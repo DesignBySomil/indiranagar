@@ -9,7 +9,7 @@ const NPC_CAST = [
   { name: 'Karthik (Delivery)', role: 'delivery', shirt: 0xf97316, pant: 0x1e293b, acc: 'helmet', lines: ['Anna my scooter punctured! Drop this hot biryani parcel at Meghana Biryani fast!', '10-minute timer ticking guru, rush to the stop!', 'Five-star rating kodtini, swalpa bega hogi!'] },
   { name: 'Manju (Auto Union)', role: 'autodriver', shirt: 0xb89d64, pant: 0x27272a, acc: 'chai', lines: ['Namaskara boss! Indiranagar stand alli ivattu full giraki!', 'Koramangala kade karedre one-and-half kelbeku!', 'Take this shortcut tip — +30 XP!'] },
   { name: 'Ibrahim Bhai', role: 'autodriver', shirt: 0xb89d64, pant: 0x1e293b, acc: 'none', lines: ['Salaam guru! Spark plug clean maadide, auto रॉकेट tara hogutte!', '100 Feet Road concrete patch mele mellage hogi!', 'By-two chai kudiyona banni!'] },
-  { name: 'Meghana (Student)', role: 'student', shirt: 0x8b5cf6, pant: 0x1e3a8a, acc: 'bag', lines: ['Bro, Truffles queue is already down the staircase!', 'Fest rehearsal at Indiranagar club, full tired!', 'Cool auto bro, love the yellow canopy!'] },
+  { name: 'Meghana (Student)', role: 'student', shirt: 0x8b5cf6, pant: 0x1e3a8a, acc: 'bag', lines: ['Bro, Nike queue is already down the staircase!', 'Fest rehearsal at Indiranagar club, full tired!', 'Cool auto bro, love the yellow canopy!'] },
   { name: 'Arjun (Student)', role: 'student', shirt: 0x06b6d4, pant: 0x0f172a, acc: 'bag', lines: ['Just hopped off Purple Line at Indiranagar Metro!', 'Third Wave cold brew is keeping my semester alive.', 'Honk that horn one more time anna!'] },
   { name: 'Priya & Bruno', role: 'dogwalker', shirt: 0x10b981, pant: 0x1f2937, acc: 'dog', lines: ['Bruno loves chasing autos on Defence Colony lanes!', 'Shh Bruno, good boy, stay on the footpath!', 'Indiranagar tree canopy is the best walk in Bengaluru.'] },
   { name: 'Madesha (Elaneer)', role: 'coconut', shirt: 0x16a34a, pant: 0x4b5563, acc: 'coconut', lines: ['Maddur tender coconut guru, sweet water!', 'Drink elaneer, cool down your engine — +₹20!', 'Bisi bisiveyalli elaneer ne medicine!'] },
@@ -19,7 +19,7 @@ const NPC_CAST = [
   { name: 'Subramanya Uncle', role: 'elder', shirt: 0xf8fafc, pant: 0xd6d3d1, acc: 'umbrella', lines: ['1978 alli Indiranagar full orchard mattu bangale ittu!', 'MTR masala dosa taste ivattigu hange ide!', 'Mellage drive maadi pa, speed breaker ide!'] },
   { name: 'Chef Naveen', role: 'vendor', shirt: 0xffffff, pant: 0x18181b, acc: 'chai', lines: ['Fresh filter decoction brewing at Sri Udupi Park!', 'Ghee roast smell goes two cross roads away!', 'Auto drivers get priority token here!'] },
   { name: 'Divya (Designer)', role: 'techie', shirt: 0xec4899, pant: 0x1e293b, acc: 'bag', lines: ['Sketching the red-brick facade outside Toit!', '12th Main boutiques have the nicest pastel walls.', 'Love how the street lamps glow at dusk!'] },
-  { name: 'Suresh (Courier)', role: 'delivery', shirt: 0xeab308, pant: 0x1f2937, acc: 'helmet', lines: ['CMH Road cross numbers confuse even Google Maps guru!', 'Drop this urgent parcel at Starbucks 12th Main!', 'Bonus tip if you reach before the signal turns!'] },
+  { name: 'Suresh (Courier)', role: 'delivery', shirt: 0xeab308, pant: 0x1f2937, acc: 'helmet', lines: ['CMH Road cross numbers confuse even Google Maps guru!', 'Drop this urgent parcel at Adidas 12th Main!', 'Bonus tip if you reach before the signal turns!'] },
   { name: 'Ananya (Musician)', role: 'student', shirt: 0xa855f7, pant: 0x0f172a, acc: 'bag', lines: ['Acoustic gig tonight near 80 Feet Road!', 'Bengaluru breeze + filter coffee = best songwriting mood.', 'See you at Indiranagar Social later!'] },
   // 6 Kerbside Hailing Passengers ('!' marker, board back seat, pay distance fare + smooth tip)
   { name: 'Kavitha Madam', role: 'passenger', dest: 'MTR 1924', shirt: 0xd946ef, pant: 0x701a75, acc: 'bag', lines: ['Auto! MTR 1924 hogbeku, meter mele +30 kodtini!', 'Swalpa bega hogi anna, family waiting for dosa!'] },
@@ -27,7 +27,7 @@ const NPC_CAST = [
   { name: 'Nandini', role: 'passenger', dest: 'Indiranagar station', shirt: 0x14b8a6, pant: 0x115e59, acc: 'bag', lines: ['Anna, Indiranagar Metro Station! Train in 4 minutes!', 'Full speed hogi, extra tip kodtini!'] },
   { name: 'Zoya', role: 'passenger', dest: 'Burma Burma Restaurant & Tea Room', shirt: 0xf43f5e, pant: 0x881337, acc: 'bag', lines: ['12th Main Burma Burma hogona? Won-and-half ok!', 'Left ತಗೊಳ್ಳಿ ಅಣ್ಣ, ಅಲ್ಲಿ ಟ್ರಾಫಿಕ್ ಕಮ್ಮಿ!'] },
   { name: 'Harish Uncle', role: 'passenger', dest: 'Sri Udupi Park', shirt: 0xfef08a, pant: 0x713f12, acc: 'umbrella', lines: ['Sri Udupi Park ge karkondu hogappa, kaapi time!', 'Smooth drive maadidre double tip!'] },
-  { name: 'Deepak', role: 'passenger', dest: 'Truffles', shirt: 0x22c55e, pant: 0x14532d, acc: 'none', lines: ['Guru, Truffles 100 Feet Road! Friends waiting!', 'Horn haakkondu side thagoli!'] }
+  { name: 'Deepak', role: 'passenger', dest: 'Nike', shirt: 0x22c55e, pant: 0x14532d, acc: 'none', lines: ['Guru, Nike 100 Feet Road! Friends waiting!', 'Horn haakkondu side thagoli!'] }
 ];
 
 function makeNpcBubbleCanvas() {
@@ -328,7 +328,7 @@ export function createNPCs({
       addXP(35);
       notify('Traffic Police Check · +35 XP', npc.name, line);
     } else if (npc.role === 'delivery' && !activePassenger) {
-      const destName = npc.name.includes('Suresh') ? 'Starbucks' : 'Meghana Biryani';
+      const destName = npc.name.includes('Suresh') ? 'Adidas' : 'Meghana Biryani';
       const target = stops.find(s => s.p.n === destName) || stops[0];
       if (target) {
         activePassenger = npc;
