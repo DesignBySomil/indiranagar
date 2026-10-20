@@ -1,5 +1,6 @@
 // src/materials.js
 import * as THREE from 'three';
+import { makeWetRoadMaterialPatch } from './lamps.js';
 
 export const nightUniform = { value: 0 };
 
@@ -26,8 +27,7 @@ function createNoiseCanvas(w, h, baseHex, variance, specks = false) {
 }
 
 export function createAsphaltMaterial() {
-  // Neutral bright base texture so vertexColors directly control the target #4b4e53 lit tone
-  const map = createNoiseCanvas(256, 256, 0xdedede, 0.08, true);
+  const map = createNoiseCanvas(256, 256, 0xd4d4d4, 0.08, true);
   map.repeat.set(60, 60);
   const bump = createNoiseCanvas(256, 256, 0x808080, 0.18, true);
   bump.repeat.set(60, 60);
@@ -37,41 +37,21 @@ export function createAsphaltMaterial() {
     bumpMap: bump,
     bumpScale: 0.025,
     vertexColors: true,
-    roughness: 0.86,
-    metalness: 0.02,
+    roughness: 0.84,
+    metalness: 0.04,
     side: THREE.DoubleSide
   });
 
-  mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uNight = nightUniform;
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWorldPos;\nvarying vec2 vRoadUv;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;\nvRoadUv = uv;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uNight;\nvarying vec3 vWorldPos;\nvarying vec2 vRoadUv;\nfloat hashA(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}')
-      .replace('#include <color_fragment>', `#include <color_fragment>
-        // Warm brown-grey Bangalore dust along road edges (uv.x near 0 or 1) and subtle centre wear
-        float edgeDist = abs(vRoadUv.x - 0.5) * 2.0;
-        float dustNoise = 0.75 + 0.25 * sin(vWorldPos.x * 0.25 + vWorldPos.z * 0.19);
-        float dustMask = smoothstep(0.62, 0.98, edgeDist) * dustNoise;
-        vec3 dustColor = vec3(0.54, 0.49, 0.42);
-        diffuseColor.rgb = mix(diffuseColor.rgb, dustColor, dustMask * 0.58);
-      `)
-      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        float puddle = smoothstep(0.55, 0.78, sin(vWorldPos.x * 0.14) * cos(vWorldPos.z * 0.14) + hashA(floor(vWorldPos.xz * 0.25)) * 0.3);
-        roughnessFactor = mix(roughnessFactor, 0.22, uNight * (0.45 + 0.55 * puddle));
-      `);
-  };
-  return mat;
+  return makeWetRoadMaterialPatch(mat);
 }
 
 export function createPavementMaterial() {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#918c82';
+  ctx.fillStyle = '#888379';
   ctx.fillRect(0, 0, 128, 128);
-  ctx.strokeStyle = '#736f66';
+  ctx.strokeStyle = '#6b675e';
   ctx.lineWidth = 3;
   for (let i = 0; i <= 128; i += 32) {
     ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 128); ctx.stroke();
@@ -87,9 +67,9 @@ export function createKerbMaterial() {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 32;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f0eee6';
+  ctx.fillStyle = '#eae8e0';
   ctx.fillRect(0, 0, 64, 32);
-  ctx.fillStyle = '#282a2e';
+  ctx.fillStyle = '#24262a';
   ctx.fillRect(64, 0, 64, 32);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -148,7 +128,7 @@ export function makeEmissiveSignMaterial(tex, glowStrength = 1.1) {
     sh.uniforms.uNight = nightUniform;
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uNight;')
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance *= (0.28 + uNight * ${glowStrength.toFixed(2)});`);
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance *= (0.25 + uNight * ${glowStrength.toFixed(2)});`);
   };
   return mat;
 }
@@ -164,7 +144,7 @@ export function makeNeonMaterial(colorHex, strength = 2.0) {
     sh.uniforms.uNight = nightUniform;
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uNight;')
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance *= (0.38 + uNight * ${strength.toFixed(2)});`);
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance *= (0.35 + uNight * ${strength.toFixed(2)});`);
   };
   return mat;
 }
