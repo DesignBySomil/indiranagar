@@ -56,7 +56,7 @@ export function createLampLights(scene, lampSpots = [], opts = {}) {
   const haloMat = new THREE.ShaderMaterial({
     uniforms: {
       uMap: { value: makeHaloTexture() },
-      uNight: nightUniform,
+      uNight: { get value() { return nightUniform.value; } },
       uTime: { value: 0 },
       uScale: { value: window.innerHeight * 0.5 }
     },
@@ -259,7 +259,7 @@ export function makeWetRoadMaterialPatch(material) {
 const VolumetricConeShader = {
   uniforms: {
     uColor: { value: new THREE.Color(0xfff1c2) },
-    uNight: nightUniform,
+    uNight: { get value() { return nightUniform.value; } },
     uOn: { value: 1.0 }
   },
   vertexShader: `
