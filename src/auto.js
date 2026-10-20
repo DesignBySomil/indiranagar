@@ -1,6 +1,7 @@
 // src/auto.js
 import * as THREE from 'three';
 import { makeSign, nightUniform } from './materials.js';
+import { makeHeadlightRig } from './lamps.js';
 
 function createWheel() {
   const g = new THREE.Group();
@@ -14,7 +15,6 @@ function createWheel() {
   tire.castShadow = true;
   g.add(tire);
 
-  // Crisp white-wall ring on both sides of the tyre
   for (const s of [-1, 1]) {
     const ww = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.225, 20), whiteWallMat);
     ww.rotation.y = s > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -45,24 +45,22 @@ function createWheel() {
 
 export function buildAuto() {
   const root = new THREE.Group();
-  // Slightly larger scale so the auto reads prominently at the 11m chase distance
   root.scale.setScalar(1.22);
 
   const chassis = new THREE.Group();
   root.add(chassis);
 
-  // Vibrant Bengaluru auto colours (#1f7a43 green body, #f6c30f yellow roof, black lower panel)
   const greenMat = new THREE.MeshStandardMaterial({
     color: 0x1f7a43,
     emissive: 0x072412,
-    emissiveIntensity: 0.28,
+    emissiveIntensity: 0.22,
     roughness: 0.36,
-    metalness: 0.1
+    metalness: 0.12
   });
   const yellowMat = new THREE.MeshStandardMaterial({
     color: 0xf6c30f,
     emissive: 0x3b2c00,
-    emissiveIntensity: 0.25,
+    emissiveIntensity: 0.20,
     roughness: 0.38,
     metalness: 0.05
   });
@@ -72,13 +70,11 @@ export function buildAuto() {
   const canvasFlapMat = new THREE.MeshStandardMaterial({ color: 0x26292e, roughness: 0.85, side: THREE.DoubleSide });
   const glassMat = new THREE.MeshStandardMaterial({ color: 0xb8e2f4, transparent: true, opacity: 0.5, roughness: 0.08, metalness: 0.15 });
 
-  // Black lower chassis panel & skirt
   const lowerPanel = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.22, 2.24), blackMat);
   lowerPanel.position.set(0, 0.36, -0.04);
   lowerPanel.castShadow = true;
   chassis.add(lowerPanel);
 
-  // Sculpted rear cabin body (Extrude with bevels)
   const rearShape = new THREE.Shape();
   rearShape.moveTo(-0.66, -0.64);
   rearShape.lineTo(0.66, -0.64);
@@ -100,7 +96,6 @@ export function buildAuto() {
   rearBody.castShadow = true;
   chassis.add(rearBody);
 
-  // Side walls, bright yellow belt stripe & rear mudguards
   for (const s of [-1, 1]) {
     const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.58, 0.78), greenMat);
     sideWall.position.set(s * 0.63, 0.70, -0.55);
@@ -116,7 +111,6 @@ export function buildAuto() {
     chassis.add(rFender);
   }
 
-  // Rounded front cowl
   const cowlShape = new THREE.Shape();
   cowlShape.moveTo(-0.58, -0.36);
   cowlShape.lineTo(0.58, -0.36);
@@ -137,7 +131,6 @@ export function buildAuto() {
   cowl.castShadow = true;
   chassis.add(cowl);
 
-  // Rounded front nose cone
   const nosePts = [
     new THREE.Vector2(0.01, 0.28),
     new THREE.Vector2(0.19, 0.24),
@@ -150,7 +143,6 @@ export function buildAuto() {
   nose.position.set(0, 0.75, 1.38);
   chassis.add(nose);
 
-  // Windscreen & frame
   const wsGroup = new THREE.Group();
   wsGroup.position.set(0, 1.46, 0.92);
   wsGroup.rotation.x = -0.26;
@@ -166,7 +158,6 @@ export function buildAuto() {
   wsGroup.add(wsPane, wsTop, wsBot, wsMid, wiper);
   chassis.add(wsGroup);
 
-  // Chrome wing mirrors
   for (const s of [-1, 1]) {
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.26, 6), chromeMat);
     arm.rotation.z = s * 1.1;
@@ -176,7 +167,6 @@ export function buildAuto() {
     chassis.add(arm, mirror);
   }
 
-  // Canopy pillars & bright yellow rounded roof (#f6c30f)
   const pillarGeo = new THREE.CylinderGeometry(0.024, 0.024, 0.98, 8);
   for (const [px, pz] of [[-0.58, 0.65], [0.58, 0.65], [-0.60, -1.05], [0.60, -1.05]]) {
     const p = new THREE.Mesh(pillarGeo, blackMat);
@@ -203,7 +193,6 @@ export function buildAuto() {
   roof.castShadow = true;
   chassis.add(roof);
 
-  // Rolled canvas side flaps
   for (const s of [-1, 1]) {
     const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.58, 8), canvasFlapMat);
     roll.rotation.x = Math.PI / 2;
@@ -214,7 +203,6 @@ export function buildAuto() {
     chassis.add(roll, flapRear);
   }
 
-  // Interior seating & digital fare meter
   const pSeat = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.16, 0.54), seatMat);
   pSeat.position.set(0, 0.76, -0.68);
   const pBack = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.48, 0.14), seatMat);
@@ -231,7 +219,6 @@ export function buildAuto() {
   meterLed.rotation.y = Math.PI;
   chassis.add(meterBox, meterLed);
 
-  // Steerable Front Fork assembly + Headlight + Volumetric Headlight Cone
   const frontFork = new THREE.Group();
   frontFork.position.set(0, 0.34, 1.40);
   chassis.add(frontFork);
@@ -266,33 +253,20 @@ export function buildAuto() {
   hlLens.position.set(0, 0.44, 0.25);
   frontFork.add(hlHousing, hlLens);
 
-  // Visible lit headlight beam cone extending ahead of the front nose
-  const coneGeo = new THREE.ConeGeometry(1.85, 7.5, 18, 1, true);
-  coneGeo.translate(0, -3.75, 0);
-  coneGeo.rotateX(-Math.PI / 2 + 0.11);
-  const coneMat = new THREE.MeshBasicMaterial({
-    color: 0xfff2b8,
-    transparent: true,
-    opacity: 0.18,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending
-  });
-  const hlCone = new THREE.Mesh(coneGeo, coneMat);
-  hlCone.position.set(0, 0.44, 0.28);
-  frontFork.add(hlCone);
+  // Attach volumetric headlight rig (cone + lens flare)
+  const hlRig = makeHeadlightRig({ single: true });
+  hlRig.position.set(0, 0.44, 0.26);
+  frontFork.add(hlRig);
 
   const frontWheel = createWheel();
   frontFork.add(frontWheel);
 
-  // Rear wheels
   const wheelRL = createWheel();
   wheelRL.position.set(-0.68, 0.34, -0.82);
   const wheelRR = createWheel();
   wheelRR.position.set(0.68, 0.34, -0.82);
   root.add(wheelRL, wheelRR);
 
-  // Spare tyre with two-tone yellow/green cover, KA-03 number plate, tail lamps, chrome bumper
   const spare = createWheel();
   spare.scale.setScalar(0.92);
   spare.rotation.y = Math.PI / 2;
@@ -321,7 +295,7 @@ export function buildAuto() {
   rBumper.position.set(0, 0.34, -1.27);
   chassis.add(rBumper);
 
-  const spot = new THREE.SpotLight(0xfff0c8, 15, 75, 0.58, 0.65, 1.2);
+  const spot = new THREE.SpotLight(0xfff0c8, 15, 42, 0.48, 0.72, 1.4);
   spot.position.set(0, 0.95, 1.65);
   spot.target.position.set(0, 0.1, 15);
   chassis.add(spot, spot.target);
@@ -332,7 +306,8 @@ export function buildAuto() {
     wheels: [frontWheel, wheelRL, wheelRR],
     hl: spot,
     hlLens,
-    hlCone,
+    hlRig,
+    greenMat,
     prevV: 0,
     pitch: 0,
     roll: 0,
@@ -349,19 +324,19 @@ export function updateAuto(group, state, dt = 0.016) {
   const v = state.v || 0;
   const steer = state.steer || 0;
 
-  // Spin all 3 wheels around local X
+  // Golden auto skin unlock from completing the Passport
+  if (state.goldAuto && u.greenMat && !u.isGold) {
+    u.isGold = true;
+    u.greenMat.color.setHex(0xd4af37);
+    u.greenMat.metalness = 0.78;
+    u.greenMat.roughness = 0.22;
+  }
+
   const spin = (v * dt) / 0.34;
   for (const w of u.wheels) w.rotation.x += spin;
 
-  // Steer front fork around Y
   u.frontFork.rotation.y = steer * 0.52;
 
-  // Headlight cone visibility (subtle in golden hour, bright at night)
-  if (u.hlCone) {
-    u.hlCone.material.opacity = 0.10 + nightUniform.value * 0.28;
-  }
-
-  // Compute acceleration for squat/dive pitch & cornering roll
   const accel = (v - u.prevV) / Math.max(dt, 0.001);
   u.prevV = v;
 
@@ -371,7 +346,6 @@ export function updateAuto(group, state, dt = 0.016) {
   u.pitch += (targetPitch - u.pitch) * Math.min(1, dt * 10);
   u.roll += (targetRoll - u.roll) * Math.min(1, dt * 10);
 
-  // Engine idle vibration + road surface bounce
   u.phase += dt * (14 + Math.abs(v) * 2.2);
   const bounce = Math.sin(u.phase) * (0.004 + Math.abs(v) * 0.0012) + Math.cos(u.phase * 2.3) * 0.003;
 
