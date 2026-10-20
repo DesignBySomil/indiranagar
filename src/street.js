@@ -139,21 +139,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         divIdx.push(divV, divV + 1, divV + 2, divV + 1, divV + 3, divV + 2);
         divV += 4;
 
-        // Concrete transverse expansion joints every 5.5m
-        for (let s = 3; s < L - 2; s += 5.5) {
-          const jx = x1 + ux * s, jz = z1 + uz * s;
-          const jbx = ux * 0.06, jbz = uz * 0.06;
-          patchPos.push(
-            jx - jbx + nx * 0.95, y + 0.008, jz - jbz + nz * 0.95,
-            jx - jbx - nx * 0.95, y + 0.008, jz - jbz - nz * 0.95,
-            jx + jbx + nx * 0.95, y + 0.008, jz + jbz + nz * 0.95,
-            jx + jbx - nx * 0.95, y + 0.008, jz + jbz - nz * 0.95
-          );
-          for (let k = 0; k < 4; k++) patchCol.push(0.24, 0.24, 0.23);
-          patchIdx.push(patV, patV + 1, patV + 2, patV + 1, patV + 3, patV + 2);
-          patV += 4;
-        }
-      } else if (r.k >= 2) {
+            } else if (r.k >= 2) {
         // Hand-painted faded broken centre line (two-way single lane each way)
         for (let s = 1.5; s + 2.5 < L; s += 7.5) {
           if (hash(x1 + s, z1) < 0.18) continue; // Occasional worn-out missing dash
@@ -689,7 +675,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   function isInCarriageway(x, z) {
     for (let i = 0; i < roadSegs.length; i++) {
       const s = roadSegs[i];
-      const halfW = s.width * 0.5 + 1.15;
+      const halfW = s.width * 0.5 + 1.6;
       if (x < Math.min(s.x1, s.x2) - halfW || x > Math.max(s.x1, s.x2) + halfW) continue;
       if (z < Math.min(s.z1, s.z2) - halfW || z > Math.max(s.z1, s.z2) + halfW) continue;
       const dx = s.x2 - s.x1, dz = s.z2 - s.z1;
@@ -785,7 +771,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   });
 
   trInst.castShadow = lobe1.castShadow = lobe2.castShadow = lobe3.castShadow = lobe4.castShadow = true;
-  scene.add(trInst, lobe1, lobe2, lobe3, lobe4);
+  // old low-poly trees replaced by trees.js
 
   // Street Lamps
   for (const r of world.roads) {
@@ -800,6 +786,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         const lx = x1 + (dx * s) / L - (dz / L) * off;
         const lz = z1 + (dz * s) / L + (dx / L) * off;
         const yaw = Math.atan2(-dz * side, dx * side);
+        if (isInCarriageway(lx, lz)) continue;
         lampSpots.push({ x: lx + Math.cos(yaw) * 1.1, z: lz - Math.sin(yaw) * 1.1, poleX: lx, poleZ: lz, yaw, h: 6.05 });
       }
     }
