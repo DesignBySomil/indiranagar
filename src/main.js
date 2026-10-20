@@ -17,6 +17,7 @@ import { createRimLight } from './rim.js';
 import { buildIcons } from './icons.js';
 import { createTraffic, createParkedVehicles } from './vehicles.js';
 import { createCrowd } from './people.js';
+import { upgradeBuildingFacades } from './buildingsHQ.js';
 import { buildBrandStore, updateBrandStores } from './brands.js';
 import { STOP_LIST, STOP_PLACES, LEELA_ACCESS_ROAD } from './stopsdata.js';
 import { createAmbientOcclusion, tuneShadows } from './ao.js';
@@ -32,7 +33,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(54, 1, 0.5, 2200);
 const post = createPost(renderer, scene, camera);
 
-let ao = null, shadowTuner = null, extras = null, traffic = null, parkedVehicles = null, crowd = null;
+let ao = null, shadowTuner = null, extras = null, traffic = null, parkedVehicles = null, crowd = null, bldgHQ = null;
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   post.setSize(innerWidth, innerHeight);
@@ -400,6 +401,7 @@ function step(dt, now) {
   if (trees) trees.update(dt);
   if (traffic) traffic.update(dt, state.hour);
   if (crowd) crowd.update(dt, state.hour);
+  if (bldgHQ && bldgHQ.update) bldgHQ.update(dt);
   if (shadowTuner && shadowTuner.update) shadowTuner.update();
   updateBrandStores(brandGroup, nightUniform);
   if (rimLight) rimLight.update(dt, nightUniform.value);
@@ -577,6 +579,7 @@ try {
   traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: 90 });
   parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42 });
   crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z }), nightUniform, count: 120 });
+  bldgHQ = upgradeBuildingFacades({ THREE, scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   buildMini();
 
   auto.x = stops[0].p.x + 15.5;
