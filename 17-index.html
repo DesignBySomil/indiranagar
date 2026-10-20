@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#14181c" />
+<title>Indiranagar Island</title>
+<meta name="description" content="Drive an auto through a walkable 3D Indiranagar, Bengaluru, built from real OpenStreetMap streets and places." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=DM+Mono&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="loader"><div class="l-in"><h1>Indiranagar</h1><p>A neighbourhood you can drive through</p><div class="bar"><i id="lbar"></i></div><span id="lmsg">Laying the roads</span></div></div>
+<div id="hud">
+  <div id="street"><small>NOW ON</small><b id="streetName">Indiranagar</b></div>
+  <div id="score"><b id="found">0</b><span>/ <i id="total">0</i> stops</span></div>
+  <canvas id="mini" width="360" height="360"></canvas>
+  <div id="clock">17:30</div>
+  <div id="help">WASD or arrows to drive &middot; Space for horn &middot; N changes the hour</div>
+</div>
+<div id="say"></div><div id="fare"></div><div id="toast"></div>
+<div id="card"><small id="cardKind"></small><h2 id="cardName"></h2><p id="cardText"></p></div>
+<div id="stick"><i></i></div>
+<div id="start"><button id="go">Start driving</button></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
