@@ -130,12 +130,21 @@ export function createTraffic({ THREE: T = THREE, scene, roadSegs = [], solidFn 
   const scInst = new T.InstancedMesh(scooterGeo, mat, Math.round(count * 0.25));
 
   carInst.castShadow = suvInst.castShadow = scInst.castShadow = true;
+  carInst.frustumCulled = suvInst.frustumCulled = scInst.frustumCulled = false;
   group.add(carInst, suvInst, scInst);
 
   const palette = [0xd93829, 0x2563eb, 0x1f7a43, 0xf6c30f, 0xe2e8f0, 0x1e293b, 0x0284c7, 0xf97316];
   const colC = new T.Color();
 
   const trafficUnits = [];
+  const segMid = (sg) => [((sg.x1 ?? sg[0]) + (sg.x2 ?? sg[2])) / 2, ((sg.z1 ?? sg[1]) + (sg.z2 ?? sg[3])) / 2];
+  const segLen = (sg) => Math.hypot((sg.x2 ?? sg[2]) - (sg.x1 ?? sg[0]), (sg.z2 ?? sg[3]) - (sg.z1 ?? sg[1]));
+  function pickNearSeg(k, maxD = 200) {
+    const pa = getAuto ? getAuto() : { x: 0, z: 0 };
+    const near = roadSegs.filter((sg) => { const m = segMid(sg); return segLen(sg) > 25 && Math.hypot(m[0] - pa.x, m[1] - pa.z) < maxD; });
+    if (!near.length) return null;
+    return near[Math.floor(Math.random() * near.length + k * 0) % near.length];
+  }
   let cIdx = 0, sIdx = 0, scIdx = 0;
 
   for (let i = 0; i < count; i++) {
@@ -147,7 +156,7 @@ export function createTraffic({ THREE: T = THREE, scene, roadSegs = [], solidFn 
     colC.setHex(palette[i % palette.length]);
     inst.setColorAt(subIdx, colC);
 
-    const seg = roadSegs[(i * 7) % roadSegs.length] || { x1: 0, z1: 0, x2: 10, z2: 10, width: 8.2 };
+    const seg = pickNearSeg(i) || roadSegs[(i * 7) % roadSegs.length] || { x1: 0, z1: 0, x2: 10, z2: 10, width: 8.2 };
     trafficUnits.push({
       inst,
       subIdx,
@@ -173,6 +182,11 @@ export function createTraffic({ THREE: T = THREE, scene, roadSegs = [], solidFn 
       const tu = trafficUnits[i];
       const x1 = tu.seg.x1 ?? tu.seg[0], z1 = tu.seg.z1 ?? tu.seg[1], x2 = tu.seg.x2 ?? tu.seg[2], z2 = tu.seg.z2 ?? tu.seg[3];
       const width = tu.seg.width ?? tu.seg[6] ?? 8.2;
+      const mdx = (x1 + x2) / 2 - pAuto.x, mdz = (z1 + z2) / 2 - pAuto.z;
+      if (mdx * mdx + mdz * mdz > 260 * 260) {
+        const ns = pickNearSeg(i, 180);
+        if (ns) { tu.seg = ns; tu.t = 0.1 + Math.random() * 0.8; continue; }
+      }
       const dx = x2 - x1, dz = z2 - z1;
       const len = Math.hypot(dx, dz) || 1;
       const ux = dx / len, uz = dz / len;
