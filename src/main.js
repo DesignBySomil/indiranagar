@@ -10,6 +10,10 @@ import { buildStreet } from './street.js';
 import { createStopsGame } from './stops.js';
 import { createStreetLife } from './life.js';
 import { createNPCs } from './npcs.js';
+import { createRainTrees } from './trees.js';
+import { createCameraRig } from './cameras.js';
+import { createDestinationMode } from './destination.js';
+import { createRimLight } from './rim.js';
 import { buildIcons } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
@@ -60,6 +64,7 @@ const LANDMARKS_DATA = [
 
 // ---------- world & modules ----------
 let world, solid = () => 0;
+let trees = null, camRig = null, destination = null, rimLight = null;
 let npcs = null, roadSegs = [], lampHead = null, lampLights = null, stopsGame = null, life = null, icons = null;
 const state = { hour: 17.8, auto: true };
 
@@ -283,6 +288,11 @@ function drawMini() {
     mx.arc(s.p.x - auto.x, s.p.z - auto.z, s.got ? 6 : 9, 0, 7);
     mx.fill();
   }
+  if (destination && destination.active && destination.route && destination.route.length > 1) {
+    mx.strokeStyle = '#38bdf8'; mx.lineWidth = 5; mx.beginPath();
+    destination.route.forEach((pt, idx) => { idx ? mx.lineTo(pt.x - auto.x, pt.z - auto.z) : mx.moveTo(pt.x - auto.x, pt.z - auto.z); });
+    mx.stroke();
+  }
   mx.restore();
   mx.fillStyle = '#f6c30f';
   mx.beginPath(); mx.moveTo(S / 2, S / 2 - 12); mx.lineTo(S / 2 + 8, S / 2 + 9); mx.lineTo(S / 2 - 8, S / 2 + 9); mx.closePath(); mx.fill();
@@ -302,6 +312,10 @@ function step(dt, now) {
   let thr = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   let str = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
   if (joy.on) { thr = -joy.y; str = -joy.x; }
+  const input = { thr, str };
+  if (destination) destination.update(dt, input);
+  thr = input.thr;
+  str = input.str;
 
   const max = 17;
   auto.v += (thr * (thr > 0 ? 9.5 : 12.5) - auto.v * 0.35 * (thr === 0 ? 1.8 : 1)) * dt;
@@ -333,7 +347,9 @@ function step(dt, now) {
   car.position.set(auto.x, 0, auto.z);
   car.rotation.y = auto.a;
   updateAuto(car, auto, dt);
-  syncCamera(dt, Boolean(state.snap));
+  if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap));
+  if (trees) trees.update(dt);
+  if (rimLight) rimLight.update(dt, nightUniform.value);
 
   if (state.auto) state.hour = (state.hour + dt / 14) % 24;
   lighting.applyTime(state.hour, dt, car.position);
@@ -476,6 +492,24 @@ try {
     }
   });
   
+  trees = createRainTrees({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, bridgeVolumes: street.bridgeVolumes, seed: 42 });
+  camRig = createCameraRig({ THREE, camera, auto, carGroup: car, scene });
+  destination = createDestinationMode({
+    THREE, scene, world, roadSegs: street.roadSegs, stops, auto, solidFn: solid,
+    getTraffic: () => (npcs && npcs.npcs ? npcs.npcs.map(n => ({ x: n.x, z: n.z, radius: 0.9 })) : []),
+    onHorn: () => { honk(); if (life) life.onHorn(); },
+    ui: { $, showCard, toast: (t) => console.log('[Auto]', t) },
+    onArrive: (stop, fare) => {
+      if (stopsGame) {
+        stopsGame.state.coins += fare; stopsGame.state.xp += 80;
+        const cEl = $('shud-coins'), xEl = $('shud-xp');
+        if (cEl) cEl.textContent = stopsGame.state.coins;
+        if (xEl) xEl.textContent = stopsGame.state.xp;
+      }
+    }
+  });
+  rimLight = createRimLight({ THREE, scene, camera, targets: [car, trees.group] });
+
   buildMini();
 
   auto.x = stops[0].p.x + 15.5;
@@ -486,7 +520,7 @@ try {
   car.position.set(auto.x, 0, auto.z);
   car.rotation.set(0, auto.a, 0);
   updateAuto(car, auto, 0.016);
-  syncCamera(0.016, true);
+  if (camRig) camRig.update(0.016, true); else syncCamera(0.016, true);
 
   applyTime(state.hour);
   post.setNight(nightUniform.value);
@@ -502,6 +536,6 @@ try {
     startAudio();
   };
   $('go').addEventListener('click', go);
-  window.__game = { scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
+  window.__game = { get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
 }
 boot();
