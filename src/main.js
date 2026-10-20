@@ -9,6 +9,7 @@ import { buildCity } from './city.js';
 import { buildStreet } from './street.js';
 import { createStopsGame } from './stops.js';
 import { createStreetLife } from './life.js';
+import { createNPCs } from './npcs.js';
 import { buildIcons } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
@@ -59,7 +60,7 @@ const LANDMARKS_DATA = [
 
 // ---------- world & modules ----------
 let world, solid = () => 0;
-let roadSegs = [], lampHead = null, lampLights = null, stopsGame = null, life = null, icons = null;
+let npcs = null, roadSegs = [], lampHead = null, lampLights = null, stopsGame = null, life = null, icons = null;
 const state = { hour: 17.8, auto: true };
 
 const WANT = [
@@ -342,6 +343,7 @@ function step(dt, now) {
   if (lampHead) lampHead.material.color.setHex(0xffc878).multiplyScalar(0.35 + nightUniform.value * 1.8);
   if (lampLights) lampLights.update(car.position, nightUniform.value, dt);
   if (stopsGame) stopsGame.update(dt, now);
+  if (npcs) npcs.update(dt, performance.now(), state.hour);
   if (life) life.update(dt, auto, state.hour);
   if (icons) icons.update(dt, state.hour);
 
@@ -397,6 +399,13 @@ function loop(now) {
 async function boot() {
   setLoad(8, 'Fetching the map');
   world = await (await fetch(import.meta.env.BASE_URL + 'data/world.json')).json();
+let extras = null;
+try {
+  extras = await (await fetch(import.meta.env.BASE_URL + 'data/extras.json')).json();
+} catch (e) {
+  console.warn('extras.json not found, continuing with base world:', e);
+}
+
 
   setLoad(30, 'Raising Indiranagar blocks');
   await new Promise(r => setTimeout(r, 20));
@@ -405,7 +414,7 @@ async function boot() {
 
   setLoad(55, 'Laying 100 Feet Road, metro & trees');
   await new Promise(r => setTimeout(r, 20));
-  const street = buildStreet(world, scene, nightUniform, solid);
+  const street = buildStreet(world, scene, nightUniform, solid, extras);
   roadSegs = street.roadSegs;
   lampHead = street.lampHead;
   lampLights = createLampLights(scene, street.lampSpots);
@@ -424,20 +433,49 @@ async function boot() {
     ui: { $, showCard }
   });
   icons = buildIcons(world, scene, nightUniform, solid);
+  npcs = createNPCs({
+    THREE,
+    scene,
+    camera,
+    world,
+    vendorSpots: street.vendorSpots,
+    roadSegs: street.roadSegs,
+    getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a, speed: auto.v }),
+    playerCar: car,
+    stops,
+    ui: { $, showCard },
+    addXP: (amt) => {
+      if (!stopsGame) return;
+      stopsGame.state.xp += amt;
+      const el = $('shud-xp');
+      if (el) el.textContent = stopsGame.state.xp;
+    },
+    addCoins: (amt) => {
+      if (!stopsGame) return;
+      stopsGame.state.coins += amt;
+      const el = $('shud-coins');
+      if (el) el.textContent = stopsGame.state.coins;
+    }
+  });
+  
   life = createStreetLife({
     THREE,
     scene,
     camera,
     world,
-    roadSegs,
+    roadSegs: street.roadSegs,
+    speedBreakers: street.speedBreakers,
+    vendorSpots: street.vendorSpots,
     solid,
     auto,
+    npcsRef: npcs,
     ui: {
       say: (txt) => showCard('Auto Dialogue', 'Driver / Passenger', txt),
       fare: (txt) => { if ($('streetName')) $('streetName').textContent = txt; },
       toast: (txt) => console.log('[Indiranagar]', txt)
     }
   });
+  
   buildMini();
 
   auto.x = stops[0].p.x + 15.5;
@@ -464,6 +502,6 @@ async function boot() {
     startAudio();
   };
   $('go').addEventListener('click', go);
-  window.__game = { auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
+  window.__game = { scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
 }
 boot();
