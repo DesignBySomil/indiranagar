@@ -4,3 +4,5 @@ Drive an auto-rickshaw through a 3D Indiranagar, Bengaluru, built from OpenStree
 
 - Run: `npm install && npx vite`
 - Rebuild map data: `node scripts/prep.mjs`
+
+Live: https://indiranagar.vercel.app
