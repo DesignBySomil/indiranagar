@@ -86,8 +86,8 @@ export function createPost(renderer, scene, camera) {
     },
     setNight(n) {
       nightVal = THREE.MathUtils.clamp(n, 0, 1);
-      bloomPass.strength = 0.16 + nightVal * 0.48;
-      bloomPass.threshold = 0.86 - nightVal * 0.22;
+      bloomPass.strength = 0.12 + nightVal * 0.2;
+      bloomPass.threshold = 0.9 - nightVal * 0.05;
       grainPass.uniforms.uNight.value = nightVal;
     },
     render(dt = 0.016) {
