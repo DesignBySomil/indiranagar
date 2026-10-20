@@ -1,10 +1,13 @@
 // src/main.js
 import * as THREE from 'three';
 import { setupLighting } from './lighting.js';
+import { createPost } from './post.js';
+import { createLampLights, attachHeadlightsToNearest } from './lamps.js';
 import { buildAuto, updateAuto } from './auto.js';
 import { buildLandmark, nightUniform } from './landmarks.js';
 import { buildCity } from './city.js';
 import { buildStreet } from './street.js';
+import { createStopsGame } from './stops.js';
 import { createStreetLife } from './life.js';
 import { buildIcons } from './icons.js';
 
@@ -13,12 +16,15 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 0.98;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(54, 1, 0.5, 2200);
+const post = createPost(renderer, scene, camera);
+
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
+  post.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 }
@@ -34,7 +40,6 @@ const setLoad = (p, m) => {
 const lighting = setupLighting(scene, renderer);
 const applyTime = (h) => lighting.applyTime(h, 0.016, car.position);
 
-// Real landmark coordinates and orientations from landmarks.json
 const LANDMARKS_DATA = [
   { name: 'Toit', type: 'pub', x: -148.9, z: -377.2, nearestRoad: '100 Feet Road', roadDist: 15.7, faceYaw: 1.614 },
   { name: 'Truffles', type: 'restaurant', x: -155.6, z: -519.4, nearestRoad: '100 Feet Road', roadDist: 14.8, faceYaw: 1.632 },
@@ -52,16 +57,11 @@ const LANDMARKS_DATA = [
   { name: 'Starbucks', type: 'cafe', x: -225.7, z: 629.7, nearestRoad: '12th Main Road', roadDist: 20.2, faceYaw: 0.073 }
 ];
 
-// ---------- world & state ----------
+// ---------- world & modules ----------
 let world, solid = () => 0;
-let life = null, icons = null;
-const _tm = {};
-function uiShow(id, text, ms) { const e = document.getElementById(id); if (!e) return; e.textContent = text; e.classList.add('on'); clearTimeout(_tm[id]); _tm[id] = setTimeout(() => e.classList.remove('on'), ms); }
-const gameUI = { say: (t, ms = 3500) => uiShow('say', t, ms), fare: (t) => uiShow('fare', t, 6000), toast: (t) => uiShow('toast', t, 3000) };
-let roadSegs = [], lampHead = null, lampPool = null;
+let roadSegs = [], lampHead = null, lampLights = null, stopsGame = null, life = null, icons = null;
 const state = { hour: 17.8, auto: true };
 
-// ---------- landmarks & stops ----------
 const WANT = [
   ['Toit', 'Brewpub'],
   ['Indiranagar station', 'Namma Metro'],
@@ -80,27 +80,8 @@ const WANT = [
   ['Swami Vivekananda Road station', 'Namma Metro'],
   ['Starbucks', 'Coffee']
 ];
-const KIND = { pub: 'Pub', bar: 'Bar', cafe: 'Cafe', restaurant: 'Restaurant', station: 'Metro station', juice_bar: 'Juice bar' };
-const LINE = {
-  Brewpub: 'Craft beer on the 100 Feet Road strip.',
-  'Namma Metro': 'Purple Line. Half the neighbourhood commutes from here.',
-  Burgers: 'Burgers, and a queue most evenings.',
-  'South Indian': 'Dosa and filter coffee, the early-morning way.',
-  Burmese: 'Khow suey and tea leaf salad.',
-  Social: 'Cocktails, co-working by day.',
-  Brewhouse: 'Beer, football and a long bar.',
-  Biryani: 'Andhra-style biryani, worth the wait.',
-  Pizza: 'Wood-fired, on Indiranagar side streets.',
-  Italian: 'Italian, a few doors from the pubs.',
-  Coffee: 'Stop for a flat white.',
-  Asian: 'Bao, dumplings and cocktails.',
-  Tiffin: 'Idli, vada and a steel tumbler of coffee.',
-  Brewery: 'Brewed on site.'
-};
 
 const stops = [];
-const beams = new THREE.Group();
-scene.add(beams);
 
 function nearestRoadInfo(x, z) {
   let best = 1e9, name = '', yaw = 0;
@@ -137,23 +118,8 @@ function setupLandmarks() {
     model.rotation.y = yaw;
     scene.add(model);
 
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.1, 1.1, 90, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0x38e07b, transparent: true, opacity: 0.26, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false })
-    );
-    beam.position.set(p.x, 45, p.z);
-
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(8.5, 9.6, 40),
-      new THREE.MeshBasicMaterial({ color: 0x38e07b, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(p.x, 0.32, p.z);
-    beams.add(beam, ring);
-
-    stops.push({ p, tag, road, beam, ring, got: false });
+    stops.push({ p, tag, road });
   }
-  if ($('total')) $('total').textContent = stops.length;
 }
 
 // POI text sprites near player
@@ -185,9 +151,8 @@ function setLabel(s, text) {
 // ---------- the auto ----------
 const car = buildAuto();
 scene.add(car);
-const auto = { x: -133, z: -345, a: Math.PI, v: 0, steer: 0 };
+const auto = { x: -133, z: -345, a: Math.PI, v: 0, steer: 0, goldAuto: false };
 
-// Sync camera cleanly behind the auto facing the direction of travel with zero roll
 function syncCamera(dt, snap = false) {
   const back = 11.0 + Math.abs(auto.v) * 0.25;
   const sideSwing = snap ? 0 : auto.steer * (auto.v / 17) * 1.4;
@@ -277,19 +242,6 @@ function honk() {
   o.connect(g); o2.connect(g); g.connect(AC.destination);
   o.start(); o2.start(); o.stop(AC.currentTime + 0.5); o2.stop(AC.currentTime + 0.5);
 }
-function chime() {
-  if (!AC) return;
-  [660, 880, 1320].forEach((f, i) => {
-    const o = AC.createOscillator(), g = AC.createGain();
-    o.type = 'sine'; o.frequency.value = f;
-    const t = AC.currentTime + i * 0.09;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.15, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-    o.connect(g); g.connect(AC.destination);
-    o.start(t); o.stop(t + 0.55);
-  });
-}
 
 // ---------- minimap ----------
 const mini = $('mini'), mx = mini.getContext('2d');
@@ -324,8 +276,11 @@ function drawMini() {
   const sc = S / (R * 2); mx.scale(sc, sc);
   mx.drawImage(miniBase, -auto.x - 900, -auto.z - 900);
   for (const s of stops) {
-    mx.fillStyle = s.got ? '#55606a' : '#38e07b';
-    mx.beginPath(); mx.arc(s.p.x - auto.x, s.p.z - auto.z, s.got ? 6 : 9, 0, 7); mx.fill();
+    if (s.secret && !s.revealed) continue;
+    mx.fillStyle = s.got ? '#d4af37' : (s.colorHex || '#38e07b');
+    mx.beginPath();
+    mx.arc(s.p.x - auto.x, s.p.z - auto.z, s.got ? 6 : 9, 0, 7);
+    mx.fill();
   }
   mx.restore();
   mx.fillStyle = '#f6c30f';
@@ -335,14 +290,14 @@ function drawMini() {
 // ---------- loop ----------
 let last = performance.now(), cardT = 0, frame = 0, started = false, camRoll = 0;
 function showCard(kind, name, text) {
-  $('cardKind').textContent = kind;
-  $('cardName').textContent = name;
-  $('cardText').textContent = text;
-  $('card').classList.add('on');
+  if ($('cardKind')) $('cardKind').textContent = kind;
+  if ($('cardName')) $('cardName').textContent = name;
+  if ($('cardText')) $('cardText').textContent = text;
+  if ($('card')) $('card').classList.add('on');
   cardT = 4.5;
 }
 
-function step(dt) {
+function step(dt, now) {
   let thr = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   let str = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
   if (joy.on) { thr = -joy.y; str = -joy.x; }
@@ -357,18 +312,23 @@ function step(dt) {
   const hit = (x, z) => {
     const s = Math.sin(auto.a), c = Math.cos(auto.a);
     for (const [lx, lz] of [[0.9, 1.9], [-0.9, 1.9], [0.9, -1.4], [-0.9, -1.4], [0, 2]]) {
-      if (solid(x + c * lx + s * lz, z - s * lx + c * lz)) return true;
+      const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
+      if (solid(px, pz) || (life && life.solid(px, pz))) return true;
     }
     return false;
   };
   if (!hit(auto.x + dx, auto.z + dz)) { auto.x += dx; auto.z += dz; }
-  else if (!hit(auto.x + dx, auto.z)) { auto.x += dx; auto.v *= 0.8; }
-  else if (!hit(auto.x, auto.z + dz)) { auto.z += dz; auto.v *= 0.8; }
-  else auto.v *= -0.25;
+  else {
+    if (stopsGame) stopsGame.state.cleanDriveTimer = 0;
+    if (!hit(auto.x + dx, auto.z)) { auto.x += dx; auto.v *= 0.8; }
+    else if (!hit(auto.x, auto.z + dz)) { auto.z += dz; auto.v *= 0.8; }
+    else auto.v *= -0.25;
+  }
 
   auto.x = THREE.MathUtils.clamp(auto.x, -880, 880);
   auto.z = THREE.MathUtils.clamp(auto.z, -880, 880);
 
+  if (stopsGame) auto.goldAuto = stopsGame.state.goldAuto;
   car.position.set(auto.x, 0, auto.z);
   car.rotation.y = auto.a;
   updateAuto(car, auto, dt);
@@ -376,10 +336,14 @@ function step(dt) {
 
   if (state.auto) state.hour = (state.hour + dt / 14) % 24;
   lighting.applyTime(state.hour, dt, car.position);
+  post.setNight(nightUniform.value);
 
-  car.userData.hl.intensity = 14 + nightUniform.value * 85;
+  car.userData.hl.intensity = 6 + nightUniform.value * 55;
   if (lampHead) lampHead.material.color.setHex(0xffc878).multiplyScalar(0.35 + nightUniform.value * 1.8);
-  if (lampPool) lampPool.material.opacity = nightUniform.value * 0.34;
+  if (lampLights) lampLights.update(car.position, nightUniform.value, dt);
+  if (stopsGame) stopsGame.update(dt, now);
+  if (life) life.update(dt, auto, state.hour);
+  if (icons) icons.update(dt, state.hour);
 
   if (eg) {
     const spd = Math.abs(auto.v);
@@ -401,7 +365,7 @@ function step(dt) {
       const d = Math.hypot(auto.x - s[0] - dxs * t, auto.z - s[1] - dzs * t);
       if (d < best) { best = d; name = s[4]; }
     }
-    if (name && best < 14 && $('streetName').textContent !== name) $('streetName').textContent = name;
+    if (name && best < 14 && $('streetName') && $('streetName').textContent !== name) $('streetName').textContent = name;
   }
 
   if (frame % 12 === 0) {
@@ -417,32 +381,16 @@ function step(dt) {
     });
   }
 
-  for (const s of stops) {
-    s.ring.scale.setScalar(1 + Math.sin(performance.now() / 400) * 0.06);
-    s.beam.material.opacity = s.got ? 0.05 : 0.22 + Math.sin(performance.now() / 600) * 0.06;
-    if (!s.got && Math.hypot(s.p.x - auto.x, s.p.z - auto.z) < 13.5) {
-      s.got = true;
-      s.ring.material.color.setHex(0x55606a);
-      s.beam.material.color.setHex(0x55606a);
-      chime();
-      const n = stops.filter(q => q.got).length;
-      $('found').textContent = n;
-      showCard((KIND[s.p.t] || 'Place') + ' · ' + s.tag, s.p.n, (s.road ? 'On ' + s.road + '. ' : '') + (LINE[s.tag] || 'A local favourite.'));
-      if (n === stops.length) setTimeout(() => showCard('All done', 'You know Indiranagar', 'Every stop found. Keep driving, the map is yours.'), 4800);
-    }
-  }
-  if (cardT > 0) { cardT -= dt; if (cardT <= 0) $('card').classList.remove('on'); }
-  if (life) life.update(dt, auto, state.hour);
-  if (icons && icons.update) icons.update(dt, state.hour);
+  if (cardT > 0) { cardT -= dt; if (cardT <= 0 && $('card')) $('card').classList.remove('on'); }
   drawMini();
-  $('clock').textContent = String(Math.floor(state.hour)).padStart(2, '0') + ':' + String(Math.floor((state.hour % 1) * 60)).padStart(2, '0');
+  if ($('clock')) $('clock').textContent = String(Math.floor(state.hour)).padStart(2, '0') + ':' + String(Math.floor((state.hour % 1) * 60)).padStart(2, '0');
 }
 
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (started) step(dt);
-  renderer.render(scene, camera);
+  if (started) step(dt, now);
+  post.render(dt);
   requestAnimationFrame(loop);
 }
 
@@ -453,24 +401,45 @@ async function boot() {
   setLoad(30, 'Raising Indiranagar blocks');
   await new Promise(r => setTimeout(r, 20));
   const city = buildCity(world, scene, nightUniform, LANDMARKS_DATA);
-  const baseSolid = city.solid;
-  solid = (x, z) => baseSolid(x, z) || (life && life.solid ? life.solid(x, z) : 0);
+  solid = city.solid;
 
   setLoad(55, 'Laying 100 Feet Road, metro & trees');
   await new Promise(r => setTimeout(r, 20));
   const street = buildStreet(world, scene, nightUniform, solid);
   roadSegs = street.roadSegs;
   lampHead = street.lampHead;
-  lampPool = street.lampPool;
-  try { icons = buildIcons(world, scene, nightUniform, baseSolid); } catch (e) { console.warn('icons', e); }
-  try { life = createStreetLife({ THREE, scene, camera, world, roadSegs, solid: baseSolid, auto, ui: gameUI }); window.__life = life; window.__scene = scene; } catch (e) { console.warn('life', e); }
+  lampLights = createLampLights(scene, street.lampSpots);
 
-  setLoad(82, 'Building Toit, MTR, Metro & landmarks');
+  setLoad(82, 'Building Toit, MTR, Metro & gamified stops');
   await new Promise(r => setTimeout(r, 20));
   setupLandmarks();
+  stopsGame = createStopsGame({
+    THREE,
+    scene,
+    camera,
+    renderer,
+    world,
+    stops,
+    getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a, speed: auto.v }),
+    ui: { $, showCard }
+  });
+  icons = buildIcons(world, scene, nightUniform, solid);
+  life = createStreetLife({
+    THREE,
+    scene,
+    camera,
+    world,
+    roadSegs,
+    solid,
+    auto,
+    ui: {
+      say: (txt) => showCard('Auto Dialogue', 'Driver / Passenger', txt),
+      fare: (txt) => { if ($('streetName')) $('streetName').textContent = txt; },
+      toast: (txt) => console.log('[Indiranagar]', txt)
+    }
+  });
   buildMini();
 
-  // Spawn on 100 Feet Road facing North (-Z, a = Math.PI) toward Toit, with camera cleanly behind at z + 11m and 6m up
   auto.x = stops[0].p.x + 15.5;
   auto.z = stops[0].p.z + 32;
   auto.a = Math.PI;
@@ -482,6 +451,7 @@ async function boot() {
   syncCamera(0.016, true);
 
   applyTime(state.hour);
+  post.setNight(nightUniform.value);
   setLoad(100, 'Ready');
   $('loader').classList.add('off');
   $('start').classList.add('on');
@@ -494,6 +464,6 @@ async function boot() {
     startAudio();
   };
   $('go').addEventListener('click', go);
-  window.__game = { auto, state, stops, go, solid, world, applyTime, camera, get started() { return started; } };
+  window.__game = { auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
 }
 boot();
