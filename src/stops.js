@@ -1,5 +1,6 @@
 // src/stops.js
 import * as THREE from 'three';
+import { STOP_LIST } from './stopsdata.js';
 import { makeSign, makeEmissiveSignMaterial, makeNeonMaterial } from './materials.js';
 
 export const STOPS_CSS = `
@@ -124,7 +125,14 @@ const CATEGORY_COLORS = {
   Pizza: 0xf43f5e,
   Italian: 0x22c55e,
   'Namma Metro': 0x38bdf8,
-  Social: 0xa855f7
+  Social: 0xa855f7,
+  'Climbing Gym': 0xf97316,
+  'Fintech Office': 0xe2e8f0,
+  'Luxury Hotel': 0xd4af37,
+  Sportswear: 0xfacc15,
+  Merch: 0xfde047,
+  Denim: 0xef4444,
+  Footwear: 0x3b82f6
 };
 
 const STOP_COPY = {
@@ -224,6 +232,7 @@ const STOP_COPY = {
     driver: 'Malegaladalli ಬಿಸಿ ಬಿಸಿ ಶುಂಠಿ ಚಾ ಸಿಕ್ಕಿದ್ರೆ ಸ್ವರ್ಗ ನೇ ಗುರು!'
   }
 };
+for (const it of STOP_LIST) STOP_COPY[it.name] = { order: it.order, fact: it.fact, driver: it.driver };
 
 const LEVEL_TITLES = [
   [0,    'Auto Rookie'],
