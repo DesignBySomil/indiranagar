@@ -460,7 +460,7 @@ function step(dt, now) {
 }
 
 function loop(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const dt = Math.min(window.__dtCap || 0.05, (now - last) / 1000);
   last = now;
   if (started) step(dt, now);
   post.render(dt);
