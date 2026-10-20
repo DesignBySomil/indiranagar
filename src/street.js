@@ -11,21 +11,21 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
   const roadSegs = [];
   const solid = solidFn || (() => 0);
 
-  // Visible dusty green/tan Bangalore ground plane (#6b705a)
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x6b705a, roughness: 0.92, metalness: 0.0 });
+  // Dusty green/tan Bangalore ground plane (castShadow false to prevent self-shadow moire stripes)
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x616652, roughness: 0.94, metalness: 0.0 });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
+  ground.castShadow = false;
   scene.add(ground);
 
   const width = { 5: 17, 4: 13, 3: 9, 2: 6.5, 1: 4.5 };
-  // Clear mid-dark grey asphalt (~#4b4e53 lit) with 100 Feet Road (rank 5) slightly lighter
   const colors = {
-    5: [0.43, 0.45, 0.48],
-    4: [0.38, 0.40, 0.43],
-    3: [0.35, 0.37, 0.40],
-    2: [0.33, 0.35, 0.38],
-    1: [0.31, 0.33, 0.36]
+    5: [0.40, 0.42, 0.45],
+    4: [0.36, 0.38, 0.41],
+    3: [0.33, 0.35, 0.38],
+    2: [0.31, 0.33, 0.36],
+    1: [0.29, 0.31, 0.34]
   };
 
   const pos = [], col = [], uvs = [], idx = [];
@@ -52,7 +52,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
       const ux = dx / L, uz = dz / L;
       const nx = -uz * (w / 2), nz = ux * (w / 2);
 
-      // Asphalt surface (uv.x 0..1 across width so edge dust shader works cleanly)
       pos.push(x1 + nx, y, z1 + nz, x1 - nx, y, z1 - nz, x2 + nx, y, z2 + nz, x2 - nx, y, z2 - nz);
       uvs.push(0, 0, 1, 0, 0, L * 0.2, 1, L * 0.2);
       for (let k = 0; k < 4; k++) col.push(...c);
@@ -60,7 +59,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
       v += 4;
       roadSegs.push([x1, z1, x2, z2, r.n, r.k, w]);
 
-      // Raised footpaths + kerbs on Rank >= 3 roads
       if (r.k >= 3) {
         const fw = r.k >= 4 ? 2.4 : 1.6;
         const fy = 0.18;
@@ -85,7 +83,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
         }
       }
 
-      // Center lane dashes on main roads
       if (r.k >= 3) {
         for (let s = 0; s + 2.5 < L; s += 6.5) {
           const a = s / L, b = (s + 2.8) / L;
@@ -100,7 +97,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
           dv += 4;
         }
 
-        // Zebra crossings
         if (r.k >= 4 && i % 4 === 0 && L > 14) {
           const zOff = 2.5 / L;
           const zx = x1 + dx * zOff, zz = z1 + dz * zOff;
@@ -121,14 +117,12 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
         }
       }
 
-      // 100 Feet Road planter medians
       if (is100Ft && L > 18) {
         for (let s = 9; s + 9 < L; s += 22) {
           medians.push([x1 + ux * s, z1 + uz * s, Math.atan2(ux, uz)]);
         }
       }
 
-      // Namma Metro Purple Line corridor along CMH Road
       if (isCMH && L > 12) {
         for (let s = 6; s < L; s += 26) {
           metroPiers.push([x1 + ux * s, z1 + uz * s, Math.atan2(ux, uz)]);
@@ -137,7 +131,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
     }
   }
 
-  // Build Road Mesh
   const roadGeo = new THREE.BufferGeometry();
   roadGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   roadGeo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -146,9 +139,9 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
   roadGeo.computeVertexNormals();
   const roadMesh = new THREE.Mesh(roadGeo, createAsphaltMaterial());
   roadMesh.receiveShadow = true;
+  roadMesh.castShadow = false;
   scene.add(roadMesh);
 
-  // Build Footpaths & Kerbs
   const fpGeo = new THREE.BufferGeometry();
   fpGeo.setAttribute('position', new THREE.Float32BufferAttribute(fpPos, 3));
   fpGeo.setAttribute('uv', new THREE.Float32BufferAttribute(fpUvs, 2));
@@ -156,6 +149,7 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
   fpGeo.computeVertexNormals();
   const fpMesh = new THREE.Mesh(fpGeo, createPavementMaterial());
   fpMesh.receiveShadow = true;
+  fpMesh.castShadow = false;
   scene.add(fpMesh);
 
   const kbGeo = new THREE.BufferGeometry();
@@ -165,7 +159,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
   kbGeo.computeVertexNormals();
   scene.add(new THREE.Mesh(kbGeo, createKerbMaterial()));
 
-  // Markings & Zebra Crossings
   const dg = new THREE.BufferGeometry();
   dg.setAttribute('position', new THREE.Float32BufferAttribute(dp, 3));
   dg.setIndex(di);
@@ -176,20 +169,18 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
   zg.setIndex(zi);
   scene.add(new THREE.Mesh(zg, new THREE.MeshBasicMaterial({ color: 0xf4f6f8, side: THREE.DoubleSide })));
 
-  // 100 Feet Road Planter Medians
   if (medians.length) {
-    const medKerb = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 0.35, 12), createKerbMaterial(), medians.length);
+    const medKerb = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.3, 12), createKerbMaterial(), medians.length);
     const medShrub = new THREE.InstancedMesh(new THREE.BoxGeometry(0.65, 0.65, 11.2), new THREE.MeshStandardMaterial({ color: 0x3b7a40, roughness: 0.88 }), medians.length);
     const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3(1, 1, 1);
     medians.forEach(([x, z, yaw], i) => {
       q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
       m4.compose(v3.set(x, 0.18, z), q4, s3); medKerb.setMatrixAt(i, m4);
-      m4.compose(v3.set(x, 0.55, z), q4, s3); medShrub.setMatrixAt(i, m4);
+      
     });
-    scene.add(medKerb, medShrub);
+    scene.add(medKerb);
   }
 
-  // Namma Metro Purple Line Viaduct & Pillars along CMH Road
   if (metroPiers.length) {
     const concMat = new THREE.MeshStandardMaterial({ color: 0xc8cdd4, roughness: 0.82 });
     const purpMat = makeNeonMaterial(0x7c3aed, 1.2);
@@ -207,7 +198,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
     scene.add(pierInst, deckInst, bandInst);
   }
 
-  // Helper to ensure trees never sit inside ANY carriageway (including intersecting side roads)
   function isInCarriageway(x, z) {
     for (let i = 0; i < roadSegs.length; i++) {
       const s = roadSegs[i];
@@ -223,7 +213,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
     return false;
   }
 
-  // Bangalore Street Trees: strictly on verge between footpath & building, >= 14m spacing, trunk 4-6m, crown radius 2.5-4.5m, total height 8-11m
   const treeSpots = [];
   const CELL = 14;
   const treeGrid = new Set();
@@ -245,7 +234,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
           const x = x1 + ux * s - uz * vergeOffset * side;
           const z = z1 + uz * s + ux * vergeOffset * side;
 
-          // Enforce >= 14m spacing globally
           const gx = Math.floor(x / CELL), gz = Math.floor(z / CELL);
           let tooClose = false;
           for (let ox = -1; ox <= 1; ox++) {
@@ -255,7 +243,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
           }
           if (tooClose) continue;
 
-          // Never in carriageway and never inside a building footprint
           if (
             !solid(x, z) && !solid(x + 1.8, z) && !solid(x - 1.8, z) &&
             !solid(x, z + 1.8) && !solid(x, z - 1.8) && !isInCarriageway(x, z)
@@ -268,7 +255,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
     }
   }
 
-  // Multi-cluster low-poly canopy (4 overlapping icosahedron lobes per tree, trunk 4-6m, crown radius 2.5-4.5m, total height 8-11m)
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4f3d2e, roughness: 0.9 });
   const crownMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, flatShading: true });
   const trInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.30, 1.0, 6), trunkMat, treeSpots.length);
@@ -283,8 +269,6 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
   treeSpots.forEach(([x, z], i) => {
     const r = hash(x, z);
     const r2 = hash(z, x);
-
-    // Trunk 4.0m to 5.8m tall; Crown radius 2.5m to 4.3m; Total height 8.0m to 10.8m
     const trunkH = 4.2 + r * 1.6;
     const crownR = 2.5 + r2 * 1.8;
     const crownBaseY = trunkH + 1.2;
@@ -293,43 +277,18 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
     m4.compose(new THREE.Vector3(x, trunkH * 0.5, z), q4, new THREE.Vector3(1, trunkH, 1));
     trInst.setMatrixAt(i, m4);
 
-    // 4 overlapping organic canopy clusters with small scale & height variation
-    m4.compose(
-      new THREE.Vector3(x, crownBaseY + 0.9, z),
-      q4,
-      new THREE.Vector3(crownR * 0.65, crownR * 0.48, crownR * 0.65)
-    );
+    m4.compose(new THREE.Vector3(x, crownBaseY + 0.9, z), q4, new THREE.Vector3(crownR * 0.65, crownR * 0.48, crownR * 0.65));
     lobe1.setMatrixAt(i, m4);
-
-    m4.compose(
-      new THREE.Vector3(x - crownR * 0.36, crownBaseY + 0.25, z + crownR * 0.24),
-      q4,
-      new THREE.Vector3(crownR * 0.56, crownR * 0.42, crownR * 0.52)
-    );
+    m4.compose(new THREE.Vector3(x - crownR * 0.36, crownBaseY + 0.25, z + crownR * 0.24), q4, new THREE.Vector3(crownR * 0.56, crownR * 0.42, crownR * 0.52));
     lobe2.setMatrixAt(i, m4);
-
-    m4.compose(
-      new THREE.Vector3(x + crownR * 0.38, crownBaseY + 0.35, z - crownR * 0.22),
-      q4,
-      new THREE.Vector3(crownR * 0.54, crownR * 0.40, crownR * 0.56)
-    );
+    m4.compose(new THREE.Vector3(x + crownR * 0.38, crownBaseY + 0.35, z - crownR * 0.22), q4, new THREE.Vector3(crownR * 0.54, crownR * 0.40, crownR * 0.56));
     lobe3.setMatrixAt(i, m4);
-
-    m4.compose(
-      new THREE.Vector3(x + (r - 0.5) * crownR * 0.3, crownBaseY + 0.45, z + crownR * 0.36),
-      q4,
-      new THREE.Vector3(crownR * 0.50, crownR * 0.38, crownR * 0.50)
-    );
+    m4.compose(new THREE.Vector3(x + (r - 0.5) * crownR * 0.3, crownBaseY + 0.45, z + crownR * 0.36), q4, new THREE.Vector3(crownR * 0.50, crownR * 0.38, crownR * 0.50));
     lobe4.setMatrixAt(i, m4);
 
-    // Foliage colours: ~1 in 10 Gulmohar red-orange, ~1 in 12 Copper-pod yellow, rest deep Bangalore greens
-    if (r < 0.10) {
-      colC.setHSL(0.03 + r2 * 0.025, 0.82, 0.46); // Gulmohar red-orange
-    } else if (r < 0.183) {
-      colC.setHSL(0.12 + r2 * 0.02, 0.80, 0.48);  // Copper-pod golden yellow
-    } else {
-      colC.setHSL(0.29 + (r - 0.18) * 0.06, 0.48, 0.26 + r2 * 0.09); // Deep rich greens
-    }
+    if (r < 0.10) colC.setHSL(0.03 + r2 * 0.025, 0.82, 0.46);
+    else if (r < 0.183) colC.setHSL(0.12 + r2 * 0.02, 0.80, 0.48);
+    else colC.setHSL(0.29 + (r - 0.18) * 0.06, 0.48, 0.26 + r2 * 0.09);
 
     lobe1.setColorAt(i, colC.clone().multiplyScalar(1.06));
     lobe2.setColorAt(i, colC);
@@ -340,7 +299,7 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
   trInst.castShadow = lobe1.castShadow = lobe2.castShadow = lobe3.castShadow = lobe4.castShadow = true;
   scene.add(trInst, lobe1, lobe2, lobe3, lobe4);
 
-  // Curved Street Lamps + Ground Light Pools + BMTC Bus Stops + Chai/Flower Stalls
+  // Street Lamps (NO flat ground CircleGeometry discs; returns lampSpots for createLampLights)
   const lampSpots = [];
   const propsGroup = new THREE.Group();
   const bbGreenTex = makeSign('100 FEET ROAD · ಇಂದಿರಾನಗರ', '#14532d', '#ffffff', '700 32px sans-serif', 512, 96, 'BBMP · INDIRANAGAR', '#ffffff');
@@ -359,7 +318,7 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
         const lx = x1 + (dx * s) / L - (dz / L) * off;
         const lz = z1 + (dz * s) / L + (dx / L) * off;
         const yaw = Math.atan2(-dz * side, dx * side);
-        lampSpots.push([lx, lz, yaw]);
+        lampSpots.push({ x: lx + Math.cos(yaw) * 1.1, z: lz - Math.sin(yaw) * 1.1, poleX: lx, poleZ: lz, yaw, h: 6.05 });
 
         if (propsGroup.children.length < 95 && hash(lx, lz) > 0.82 && !solid(lx, lz) && !isInCarriageway(lx, lz)) {
           const g = new THREE.Group();
@@ -397,37 +356,24 @@ export function buildStreet(world, scene, nightUniform, solidFn) {
 
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x2b313a, roughness: 0.5, metalness: 0.6 });
   const headMat = new THREE.MeshBasicMaterial({ color: 0xffc878 });
-  const poolMat = new THREE.MeshBasicMaterial({
-    color: 0xffb85c,
-    transparent: true,
-    opacity: 0.0,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending
-  });
 
   const poleInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.09, 6.2, 6), poleMat, lampSpots.length);
   const armInst  = new THREE.InstancedMesh(new THREE.BoxGeometry(1.3, 0.07, 0.07), poleMat, lampSpots.length);
   const headInst = new THREE.InstancedMesh(new THREE.BoxGeometry(0.45, 0.12, 0.25), headMat, lampSpots.length);
-  const poolInst = new THREE.InstancedMesh(new THREE.CircleGeometry(4.5, 16), poolMat, lampSpots.length);
 
-  lampSpots.forEach(([x, z, yaw], i) => {
-    q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-    m4.compose(new THREE.Vector3(x, 3.1, z), q4, new THREE.Vector3(1, 1, 1));
+  lampSpots.forEach((sp, i) => {
+    q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), sp.yaw);
+    m4.compose(new THREE.Vector3(sp.poleX, 3.1, sp.poleZ), q4, new THREE.Vector3(1, 1, 1));
     poleInst.setMatrixAt(i, m4);
 
-    const ax = x + Math.cos(yaw) * 0.55, az = z - Math.sin(yaw) * 0.55;
+    const ax = sp.poleX + Math.cos(sp.yaw) * 0.55, az = sp.poleZ - Math.sin(sp.yaw) * 0.55;
     m4.compose(new THREE.Vector3(ax, 6.1, az), q4, new THREE.Vector3(1, 1, 1));
     armInst.setMatrixAt(i, m4);
 
-    const hx = x + Math.cos(yaw) * 1.1, hz = z - Math.sin(yaw) * 1.1;
-    m4.compose(new THREE.Vector3(hx, 6.05, hz), q4, new THREE.Vector3(1, 1, 1));
+    m4.compose(new THREE.Vector3(sp.x, sp.h, sp.z), q4, new THREE.Vector3(1, 1, 1));
     headInst.setMatrixAt(i, m4);
-
-    const qFlat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-    m4.compose(new THREE.Vector3(hx, 0.09, hz), qFlat, new THREE.Vector3(1, 1, 1));
-    poolInst.setMatrixAt(i, m4);
   });
 
-  scene.add(poleInst, armInst, headInst, poolInst);
-  return { roadSegs, lampHead: headInst, lampPool: poolInst };
+  scene.add(poleInst, armInst, headInst);
+  return { roadSegs, lampHead: headInst, lampSpots };
 }
