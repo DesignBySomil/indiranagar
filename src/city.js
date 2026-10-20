@@ -195,10 +195,11 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
             win *= (1.0 - clamp(mullion, 0.0, 1.0));
 
             float seed = h21(cell + floor(vWp.xz * 0.02));
-            float on = step(0.50, seed);
-            vec3 warm = mix(vec3(1.0, 0.80, 0.45), vec3(0.80, 0.92, 1.0), h21(cell + 5.3));
+            float on = step(0.58, seed);
+            float wv = h21(cell + 5.3);
+            vec3 warm = mix(vec3(1.0, 0.58, 0.22), vec3(1.0, 0.78, 0.42), wv) * (0.55 + 0.6 * h21(cell + 9.1));
 
-            totalEmissiveRadiance += warm * win * on * (0.15 + uNight * 1.15);
+            totalEmissiveRadiance += warm * win * on * (0.08 + uNight * 0.50);
             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.24, 0.30, 0.36), win * (1.0 - uNight * 0.6) * 0.65);
           } else {
             // Ground floor striped shopfront awning band (y = 2.45m to 3.15m)
