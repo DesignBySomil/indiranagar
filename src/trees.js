@@ -450,4 +450,4 @@ export function createRainTrees({
     group,
     treeSpots
   };
-                                         }
+}
