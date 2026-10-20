@@ -15,6 +15,9 @@ import { createCameraRig } from './cameras.js';
 import { createDestinationMode } from './destination.js';
 import { createRimLight } from './rim.js';
 import { buildIcons } from './icons.js';
+import { buildBrandStore, updateBrandStores } from './brands.js';
+import { STOP_LIST, STOP_PLACES, LEELA_ACCESS_ROAD } from './stopsdata.js';
+import { createAmbientOcclusion, tuneShadows } from './ao.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('c');
@@ -27,9 +30,11 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(54, 1, 0.5, 2200);
 const post = createPost(renderer, scene, camera);
 
+let ao = null, shadowTuner = null, extras = null;
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   post.setSize(innerWidth, innerHeight);
+  if (ao && ao.setSize) ao.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 }
@@ -106,25 +111,67 @@ function nearestRoadInfo(x, z) {
   return { name: best < 60 ? name : '', yaw };
 }
 
+const brandGroup = new THREE.Group();
+scene.add(brandGroup);
+
+// push a brand plot off the carriageway and face it at the nearest road
+function plotBesideRoad(x, z) {
+  let best = 1e9, nx = x, nz = z;
+  for (const r of world.roads) {
+    if (r.k < 2) continue;
+    for (let i = 0; i < r.p.length - 1; i++) {
+      const [x1, z1] = r.p[i], [x2, z2] = r.p[i + 1];
+      const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
+      const t = THREE.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / L2, 0, 1);
+      const px = x1 + dx * t, pz = z1 + dz * t, d = Math.hypot(x - px, z - pz);
+      if (d < best) { best = d; nx = px; nz = pz; }
+    }
+  }
+  const want = 15;
+  let ox = x, oz = z;
+  if (best < want) {
+    let vx = x - nx, vz = z - nz; const vl = Math.hypot(vx, vz);
+    if (vl < 0.5) { vx = 1; vz = 0; } else { vx /= vl; vz /= vl; }
+    ox = nx + vx * want; oz = nz + vz * want;
+  }
+  return { x: ox, z: oz, yaw: Math.atan2(nx - ox, nz - oz) };
+}
+const brandPlots = {};
+
 function setupLandmarks() {
   const used = new Set();
-  for (const [name, tag] of WANT) {
-    const lmExact = LANDMARKS_DATA.find(l => l.name === name);
-    let p = world.pois.find(q => q.n === name && !used.has(q));
-    if (!p && lmExact) p = { n: lmExact.name, t: lmExact.type, x: lmExact.x, z: lmExact.z };
+  for (const item of STOP_LIST) {
+    const { name, tag, brand } = item;
+    if (brand && STOP_PLACES[name]) {
+      const sp = STOP_PLACES[name];
+      const pl = brandPlots[name] || plotBesideRoad(sp.x, sp.z);
+      const model = buildBrandStore(name, THREE, nightUniform);
+      model.position.set(pl.x, 0, pl.z);
+      model.rotation.y = pl.yaw;
+      brandGroup.add(model);
+      stops.push({ p: { n: name, t: tag.toLowerCase(), x: pl.x, z: pl.z }, tag, road: sp.road, brand: true });
+      continue;
+    }
+    if (name === 'Indiranagar Metro' && extras && extras.station && extras.station.pts) {
+      const pts = extras.station.pts;
+      const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cz = pts.reduce((a, q) => a + q[1], 0) / pts.length;
+      stops.push({ p: { n: name, t: 'station', x: cx, z: cz }, tag, road: nearestRoadInfo(cx, cz).name || 'CMH Road', brand: false });
+      continue;
+    }
+    const searchName = name === 'Indiranagar Metro' ? 'Indiranagar station' : name;
+    const lmExact = LANDMARKS_DATA.find(l => l.name === searchName);
+    let p = world.pois.find(q => q.n === searchName && !used.has(q));
+    if (!p && lmExact) p = { n: name, t: lmExact.type, x: lmExact.x, z: lmExact.z };
     if (!p) continue;
     used.add(p);
-
     const rInfo = nearestRoadInfo(p.x, p.z);
     const road = lmExact ? lmExact.nearestRoad : rInfo.name;
     const yaw = lmExact ? lmExact.faceYaw : rInfo.yaw;
-
-    const model = buildLandmark(name, THREE);
+    const model = buildLandmark(searchName, THREE);
     model.position.set(p.x, 0, p.z);
     model.rotation.y = yaw;
     scene.add(model);
-
-    stops.push({ p, tag, road });
+    stops.push({ p: { n: name, t: p.t, x: p.x, z: p.z }, tag, road, brand: false });
   }
 }
 
@@ -349,6 +396,8 @@ function step(dt, now) {
   updateAuto(car, auto, dt);
   if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap));
   if (trees) trees.update(dt);
+  if (shadowTuner && shadowTuner.update) shadowTuner.update();
+  updateBrandStores(brandGroup, nightUniform);
   if (rimLight) rimLight.update(dt, nightUniform.value);
 
   if (state.auto) state.hour = (state.hour + dt / 14) % 24;
@@ -415,7 +464,8 @@ function loop(now) {
 async function boot() {
   setLoad(8, 'Fetching the map');
   world = await (await fetch(import.meta.env.BASE_URL + 'data/world.json')).json();
-let extras = null;
+  world.roads.push({ k: 3, n: 'Old Airport Road', p: LEELA_ACCESS_ROAD });
+extras = null;
 try {
   extras = await (await fetch(import.meta.env.BASE_URL + 'data/extras.json')).json();
 } catch (e) {
@@ -425,7 +475,15 @@ try {
 
   setLoad(30, 'Raising Indiranagar blocks');
   await new Promise(r => setTimeout(r, 20));
-  const city = buildCity(world, scene, nightUniform, LANDMARKS_DATA);
+  const clearing = [];
+  for (const it of STOP_LIST) {
+    if (!it.brand || !STOP_PLACES[it.name]) continue;
+    const pl = plotBesideRoad(STOP_PLACES[it.name].x, STOP_PLACES[it.name].z);
+    brandPlots[it.name] = pl;
+    clearing.push({ x: pl.x, z: pl.z }, { x: STOP_PLACES[it.name].x, z: STOP_PLACES[it.name].z });
+    if (it.name === 'The Leela Palace') for (let k = -2; k <= 2; k++) clearing.push({ x: pl.x + k * 12, z: pl.z + k * 8 });
+  }
+  const city = buildCity(world, scene, nightUniform, LANDMARKS_DATA.concat(clearing));
   solid = city.solid;
 
   setLoad(55, 'Laying 100 Feet Road, metro & trees');
@@ -510,6 +568,8 @@ try {
   });
   rimLight = createRimLight({ THREE, scene, camera, targets: [car, trees.group] });
 
+  try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
+  shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
   buildMini();
 
   auto.x = stops[0].p.x + 15.5;
