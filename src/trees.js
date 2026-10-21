@@ -257,7 +257,7 @@ export function createRainTrees({
         if (!isPrimeAvenue && hVal < 0.36) continue;
 
         // Verge offset: width/2 + 2.2m to 4.5m from road centreline
-        const vergeOff = width * 0.5 + 2.2 + hash(z1 + dist, x1 * side, seed) * 2.3;
+        const vergeOff = width * 0.5 + 3.9 + hash(z1 + dist, x1 * side, seed) * 1.6;
         const tx = x1 + ux * dist - uz * vergeOff * side;
         const tz = z1 + uz * dist + ux * vergeOff * side;
 
