@@ -406,7 +406,7 @@ function drawMini() {
 }
 
 // ---------- loop ----------
-let hazards = null;
+let hazards = null, streetRef = null;
 let last = performance.now(), cardT = 0, frame = 0, started = false, camRoll = 0;
 function showCard(kind, name, text) {
   if ($('cardKind')) $('cardKind').textContent = kind;
@@ -415,6 +415,20 @@ function showCard(kind, name, text) {
   if ($('card')) $('card').classList.add('on');
   cardT = 4.5;
 }
+
+function inDivider(px, pz) {
+    const mq = streetRef && streetRef.medianQuads;
+    if (!mq) return false;
+    for (let i = 0; i < mq.length; i++) {
+      const q = mq[i];
+      const ux = q[2] - q[0], uz = q[3] - q[1], vx = q[4] - q[0], vz = q[5] - q[1];
+      const det = ux * vz - uz * vx; if (Math.abs(det) < 1e-6) continue;
+      const rx = px - q[0], rz = pz - q[1];
+      const sU = (rx * vz - rz * vx) / det, tV = (ux * rz - uz * rx) / det;
+      if (sU > -0.35 && sU < 1.35 && tV > 0 && tV < 1) return true;
+    }
+    return false;
+  }
 
 function step(dt, now) {
   let thr = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
@@ -435,19 +449,6 @@ function step(dt, now) {
     for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
       if (inDivider(px, pz) || solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
-    }
-    return false;
-  };
-  const inDivider = (px, pz) => {
-    const mq = street && street.medianQuads;
-    if (!mq) return false;
-    for (let i = 0; i < mq.length; i++) {
-      const q = mq[i];
-      const ux = q[2] - q[0], uz = q[3] - q[1], vx = q[4] - q[0], vz = q[5] - q[1];
-      const det = ux * vz - uz * vx; if (Math.abs(det) < 1e-6) continue;
-      const rx = px - q[0], rz = pz - q[1];
-      const sU = (rx * vz - rz * vx) / det, tV = (ux * rz - uz * rx) / det;
-      if (sU > -0.35 && sU < 1.35 && tV > 0 && tV < 1) return true;
     }
     return false;
   };
@@ -570,8 +571,8 @@ function step(dt, now) {
 function loop(now) {
   const dt = Math.min(window.__dtCap || 0.05, (now - last) / 1000);
   last = now;
-  if (started) step(dt, now);
-  post.render(dt);
+  try { if (started && !window.__paused) step(dt, now); } catch (e) { if (!window.__stepErr) { window.__stepErr = String(e && e.stack || e); console.error(e); } }
+  try { if (!window.__noRender) post.render(dt); } catch (e) { if (!window.__renderErr) { window.__renderErr = String(e); console.error(e); } }
   requestAnimationFrame(loop);
 }
 
@@ -665,6 +666,7 @@ try {
   setLoad(55, 'Laying 100 Feet Road, metro & trees');
   await new Promise(r => setTimeout(r, 20));
   const street = buildStreet(world, scene, nightUniform, solid, extras);
+  streetRef = street;
   roadSegs = street.roadSegs;
   lampHead = street.lampHead;
   lampLights = createLampLights(scene, street.lampSpots);
@@ -781,7 +783,7 @@ try {
     if (camRig) camRig.update(0.016, true); else syncCamera(0.016, true);
     clampCam();
   }
-  window.__spawnAt = spawnAt; window.__placeOnRoad = placeOnRoad;
+  window.__step = step; window.__inDivider = inDivider; window.__spawnAt = spawnAt; window.__placeOnRoad = placeOnRoad;
   spawnAt(stops[0].p.x, stops[0].p.z, Math.PI);
   auto.v = 0;
   auto.steer = 0;
@@ -831,6 +833,6 @@ try {
   chg.style.cssText = 'position:fixed;left:20px;top:64px;z-index:60;font:600 13px Bricolage Grotesque,sans-serif;padding:8px 14px;border-radius:20px;border:1px solid #ffffff55;background:#10151cdd;color:#fff;cursor:pointer';
   chg.addEventListener('click', () => { const sp = $('startpick'); $('start').classList.add('on'); if (sp) sp.focus(); });
   document.body.appendChild(chg);
-  window.__game = { get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
+  window.__game = { get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();
