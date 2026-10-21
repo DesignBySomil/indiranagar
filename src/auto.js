@@ -45,7 +45,7 @@ function createWheel() {
 
 export function buildAuto() {
   const root = new THREE.Group();
-  root.scale.setScalar(1.05);
+  root.scale.setScalar(0.95);
 
   const chassis = new THREE.Group();
   root.add(chassis);
