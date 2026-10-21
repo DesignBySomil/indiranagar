@@ -688,6 +688,7 @@ function normalizeRoadSegs(roadSegs, solidFn) {
       width,
       len,
       ux, uz,
+      oneway: !!s.oneway,
       name: s.name || ''
     });
   }
@@ -1234,7 +1235,7 @@ export function createParkedVehicles({
         if (isOnAnyRoad(px, pz, s)) continue;
 
         const h = hash(px, pz, seed);
-        const dirYaw = side === 1 ? baseYaw : baseYaw + Math.PI;
+        const dirYaw = (s.oneway || side === 1) ? baseYaw : baseYaw + Math.PI;
 
         // Classify type: hatch, sedan, suv, autoRickshaw, scooter, bike
         let type = 'hatch';
