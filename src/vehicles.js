@@ -7,286 +7,1270 @@ const hash = (x, z, seed = 0) => {
   return s - Math.floor(s);
 };
 
-function buildWheelGeometry(T) {
-  const tire = new T.CylinderGeometry(0.32, 0.32, 0.22, 16);
-  tire.rotateZ(Math.PI / 2);
-  const hub = new T.CylinderGeometry(0.18, 0.18, 0.24, 12);
+function paintGeo(T, geo, hex, shadeY = 0.08) {
+  const g = geo.index ? geo.toNonIndexed() : geo.clone();
+  g.deleteAttribute('uv');
+  g.computeVertexNormals();
+  const col = new T.Color(hex);
+  const count = g.attributes.position.count;
+  const arr = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const py = g.attributes.position.getY(i);
+    const s = 0.9 + Math.min(0.18, Math.max(-0.1, py * shadeY));
+    arr[i * 3] = Math.min(1, col.r * s);
+    arr[i * 3 + 1] = Math.min(1, col.g * s);
+    arr[i * 3 + 2] = Math.min(1, col.b * s);
+  }
+  g.setAttribute('color', new T.BufferAttribute(arr, 3));
+  return g;
+}
+
+function extrudeProfile(T, pts, width, bevelSize = 0.06, bevelThick = 0.06) {
+  const shape = new T.Shape();
+  shape.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i];
+    if (p.length === 4) {
+      shape.quadraticCurveTo(p[0], p[1], p[2], p[3]);
+    } else {
+      shape.lineTo(p[0], p[1]);
+    }
+  }
+  shape.closePath();
+
+  const depth = Math.max(0.1, width - bevelThick * 2);
+  const geo = new T.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    steps: 1,
+    bevelSize,
+    bevelThickness: bevelThick,
+    curveSegments: 12
+  });
+  // Extrude is in XY (X = vehicle Z length, Y = height) extruded along +Z (width)
+  geo.translate(0, 0, -depth * 0.5);
+  // Rotate +90 deg around Y so local X becomes +Z (forward) and local Z becomes +X (width)
+  geo.rotateY(Math.PI / 2);
+  return geo;
+}
+
+function buildSpokedWheel(T, radius = 0.33, tube = 0.105) {
+  const parts = [];
+  // Torus tyre with 22 radial segments
+  const tyre = new T.TorusGeometry(radius - tube * 0.65, tube, 12, 22);
+  tyre.rotateY(Math.PI / 2);
+  parts.push(paintGeo(T, tyre, 0x1a1c20, 0.02));
+
+  // Outer chrome rim ring
+  const rimR = radius - tube * 1.15;
+  const rim = new T.CylinderGeometry(rimR, rimR, tube * 1.1, 16, 1, true);
+  rim.rotateZ(Math.PI / 2);
+  parts.push(paintGeo(T, rim, 0xd8dee9, 0.04));
+
+  // Inner dark brake disc
+  const disc = new T.CylinderGeometry(rimR * 0.85, rimR * 0.85, tube * 0.6, 12);
+  disc.rotateZ(Math.PI / 2);
+  parts.push(paintGeo(T, disc, 0x2b303c, 0.02));
+
+  // Center hub cap
+  const hub = new T.CylinderGeometry(rimR * 0.28, rimR * 0.28, tube * 1.45, 10);
   hub.rotateZ(Math.PI / 2);
+  parts.push(paintGeo(T, hub, 0xe5e9f0, 0.05));
 
-  const tCount = tire.attributes.position.count;
-  const tArr = new Float32Array(tCount * 3);
-  for (let i = 0; i < tCount; i++) {
-    tArr[i * 3] = 0.18; tArr[i * 3 + 1] = 0.18; tArr[i * 3 + 2] = 0.18;
+  // 5 Chrome Spokes
+  for (let s = 0; s < 5; s++) {
+    const ang = (s * Math.PI * 2) / 5;
+    const spk = new T.BoxGeometry(tube * 1.32, rimR * 0.92, 0.036);
+    spk.translate(0, rimR * 0.44, 0);
+    spk.rotateX(ang);
+    parts.push(paintGeo(T, spk, 0xe2e8f0, 0.05));
   }
-  tire.setAttribute('color', new T.BufferAttribute(tArr, 3));
 
-  const hCount = hub.attributes.position.count;
-  const hArr = new Float32Array(hCount * 3);
-  for (let i = 0; i < hCount; i++) {
-    hArr[i * 3] = 0.85; hArr[i * 3 + 1] = 0.88; hArr[i * 3 + 2] = 0.92;
-  }
-  hub.setAttribute('color', new T.BufferAttribute(hArr, 3));
-  return mergeGeometries([tire, hub], false);
+  return mergeGeometries(parts, false);
 }
 
-function buildCarGeometry(T, type = 'sedan') {
-  const parts = [];
-  const colPaint = new T.Color(0xd93829);
-  const colGlass = new T.Color(0x93c5fd);
-  const colBumper = new T.Color(0x1e2229);
-  const colLight = new T.Color(0xfffbeb);
-  const colTail = new T.Color(0xef4444);
+function buildCarSet(T, type = 'sedan') {
+  const bodyParts = [];
+  const detailParts = [];
+  const brakeParts = [];
 
-  function paint(geo, col, shade = 1.0) {
-    const count = geo.attributes.position.count;
-    const arr = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const py = geo.attributes.position.getY(i);
-      const s = shade * (0.88 + Math.min(0.2, py * 0.08));
-      arr[i * 3] = col.r * s;
-      arr[i * 3 + 1] = col.g * s;
-      arr[i * 3 + 2] = col.b * s;
+  const isSuv = type === 'suv';
+  const isHatch = type === 'hatch';
+  const len = isSuv ? 4.45 : (isHatch ? 3.82 : 4.28);
+  const wdt = isSuv ? 1.86 : (isHatch ? 1.70 : 1.76);
+  const hgt = isSuv ? 1.72 : (isHatch ? 1.48 : 1.44);
+  const hl = len * 0.5;
+  const hw = wdt * 0.5;
+
+  // 1. Lower Body Side-Profile Shape (X = longitudinal Z, Y = vertical Y)
+  let hullPts;
+  if (isSuv) {
+    hullPts = [
+      [-hl, 0.26],
+      [hl - 0.14, 0.24],
+      [hl + 0.02, 0.26, hl, 0.55],
+      [hl - 0.02, 0.86, hl - 0.18, 0.94],
+      [hl * 0.38, 0.98],
+      [-hl + 0.16, 1.00],
+      [-hl, 0.94, -hl - 0.02, 0.56]
+    ];
+  } else if (isHatch) {
+    hullPts = [
+      [-hl, 0.24],
+      [hl - 0.14, 0.22],
+      [hl + 0.02, 0.25, hl, 0.48],
+      [hl - 0.04, 0.72, hl - 0.25, 0.80],
+      [hl * 0.36, 0.86],
+      [-hl + 0.12, 0.88],
+      [-hl, 0.82, -hl - 0.02, 0.46]
+    ];
+  } else {
+    // Sedan
+    hullPts = [
+      [-hl, 0.25],
+      [hl - 0.15, 0.22],
+      [hl + 0.02, 0.25, hl, 0.48],
+      [hl - 0.05, 0.74, hl - 0.28, 0.81],
+      [hl * 0.35, 0.86],
+      [-hl * 0.55, 0.88],
+      [-hl + 0.12, 0.86],
+      [-hl, 0.80, -hl - 0.02, 0.48]
+    ];
+  }
+  const hullGeo = extrudeProfile(T, hullPts, wdt, 0.07, 0.08);
+  bodyParts.push(paintGeo(T, hullGeo, 0xffffff, 0.08));
+
+  // 2. Greenhouse / Cabin with raked windscreen and pillars
+  let cabPts;
+  const cabBaseY = isSuv ? 0.90 : 0.79;
+  if (isSuv) {
+    cabPts = [
+      [-hl + 0.18, cabBaseY],
+      [hl * 0.36, cabBaseY],
+      [hl * 0.14, hgt - 0.05, -0.05, hgt],
+      [-hl + 0.38, hgt - 0.02],
+      [-hl + 0.18, hgt - 0.06, -hl + 0.14, cabBaseY + 0.1]
+    ];
+  } else if (isHatch) {
+    cabPts = [
+      [-hl + 0.16, cabBaseY],
+      [hl * 0.35, cabBaseY],
+      [hl * 0.08, hgt - 0.04, -0.12, hgt],
+      [-hl + 0.42, hgt - 0.03],
+      [-hl + 0.18, hgt - 0.12, -hl + 0.12, cabBaseY + 0.08]
+    ];
+  } else {
+    cabPts = [
+      [-hl * 0.62, cabBaseY],
+      [hl * 0.35, cabBaseY],
+      [hl * 0.06, hgt - 0.03, -0.15, hgt],
+      [-hl * 0.32, hgt - 0.02],
+      [-hl * 0.54, cabBaseY + 0.14, -hl * 0.64, cabBaseY + 0.04]
+    ];
+  }
+  // Dark glass interior block
+  const glassBlock = extrudeProfile(T, cabPts, wdt * 0.84, 0.04, 0.05);
+  detailParts.push(paintGeo(T, glassBlock, 0x16202e, 0.05));
+
+  // Tinted roof cap + pillars slightly wider/taller on top of glass
+  const roofCapPts = cabPts.map(p => {
+    if (p.length === 4) return [p[0], p[1] + 0.02, p[2], p[3] + 0.02];
+    return [p[0], p[1] + 0.02];
+  });
+  const roofCap = extrudeProfile(T, roofCapPts, wdt * 0.78, 0.03, 0.03);
+  bodyParts.push(paintGeo(T, roofCap, 0xffffff, 0.08));
+
+  // Raked A, B, C Pillars (body-colored strips along glass sides)
+  const aPillarL = new T.BoxGeometry(0.06, 0.52, 0.07);
+  aPillarL.rotateX(-0.62);
+  aPillarL.translate(hw * 0.79, cabBaseY + 0.24, hl * 0.19);
+  const aPillarR = aPillarL.clone();
+  aPillarR.translate(-hw * 1.58, 0, 0);
+  bodyParts.push(paintGeo(T, aPillarL, 0xffffff), paintGeo(T, aPillarR, 0xffffff));
+
+  const bPillarL = new T.BoxGeometry(0.05, 0.46, 0.09);
+  bPillarL.translate(hw * 0.82, cabBaseY + 0.24, -0.08);
+  const bPillarR = bPillarL.clone();
+  bPillarR.translate(-hw * 1.64, 0, 0);
+  detailParts.push(paintGeo(T, bPillarL, 0x11151c), paintGeo(T, bPillarR, 0x11151c));
+
+  // 3. Flared Wheel Arches + Dark Wheel Wells
+  const wheelZFront = hl * 0.60;
+  const wheelZRear = -hl * 0.58;
+  const wheelR = isSuv ? 0.36 : 0.32;
+  const wheelProto = buildSpokedWheel(T, wheelR, isSuv ? 0.115 : 0.10);
+
+  for (const wz of [wheelZFront, wheelZRear]) {
+    for (const side of [-1, 1]) {
+      // Wheel Arch Flare (Body colored)
+      const arch = new T.TorusGeometry(wheelR + 0.05, 0.065, 8, 16, Math.PI);
+      arch.rotateY(Math.PI / 2);
+      arch.translate(side * (hw - 0.03), wheelR, wz);
+      bodyParts.push(paintGeo(T, arch, 0xffffff, 0.06));
+
+      // Dark wheel well backing
+      const well = new T.CylinderGeometry(wheelR + 0.03, wheelR + 0.03, 0.26, 14, 1, false, 0, Math.PI);
+      well.rotateZ(Math.PI / 2);
+      well.translate(side * (hw - 0.12), wheelR, wz);
+      detailParts.push(paintGeo(T, well, 0x0f1115, 0.0));
+
+      // Spoked Wheel
+      const w = wheelProto.clone();
+      if (side < 0) w.rotateY(Math.PI);
+      w.translate(side * (hw - 0.06), wheelR, wz);
+      detailParts.push(w);
     }
-    geo.setAttribute('color', new T.BufferAttribute(arr, 3));
-    geo.deleteAttribute('uv');
-    return geo;
   }
 
-  // Lower Hull / Body
-  const len = type === 'suv' ? 4.4 : (type === 'hatch' ? 3.8 : 4.2);
-  const wdt = type === 'suv' ? 1.85 : 1.72;
-  const hgt = type === 'suv' ? 1.72 : 1.45;
+  // 4. Door Lines & Door Handles (thin dark boxes along flanks)
+  for (const side of [-1, 1]) {
+    const sx = side * (hw + 0.005);
+    const seamV1 = new T.BoxGeometry(0.018, 0.52, 0.018);
+    seamV1.translate(sx, 0.56, hl * 0.30);
+    const seamV2 = seamV1.clone();
+    seamV2.translate(0, 0, -hl * 0.38);
+    const seamV3 = seamV1.clone();
+    seamV3.translate(0, 0, -hl * 0.78);
+    const seamH = new T.BoxGeometry(0.018, 0.018, hl * 1.08);
+    seamH.translate(sx, 0.31, -hl * 0.09);
+    const handle1 = new T.BoxGeometry(0.035, 0.035, 0.14);
+    handle1.translate(sx, 0.72, 0.04);
+    const handle2 = handle1.clone();
+    handle2.translate(0, 0, -hl * 0.38);
+    detailParts.push(
+      paintGeo(T, seamV1, 0x14171f),
+      paintGeo(T, seamV2, 0x14171f),
+      paintGeo(T, seamV3, 0x14171f),
+      paintGeo(T, seamH, 0x14171f),
+      paintGeo(T, handle1, 0x1e2430),
+      paintGeo(T, handle2, 0x1e2430)
+    );
 
-  const hull = new T.BoxGeometry(wdt, hgt * 0.52, len);
-  hull.translate(0, hgt * 0.32, 0);
-  parts.push(paint(hull, colPaint, 1.0));
+    // 5. Side Mirrors (stalk + body-colored housing)
+    const stalk = new T.BoxGeometry(0.10, 0.035, 0.04);
+    stalk.translate(side * (hw + 0.02), cabBaseY + 0.06, hl * 0.25);
+    detailParts.push(paintGeo(T, stalk, 0x181b22));
 
-  // Cabin / Greenhouse
-  const cabLen = len * 0.56;
-  const cab = new T.BoxGeometry(wdt * 0.88, hgt * 0.44, cabLen);
-  cab.translate(0, hgt * 0.76, -0.05);
-  parts.push(paint(cab, colGlass, 0.85));
+    const mirHousing = new T.SphereGeometry(0.075, 10, 8);
+    mirHousing.scale(1.2, 0.75, 0.65);
+    mirHousing.translate(side * (hw + 0.09), cabBaseY + 0.08, hl * 0.24);
+    bodyParts.push(paintGeo(T, mirHousing, 0xffffff));
+  }
 
-  // Bumpers & Grill
-  const fBump = new T.BoxGeometry(wdt * 0.98, 0.28, 0.25);
-  fBump.translate(0, 0.32, len * 0.52);
+  // 6. Front & Rear Bumpers, Grille, License Plates
+  const fBump = new T.BoxGeometry(wdt * 0.96, 0.18, 0.16);
+  fBump.translate(0, 0.28, hl + 0.01);
+  const rBump = new T.BoxGeometry(wdt * 0.96, 0.20, 0.16);
+  rBump.translate(0, 0.30, -hl - 0.01);
+  detailParts.push(paintGeo(T, fBump, 0x1b1f26), paintGeo(T, rBump, 0x1b1f26));
+
+  // Front Grille + Chrome Slats
+  const grille = new T.BoxGeometry(wdt * 0.50, 0.18, 0.06);
+  grille.translate(0, 0.50, hl + 0.02);
+  detailParts.push(paintGeo(T, grille, 0x111318));
+  for (let g = -1; g <= 1; g++) {
+    const slat = new T.BoxGeometry(wdt * 0.48, 0.022, 0.075);
+    slat.translate(0, 0.50 + g * 0.05, hl + 0.022);
+    detailParts.push(paintGeo(T, slat, 0xd8dee9));
+  }
+
+  // White License Plates Front & Rear
+  const plateF = new T.BoxGeometry(0.42, 0.10, 0.04);
+  plateF.translate(0, 0.30, hl + 0.08);
+  const plateR = plateF.clone();
+  plateR.translate(0, 0.08, -len - 0.16);
+  detailParts.push(paintGeo(T, plateF, 0xf8fafc), paintGeo(T, plateR, 0xf8fafc));
+
+  // 7. Headlights & Tail Lights + Brake Light Overlay
+  for (const side of [-1, 1]) {
+    const hlBox = new T.BoxGeometry(0.28, 0.13, 0.09);
+    hlBox.rotateY(side * 0.18);
+    hlBox.translate(side * (hw * 0.68), 0.54, hl - 0.01);
+    detailParts.push(paintGeo(T, hlBox, 0xfffbeb));
+
+    const tlBox = new T.BoxGeometry(0.30, 0.14, 0.08);
+    tlBox.translate(side * (hw * 0.66), 0.62, -hl + 0.01);
+    detailParts.push(paintGeo(T, tlBox, 0xb91c1c));
+
+    // Brake light overlay (slightly proud of tail light for dynamic brake toggle)
+    const brkBox = new T.BoxGeometry(0.28, 0.12, 0.04);
+    brkBox.translate(side * (hw * 0.66), 0.62, -hl - 0.035);
+    brakeParts.push(paintGeo(T, brkBox, 0xff2222));
+  }
+
+  // Centre high-mount stop lamp
+  const chmsl = new T.BoxGeometry(0.36, 0.045, 0.04);
+  chmsl.translate(0, hgt - 0.08, isSedan(type) ? -hl * 0.58 : -hl + 0.16);
+  brakeParts.push(paintGeo(T, chmsl, 0xff2222));
+
+  return {
+    bodyGeo: mergeGeometries(bodyParts, false),
+    detailGeo: mergeGeometries(detailParts, false),
+    brakeGeo: mergeGeometries(brakeParts, false)
+  };
+}
+
+function isSedan(t) {
+  return t !== 'suv' && t !== 'hatch';
+}
+
+function buildScooterSet(T, withRider = true) {
+  const bodyParts = [];
+  const detailParts = [];
+  const brakeParts = [];
+
+  // Rounded front apron shield (Extruded curved profile)
+  const shieldPts = [
+    [0.24, 0.24],
+    [0.48, 0.26],
+    [0.58, 0.52, 0.44, 0.86],
+    [0.34, 0.88],
+    [0.42, 0.54, 0.24, 0.34]
+  ];
+  const shield = extrudeProfile(T, shieldPts, 0.42, 0.05, 0.05);
+  bodyParts.push(paintGeo(T, shield, 0xffffff, 0.08));
+
+  // Floorboard
+  const floor = new T.BoxGeometry(0.38, 0.07, 0.56);
+  floor.translate(0, 0.24, 0.04);
+  detailParts.push(paintGeo(T, floor, 0x1e222a));
+
+  // Rounded rear engine cowl / side pods (Capsules)
+  for (const side of [-1, 1]) {
+    const pod = new T.CapsuleGeometry(0.14, 0.42, 8, 12);
+    pod.rotateX(Math.PI / 2 - 0.18);
+    pod.translate(side * 0.11, 0.44, -0.34);
+    bodyParts.push(paintGeo(T, pod, 0xffffff, 0.08));
+  }
+
+  // Front mudguard (curved over front wheel)
+  const fMud = new T.SphereGeometry(0.24, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.55);
+  fMud.scale(0.75, 1.0, 1.15);
+  fMud.translate(0, 0.24, 0.54);
+  bodyParts.push(paintGeo(T, fMud, 0xffffff, 0.08));
+
+  // Rear mudguard
+  const rMud = new T.BoxGeometry(0.18, 0.18, 0.12);
+  rMud.rotateX(0.35);
+  rMud.translate(0, 0.28, -0.68);
+  detailParts.push(paintGeo(T, rMud, 0x181b20));
+
+  // Contoured Dual Seat
+  const seat = new T.CapsuleGeometry(0.15, 0.44, 8, 12);
+  seat.rotateX(Math.PI / 2);
+  seat.scale(1.1, 0.65, 1.0);
+  seat.translate(0, 0.65, -0.26);
+  detailParts.push(paintGeo(T, seat, 0x1c1917));
+
+  // Front Fork Tubes + Steering Stem
+  for (const side of [-1, 1]) {
+    const fork = new T.CylinderGeometry(0.022, 0.018, 0.58, 8);
+    fork.rotateX(-0.24);
+    fork.translate(side * 0.08, 0.46, 0.48);
+    detailParts.push(paintGeo(T, fork, 0x94a3b8));
+  }
+
+  // Handlebar + Grips + Mirrors
+  const hBar = new T.CylinderGeometry(0.022, 0.022, 0.58, 8);
+  hBar.rotateZ(Math.PI / 2);
+  hBar.translate(0, 0.94, 0.36);
+  detailParts.push(paintGeo(T, hBar, 0xcbd5e1));
+
+  const cowl = new T.SphereGeometry(0.11, 10, 8);
+  cowl.scale(1.4, 0.85, 0.9);
+  cowl.translate(0, 0.95, 0.39);
+  bodyParts.push(paintGeo(T, cowl, 0xffffff));
+
+  // Round Chrome Headlight
+  const hLight = new T.CylinderGeometry(0.075, 0.075, 0.06, 14);
+  hLight.rotateX(Math.PI / 2);
+  hLight.translate(0, 0.95, 0.46);
+  detailParts.push(paintGeo(T, hLight, 0xfffbeb));
+
+  // Exhaust Pipe (right side)
+  const exhaust = new T.CylinderGeometry(0.038, 0.048, 0.46, 10);
+  exhaust.rotateX(Math.PI / 2 - 0.15);
+  exhaust.translate(-0.19, 0.24, -0.44);
+  detailParts.push(paintGeo(T, exhaust, 0x64748b));
+
+  // Small White License Plate + Tail/Brake Light
+  const sPlate = new T.BoxGeometry(0.16, 0.09, 0.02);
+  sPlate.translate(0, 0.36, -0.73);
+  detailParts.push(paintGeo(T, sPlate, 0xf8fafc));
+
+  const sTail = new T.BoxGeometry(0.14, 0.08, 0.05);
+  sTail.translate(0, 0.54, -0.68);
+  detailParts.push(paintGeo(T, sTail, 0xb91c1c));
+
+  const sBrake = new T.BoxGeometry(0.13, 0.07, 0.03);
+  sBrake.translate(0, 0.54, -0.71);
+  brakeParts.push(paintGeo(T, sBrake, 0xff2222));
+
+  // Spoked Scooter Wheels
+  const scWheel = buildSpokedWheel(T, 0.21, 0.065);
+  const fw = scWheel.clone();
+  fw.translate(0, 0.21, 0.54);
+  const rw = scWheel.clone();
+  rw.translate(0, 0.21, -0.46);
+  detailParts.push(fw, rw);
+
+  // Rider with Helmet for moving scooters
+  if (withRider) {
+    // Torso
+    const torso = new T.CapsuleGeometry(0.14, 0.36, 8, 12);
+    torso.rotateX(0.18);
+    torso.translate(0, 1.02, -0.14);
+    detailParts.push(paintGeo(T, torso, 0x1e3a8a, 0.06));
+
+    // Arms reaching to handlebar
+    for (const side of [-1, 1]) {
+      const arm = new T.CapsuleGeometry(0.045, 0.32, 6, 8);
+      arm.rotateX(1.15);
+      arm.rotateY(side * -0.15);
+      arm.translate(side * 0.17, 1.04, 0.09);
+      detailParts.push(paintGeo(T, arm, 0x2563eb));
+
+      const leg = new T.CapsuleGeometry(0.058, 0.36, 6, 8);
+      leg.rotateX(-0.35);
+      leg.translate(side * 0.12, 0.56, 0.08);
+      detailParts.push(paintGeo(T, leg, 0x1e293b));
+    }
+
+    // Helmet + Visor
+    const helmet = new T.SphereGeometry(0.155, 14, 12);
+    helmet.translate(0, 1.42, -0.06);
+    detailParts.push(paintGeo(T, helmet, 0xfacc15, 0.08));
+
+    const visor = new T.SphereGeometry(0.158, 12, 8, -0.9, 1.8, 0.9, 0.8);
+    visor.rotateY(Math.PI / 2);
+    visor.translate(0, 1.42, -0.04);
+    detailParts.push(paintGeo(T, visor, 0x0f172a));
+  }
+
+  return {
+    bodyGeo: mergeGeometries(bodyParts, false),
+    detailGeo: mergeGeometries(detailParts, false),
+    brakeGeo: mergeGeometries(brakeParts, false)
+  };
+}
+
+function buildAutoRickshawSet(T) {
+  const bodyParts = [];
+  const detailParts = [];
+  const brakeParts = [];
+
+  // Iconic Bengaluru/Indian Green lower shell + Yellow canopy hood
+  // Lower cowl & rear passenger tub (Green = fixed or tinted; we put green on bodyGeo so palette can tint green shades, and yellow canopy on detailGeo)
+  const tubPts = [
+    [-1.25, 0.22],
+    [0.85, 0.22],
+    [1.15, 0.26, 1.12, 0.65],
+    [0.98, 0.88, 0.65, 0.92],
+    [0.35, 0.88],
+    [0.35, 0.45],
+    [-0.15, 0.45],
+    [-0.20, 0.86],
+    [-1.22, 0.88],
+    [-1.28, 0.55]
+  ];
+  const tub = extrudeProfile(T, tubPts, 1.28, 0.05, 0.05);
+  bodyParts.push(paintGeo(T, tub, 0xffffff, 0.08));
+
+  // Rounded Yellow Canopy Top + Rear Engine Cover
+  const canopyPts = [
+    [-1.22, 0.86],
+    [-1.12, 1.66, -0.75, 1.72],
+    [0.52, 1.72],
+    [0.88, 1.66, 0.98, 1.18],
+    [0.84, 1.16],
+    [0.75, 1.58, 0.48, 1.62],
+    [-0.95, 1.62],
+    [-1.08, 0.86]
+  ];
+  const canopy = extrudeProfile(T, canopyPts, 1.24, 0.04, 0.04);
+  detailParts.push(paintGeo(T, canopy, 0xfacc15, 0.08));
+
+  // Yellow upper nose band
+  const noseBand = new T.BoxGeometry(1.22, 0.24, 0.65);
+  noseBand.translate(0, 0.98, 0.72);
+  detailParts.push(paintGeo(T, noseBand, 0xfacc15, 0.06));
+
+  // Windscreen glass
+  const wScreen = new T.BoxGeometry(1.10, 0.46, 0.05);
+  wScreen.rotateX(-0.22);
+  wScreen.translate(0, 1.32, 0.90);
+  detailParts.push(paintGeo(T, wScreen, 0x1e293b));
+
+  // Passenger bench seat inside
+  const bench = new T.BoxGeometry(1.12, 0.28, 0.52);
+  bench.translate(0, 0.56, -0.68);
+  detailParts.push(paintGeo(T, bench, 0x1c1917));
+
+  // 3 Spoked Wheels (1 front, 2 rear)
+  const wProto = buildSpokedWheel(T, 0.22, 0.07);
+  const fw = wProto.clone();
+  fw.translate(0, 0.22, 0.98);
+  const rwL = wProto.clone();
+  rwL.translate(0.58, 0.22, -0.82);
+  const rwR = wProto.clone();
+  rwR.rotateY(Math.PI);
+  rwR.translate(-0.58, 0.22, -0.82);
+  detailParts.push(fw, rwL, rwR);
+
+  // Single center headlight + twin indicators
+  const hl = new T.CylinderGeometry(0.09, 0.09, 0.08, 14);
+  hl.rotateX(Math.PI / 2);
+  hl.translate(0, 0.66, 1.15);
+  detailParts.push(paintGeo(T, hl, 0xfffbeb));
+
+  // Rear tail/brake lights + license plate
+  for (const side of [-1, 1]) {
+    const tl = new T.BoxGeometry(0.18, 0.10, 0.06);
+    tl.translate(side * 0.42, 0.48, -1.27);
+    detailParts.push(paintGeo(T, tl, 0xb91c1c));
+
+    const brk = new T.BoxGeometry(0.16, 0.09, 0.04);
+    brk.translate(side * 0.42, 0.48, -1.30);
+    brakeParts.push(paintGeo(T, brk, 0xff2222));
+  }
+  const plate = new T.BoxGeometry(0.32, 0.10, 0.03);
+  plate.translate(0, 0.38, -1.27);
+  detailParts.push(paintGeo(T, plate, 0xfef08a));
+
+  return {
+    bodyGeo: mergeGeometries(bodyParts, false),
+    detailGeo: mergeGeometries(detailParts, false),
+    brakeGeo: mergeGeometries(brakeParts, false)
+  };
+}
+
+function buildTempoSet(T) {
+  const bodyParts = [];
+  const detailParts = [];
+  const brakeParts = [];
+
+  const len = 5.45;
+  const wdt = 2.02;
+  const hgt = 2.38;
+  const hl = len * 0.5;
+  const hw = wdt * 0.5;
+
+  // High-roof Tempo Traveller van profile
+  const vanPts = [
+    [-hl, 0.30],
+    [hl - 0.12, 0.28],
+    [hl + 0.04, 0.32, hl, 0.85],
+    [hl - 0.04, 1.15, hl - 0.26, 1.32],
+    [hl - 0.58, 1.98, hl - 0.82, hgt - 0.08],
+    [hl - 1.10, hgt],
+    [-hl + 0.28, hgt],
+    [-hl + 0.04, hgt - 0.05, -hl, hgt - 0.45],
+    [-hl - 0.02, 0.65]
+  ];
+  const vanBody = extrudeProfile(T, vanPts, wdt, 0.08, 0.08);
+  bodyParts.push(paintGeo(T, vanBody, 0xffffff, 0.06));
+
+  // Panoramic dark glass window band + raked front windscreen
+  const fWind = new T.BoxGeometry(wdt * 0.88, 0.74, 0.08);
+  fWind.rotateX(-0.34);
+  fWind.translate(0, 1.62, hl - 0.44);
+  detailParts.push(paintGeo(T, fWind, 0x131c29));
+
+  const sideWin = new T.BoxGeometry(wdt + 0.03, 0.62, len * 0.68);
+  sideWin.translate(0, 1.64, -0.35);
+  detailParts.push(paintGeo(T, sideWin, 0x131c29));
+
+  const rWind = new T.BoxGeometry(wdt * 0.82, 0.58, 0.06);
+  rWind.translate(0, 1.64, -hl - 0.01);
+  detailParts.push(paintGeo(T, rWind, 0x131c29));
+
+  // Window pillars (body colored)
+  for (let p = -2; p <= 1; p++) {
+    const pil = new T.BoxGeometry(wdt + 0.045, 0.64, 0.09);
+    pil.translate(0, 1.64, p * 0.92 - 0.1);
+    bodyParts.push(paintGeo(T, pil, 0xffffff));
+  }
+
+  // Roof AC unit pod
+  const acPod = new T.BoxGeometry(1.15, 0.18, 1.45);
+  acPod.translate(0, hgt + 0.08, -0.2);
+  bodyParts.push(paintGeo(T, acPod, 0xffffff));
+
+  // Heavy-duty Spoked Wheels + Arches
+  const wheelR = 0.39;
+  const wProto = buildSpokedWheel(T, wheelR, 0.12);
+  for (const wz of [hl * 0.58, -hl * 0.56]) {
+    for (const side of [-1, 1]) {
+      const arch = new T.TorusGeometry(wheelR + 0.05, 0.07, 8, 16, Math.PI);
+      arch.rotateY(Math.PI / 2);
+      arch.translate(side * (hw - 0.02), wheelR, wz);
+      detailParts.push(paintGeo(T, arch, 0x1e242d));
+
+      const w = wProto.clone();
+      if (side < 0) w.rotateY(Math.PI);
+      w.translate(side * (hw - 0.06), wheelR, wz);
+      detailParts.push(w);
+    }
+  }
+
+  // Bumpers, Grille, Side Mirrors, Door Lines
+  const fBump = new T.BoxGeometry(wdt * 0.98, 0.24, 0.18);
+  fBump.translate(0, 0.36, hl + 0.02);
   const rBump = fBump.clone();
-  rBump.translate(0, 0, -len * 1.04);
-  parts.push(paint(fBump, colBumper), paint(rBump, colBumper));
+  rBump.translate(0, 0, -len - 0.04);
+  const grille = new T.BoxGeometry(wdt * 0.62, 0.32, 0.06);
+  grille.translate(0, 0.78, hl + 0.02);
+  detailParts.push(
+    paintGeo(T, fBump, 0x181c24),
+    paintGeo(T, rBump, 0x181c24),
+    paintGeo(T, grille, 0x11141a)
+  );
 
-  // Headlights & Tail Lights
-  const hl = new T.BoxGeometry(0.35, 0.16, 0.1);
-  hl.translate(wdt * 0.34, 0.52, len * 0.53);
-  const hlR = hl.clone(); hlR.translate(-wdt * 0.68, 0, 0);
-  const tl = new T.BoxGeometry(0.32, 0.14, 0.1);
-  tl.translate(wdt * 0.34, 0.55, -len * 0.53);
-  const tlR = tl.clone(); tlR.translate(-wdt * 0.68, 0, 0);
-  parts.push(paint(hl, colLight), paint(hlR, colLight), paint(tl, colTail), paint(tlR, colTail));
+  const plateF = new T.BoxGeometry(0.46, 0.11, 0.04);
+  plateF.translate(0, 0.36, hl + 0.10);
+  const plateR = plateF.clone();
+  plateR.translate(0, 0.12, -len - 0.18);
+  detailParts.push(paintGeo(T, plateF, 0xfef08a), paintGeo(T, plateR, 0xfef08a));
 
-  return mergeGeometries(parts, false);
-}
+  for (const side of [-1, 1]) {
+    const mir = new T.BoxGeometry(0.12, 0.26, 0.08);
+    mir.translate(side * (hw + 0.10), 1.42, hl - 0.52);
+    detailParts.push(paintGeo(T, mir, 0x181c24));
 
-function buildScooterGeometry(T) {
-  const parts = [];
-  const colBody = new THREE.Color(0x38bdf8);
-  const colSeat = new THREE.Color(0x181a1e);
-  const colHelmet = new THREE.Color(0xfacc15);
+    const hlBox = new T.BoxGeometry(0.32, 0.18, 0.08);
+    hlBox.translate(side * (hw * 0.72), 0.76, hl + 0.01);
+    detailParts.push(paintGeo(T, hlBox, 0xfffbeb));
 
-  function paint(geo, col) {
-    const count = geo.attributes.position.count;
-    const arr = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      arr[i * 3] = col.r; arr[i * 3 + 1] = col.g; arr[i * 3 + 2] = col.b;
-    }
-    geo.setAttribute('color', new T.BufferAttribute(arr, 3));
-    geo.deleteAttribute('uv');
-    return geo;
+    const tlBox = new T.BoxGeometry(0.22, 0.42, 0.08);
+    tlBox.translate(side * (hw * 0.80), 0.82, -hl - 0.01);
+    detailParts.push(paintGeo(T, tlBox, 0xb91c1c));
+
+    const brkBox = new T.BoxGeometry(0.20, 0.38, 0.04);
+    brkBox.translate(side * (hw * 0.80), 0.82, -hl - 0.045);
+    brakeParts.push(paintGeo(T, brkBox, 0xff2222));
   }
 
-  const body = new T.BoxGeometry(0.38, 0.52, 1.35);
-  body.translate(0, 0.38, 0);
-  const seat = new T.BoxGeometry(0.34, 0.14, 0.72);
-  seat.translate(0, 0.68, -0.05);
-  const torso = new T.CapsuleGeometry(0.18, 0.42, 4, 8);
-  torso.translate(0, 1.08, -0.08);
-  const helmet = new T.SphereGeometry(0.18, 10, 8);
-  helmet.translate(0, 1.54, -0.05);
-
-  parts.push(paint(body, colBody), paint(seat, colSeat), paint(torso, new THREE.Color(0x2563eb)), paint(helmet, colHelmet));
-  return mergeGeometries(parts, false);
+  return {
+    bodyGeo: mergeGeometries(bodyParts, false),
+    detailGeo: mergeGeometries(detailParts, false),
+    brakeGeo: mergeGeometries(brakeParts, false)
+  };
 }
 
-export function createTraffic({ THREE: T = THREE, scene, roadSegs = [], solidFn = () => 0, nightUniform, getAuto, count = 90 }) {
+function normalizeRoadSegs(roadSegs, solidFn) {
+  const valid = [];
+  for (let i = 0; i < roadSegs.length; i++) {
+    const s = roadSegs[i];
+    if (!s) continue;
+    const x1 = s.x1 ?? s[0] ?? 0;
+    const z1 = s.z1 ?? s[1] ?? 0;
+    const x2 = s.x2 ?? s[2] ?? 0;
+    const z2 = s.z2 ?? s[3] ?? 0;
+    const width = s.width ?? s[6] ?? 8.2;
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const len = Math.hypot(dx, dz);
+    if (len < 12) continue;
+    const ux = dx / len;
+    const uz = dz / len;
+    const mx = (x1 + x2) * 0.5;
+    const mz = (z1 + z2) * 0.5;
+    if (solidFn && solidFn(mx, mz)) continue;
+    valid.push({
+      x1, z1, x2, z2,
+      mx, mz,
+      width,
+      len,
+      ux, uz,
+      name: s.name || ''
+    });
+  }
+  if (valid.length === 0) {
+    valid.push({
+      x1: -133, z1: -440, x2: -133, z2: -180,
+      mx: -133, mz: -310, width: 10, len: 260, ux: 0, uz: 1, name: '100 Feet Road'
+    });
+  }
+  return valid;
+}
+
+export function createTraffic({
+  THREE: T = THREE,
+  scene,
+  roadSegs = [],
+  solidFn = () => 0,
+  nightUniform,
+  getAuto,
+  count = 140
+}) {
+  const totalCount = Math.max(140, count || 140);
   const group = new T.Group();
   scene.add(group);
 
-  const carGeo = buildCarGeometry(T, 'sedan');
-  const suvGeo = buildCarGeometry(T, 'suv');
-  const scooterGeo = buildScooterGeometry(T);
+  const validSegs = normalizeRoadSegs(roadSegs, solidFn);
 
-  const mat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.15 });
-  const carInst = new T.InstancedMesh(carGeo, mat, Math.round(count * 0.5));
-  const suvInst = new T.InstancedMesh(suvGeo, mat, Math.round(count * 0.25));
-  const scInst = new T.InstancedMesh(scooterGeo, mat, Math.round(count * 0.25));
+  // Build high-poly vehicle geometry sets (Body tinted + Detail fixed + Brake emissive)
+  const sedanSet = buildCarSet(T, 'sedan');
+  const suvSet = buildCarSet(T, 'suv');
+  const scooterSet = buildScooterSet(T, true);
+  const autoSet = buildAutoRickshawSet(T);
+  const tempoSet = buildTempoSet(T);
 
-  carInst.castShadow = suvInst.castShadow = scInst.castShadow = true;
-  carInst.frustumCulled = suvInst.frustumCulled = scInst.frustumCulled = false;
-  group.add(carInst, suvInst, scInst);
+  const bodyMat = new T.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.34,
+    metalness: 0.28
+  });
+  const detailMat = new T.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.48,
+    metalness: 0.22
+  });
+  const brakeMat = new T.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.3,
+    metalness: 0.1,
+    emissive: new T.Color(0xff1a1a),
+    emissiveIntensity: 1.35
+  });
 
-  const palette = [0xd93829, 0x2563eb, 0x1f7a43, 0xf6c30f, 0xe2e8f0, 0x1e293b, 0x0284c7, 0xf97316];
-  const colC = new T.Color();
+  // Allocate counts across the 5 vehicle types
+  const nSedan = Math.round(totalCount * 0.32);
+  const nSuv = Math.round(totalCount * 0.20);
+  const nScooter = Math.round(totalCount * 0.22);
+  const nAuto = Math.round(totalCount * 0.16);
+  const nTempo = Math.max(4, totalCount - (nSedan + nSuv + nScooter + nAuto));
+
+  const typeDefs = [
+    { key: 'sedan', set: sedanSet, max: nSedan, halfLen: 2.35, minSpeed: 5.5, maxSpeed: 9.0, palette: [0xd93829, 0x2563eb, 0xe2e8f0, 0x334155, 0x0284c7, 0xd97706, 0x991b1b, 0xf8fafc] },
+    { key: 'suv', set: suvSet, max: nSuv, halfLen: 2.50, minSpeed: 5.2, maxSpeed: 8.6, palette: [0xf8fafc, 0x1e293b, 0x475569, 0x991b1b, 0x1d4ed8, 0x78350f, 0xd4d4d8] },
+    { key: 'scooter', set: scooterSet, max: nScooter, halfLen: 1.05, minSpeed: 4.2, maxSpeed: 7.5, palette: [0x38bdf8, 0xef4444, 0xf8fafc, 0x6366f1, 0x14b8a6, 0xf59e0b, 0xec4899] },
+    { key: 'auto', set: autoSet, max: nAuto, halfLen: 1.55, minSpeed: 3.4, maxSpeed: 6.4, palette: [0x15803d, 0x166534, 0x14532d, 0x1f7a43] },
+    { key: 'tempo', set: tempoSet, max: nTempo, halfLen: 3.00, minSpeed: 3.2, maxSpeed: 6.8, palette: [0xf8fafc, 0xf1f5f9, 0xe2e8f0, 0xfef3c7] }
+  ];
+
+  // Create 2 InstancedMeshes per vehicle type (Body + Detail) + 1 shared or per-type Brake InstancedMesh
+  // To keep draw calls around ~12 total, we use Body + Detail per type (10 meshes) + 2 brake meshes (cars/vans/autos vs scooters) or per-type brake
+  const meshesToUpdate = [];
+  const colTmp = new T.Color();
+
+  for (let t = 0; t < typeDefs.length; t++) {
+    const td = typeDefs[t];
+    td.bodyInst = new T.InstancedMesh(td.set.bodyGeo, bodyMat, td.max);
+    td.detailInst = new T.InstancedMesh(td.set.detailGeo, detailMat, td.max);
+    td.brakeInst = new T.InstancedMesh(td.set.brakeGeo, brakeMat, td.max);
+
+    td.bodyInst.castShadow = true;
+    td.bodyInst.receiveShadow = true;
+    td.detailInst.castShadow = true;
+    td.bodyInst.frustumCulled = false;
+    td.detailInst.frustumCulled = false;
+    td.brakeInst.frustumCulled = false;
+
+    group.add(td.bodyInst, td.detailInst, td.brakeInst);
+    meshesToUpdate.push(td.bodyInst, td.detailInst, td.brakeInst);
+  }
+
+  // Helper to get player state safely
+  function readPlayer() {
+    const raw = getAuto ? getAuto() : null;
+    const px = (raw && typeof raw.x === 'number') ? raw.x : -133;
+    const pz = (raw && typeof raw.z === 'number') ? raw.z : -345;
+    const pyaw = (raw && typeof raw.yaw === 'number') ? raw.yaw
+      : ((raw && typeof raw.heading === 'number') ? raw.heading
+      : ((raw && typeof raw.rotY === 'number') ? raw.rotY : 0));
+    return { x: px, z: pz, hx: Math.sin(pyaw), hz: Math.cos(pyaw) };
+  }
+
+  // Pick a road segment & lane position within [minDist, maxDist] of (px, pz), optionally biased ahead of heading
+  function pickRoadPlacement(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal) {
+    let bestSeg = validSegs[0];
+    let bestT = 0.5;
+    let bestScore = -1e9;
+
+    const trials = Math.min(validSegs.length, 28);
+    const startIdx = Math.floor(hash(seedVal, px + pz, 11) * validSegs.length);
+
+    for (let k = 0; k < trials; k++) {
+      const seg = validSegs[(startIdx + k * 5) % validSegs.length];
+      const tCand = 0.08 + hash(seedVal + k, seg.mx, 23) * 0.84;
+      const cx = seg.x1 + seg.ux * seg.len * tCand;
+      const cz = seg.z1 + seg.uz * seg.len * tCand;
+      const dx = cx - px;
+      const dz = cz - pz;
+      const dist = Math.hypot(dx, dz);
+
+      let score = 0;
+      if (dist >= minDist && dist <= maxDist) {
+        score += 200 - Math.abs(dist - (minDist + maxDist) * 0.5);
+      } else {
+        score -= Math.abs(dist - (minDist + maxDist) * 0.5);
+      }
+
+      if (biasAhead && dist > 1) {
+        const dot = (dx * hx + dz * hz) / dist;
+        score += dot * 95;
+      }
+
+      if (solidFn && solidFn(cx, cz)) {
+        score -= 1000;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestSeg = seg;
+        bestT = tCand;
+      }
+    }
+
+    return { seg: bestSeg, t: bestT };
+  }
+
+  // Compute left-hand traffic lane offset (India keep-left rule)
+  function computeLanePos(seg, t, dir) {
+    // Keep strictly on the road carriageway, well clear of footpaths
+    const laneOffset = Math.min(2.05, Math.max(1.35, seg.width * 0.22));
+    // Forward vector is (ux * dir, uz * dir). Left-hand side normal in XZ (where +Z is South/North and yaw=atan2(x,z)):
+    // Right of (+ux, +uz) is (-uz, ux), Left is (+uz, -ux)
+    const x = seg.x1 + seg.ux * seg.len * t + seg.uz * laneOffset * dir;
+    const z = seg.z1 + seg.uz * seg.len * t - seg.ux * laneOffset * dir;
+    const yaw = Math.atan2(seg.ux * dir, seg.uz * dir);
+    return { x, z, yaw };
+  }
 
   const trafficUnits = [];
-  const segMid = (sg) => [((sg.x1 ?? sg[0]) + (sg.x2 ?? sg[2])) / 2, ((sg.z1 ?? sg[1]) + (sg.z2 ?? sg[3])) / 2];
-  const segLen = (sg) => Math.hypot((sg.x2 ?? sg[2]) - (sg.x1 ?? sg[0]), (sg.z2 ?? sg[3]) - (sg.z1 ?? sg[1]));
-  function pickNearSeg(k, maxD = 200) {
-    const pa = getAuto ? getAuto() : { x: 0, z: 0 };
-    const near = roadSegs.filter((sg) => { const m = segMid(sg); return segLen(sg) > 25 && Math.hypot(m[0] - pa.x, m[1] - pa.z) < maxD; });
-    if (!near.length) return null;
-    return near[Math.floor(Math.random() * near.length + k * 0) % near.length];
+  const p0 = readPlayer();
+
+  // Collect nearby segments (40m to 220m from initial player pos) so startup traffic is guaranteed visible
+  const startupSegs = [];
+  for (let i = 0; i < validSegs.length; i++) {
+    const s = validSegs[i];
+    // Closest point on segment to player
+    const apx = p0.x - s.x1;
+    const apz = p0.z - s.z1;
+    const proj = T.MathUtils.clamp((apx * s.ux + apz * s.uz) / s.len, 0, 1);
+    const cx = s.x1 + s.ux * s.len * proj;
+    const cz = s.z1 + s.uz * s.len * proj;
+    const d = Math.hypot(cx - p0.x, cz - p0.z);
+    if (d <= 220) {
+      startupSegs.push(s);
+    }
   }
-  let cIdx = 0, sIdx = 0, scIdx = 0;
+  const poolSegs = startupSegs.length > 0 ? startupSegs : validSegs;
 
-  for (let i = 0; i < count; i++) {
-    const isSuv = i % 4 === 0;
-    const isSc = i % 4 === 1;
-    const inst = isSc ? scInst : (isSuv ? suvInst : carInst);
-    const subIdx = isSc ? scIdx++ : (isSuv ? sIdx++ : cIdx++);
+  let globalIdx = 0;
+  for (let t = 0; t < typeDefs.length; t++) {
+    const td = typeDefs[t];
+    for (let subIdx = 0; subIdx < td.max; subIdx++) {
+      const i = globalIdx++;
+      const hex = td.palette[i % td.palette.length];
+      colTmp.setHex(hex);
+      td.bodyInst.setColorAt(subIdx, colTmp);
 
-    colC.setHex(palette[i % palette.length]);
-    inst.setColorAt(subIdx, colC);
+      // Spread evenly across nearby segments within 40..220m ahead and behind
+      const seg = poolSegs[i % poolSegs.length];
+      const dir = (i % 2 === 0) ? 1 : -1;
+      const slotCount = Math.max(2, Math.ceil(totalCount / poolSegs.length));
+      const slot = Math.floor(i / poolSegs.length) % slotCount;
+      let tParam = 0.08 + ((slot + 0.5) / slotCount) * 0.84;
+      tParam = (tParam + hash(i, subIdx, 7) * 0.09) % 0.88 + 0.06;
 
-    const seg = pickNearSeg(i) || roadSegs[(i * 7) % roadSegs.length] || { x1: 0, z1: 0, x2: 10, z2: 10, width: 8.2 };
-    trafficUnits.push({
-      inst,
-      subIdx,
-      seg,
-      t: (i * 0.08) % 0.94,
-      dir: i % 2 === 0 ? 1 : -1,
-      speed: 6.0 + (i % 5) * 1.4,
-      x: 0, z: 0, yaw: 0
-    });
+      // Ensure within 40..220m of player at startup; if too close or too far, re-pick
+      let pos = computeLanePos(seg, tParam, dir);
+      const dist0 = Math.hypot(pos.x - p0.x, pos.z - p0.z);
+      let chosenSeg = seg;
+      if (dist0 < 28 || dist0 > 225 || (solidFn && solidFn(pos.x, pos.z))) {
+        const picked = pickRoadPlacement(p0.x, p0.z, p0.hx, p0.hz, 40, 220, false, i * 13.7);
+        chosenSeg = picked.seg;
+        tParam = picked.t;
+        pos = computeLanePos(chosenSeg, tParam, dir);
+      }
+
+      const maxSpd = td.minSpeed + hash(i, t, 31) * (td.maxSpeed - td.minSpeed);
+      trafficUnits.push({
+        td,
+        subIdx,
+        seg: chosenSeg,
+        t: tParam,
+        dir,
+        speed: maxSpd * 0.85,
+        maxSpeed: maxSpd,
+        halfLen: td.halfLen,
+        braking: false,
+        x: pos.x,
+        z: pos.z,
+        yaw: pos.yaw
+      });
+    }
+    td.bodyInst.instanceColor.needsUpdate = true;
   }
 
-  carInst.instanceColor.needsUpdate = true;
-  suvInst.instanceColor.needsUpdate = true;
-  scInst.instanceColor.needsUpdate = true;
-
-  const m4 = new T.Matrix4(), q4 = new T.Quaternion(), v3 = new T.Vector3(), s3 = new T.Vector3(1, 1, 1);
+  const m4 = new T.Matrix4();
+  const mBrake = new T.Matrix4();
+  const q4 = new T.Quaternion();
+  const v3 = new T.Vector3();
+  const s3 = new T.Vector3(1, 1, 1);
+  const sBrakeOff = new T.Vector3(0.0001, 0.0001, 0.0001);
   const yAxis = new T.Vector3(0, 1, 0);
 
-  function update(dt, hour = 17.8) {
-    const pAuto = getAuto ? getAuto() : { x: 0, z: 0 };
+  function findConnectedSegment(oldSeg, exitX, exitZ, prevUx, prevUz) {
+    let bestSeg = null;
+    let bestDir = 1;
+    let bestScore = -1e9;
 
+    for (let i = 0; i < validSegs.length; i++) {
+      const s = validSegs[i];
+      if (s === oldSeg && validSegs.length > 1) continue;
+
+      const d1 = Math.hypot(s.x1 - exitX, s.z1 - exitZ);
+      const d2 = Math.hypot(s.x2 - exitX, s.z2 - exitZ);
+
+      if (d1 < 22) {
+        const align = s.ux * prevUx + s.uz * prevUz;
+        const score = 30 - d1 + align * 8;
+        if (score > bestScore) {
+          bestScore = score;
+          bestSeg = s;
+          bestDir = 1;
+        }
+      }
+      if (d2 < 22) {
+        const align = (-s.ux) * prevUx + (-s.uz) * prevUz;
+        const score = 30 - d2 + align * 8;
+        if (score > bestScore) {
+          bestScore = score;
+          bestSeg = s;
+          bestDir = -1;
+        }
+      }
+    }
+    return bestSeg ? { seg: bestSeg, dir: bestDir } : null;
+  }
+
+  function update(dt = 0.016, hour = 17.8) {
+    const safeDt = Math.min(0.1, Math.max(0.001, dt || 0.016));
+    const player = readPlayer();
+    const isNight = (hour >= 18.2 || hour <= 6.2);
+    brakeMat.emissiveIntensity = isNight ? 1.85 : 1.35;
+
+    // 1. Group units by (seg, dir) so vehicles slow down and queue behind a leader
+    const laneMap = new Map();
     for (let i = 0; i < trafficUnits.length; i++) {
       const tu = trafficUnits[i];
-      const x1 = tu.seg.x1 ?? tu.seg[0], z1 = tu.seg.z1 ?? tu.seg[1], x2 = tu.seg.x2 ?? tu.seg[2], z2 = tu.seg.z2 ?? tu.seg[3];
-      const width = tu.seg.width ?? tu.seg[6] ?? 8.2;
-      const mdx = (x1 + x2) / 2 - pAuto.x, mdz = (z1 + z2) / 2 - pAuto.z;
-      if (mdx * mdx + mdz * mdz > 260 * 260) {
-        const ns = pickNearSeg(i, 180);
-        if (ns) { tu.seg = ns; tu.t = 0.1 + Math.random() * 0.8; continue; }
+      let segList = laneMap.get(tu.seg);
+      if (!segList) {
+        segList = { f: [], r: [] };
+        laneMap.set(tu.seg, segList);
       }
-      const dx = x2 - x1, dz = z2 - z1;
-      const len = Math.hypot(dx, dz) || 1;
-      const ux = dx / len, uz = dz / len;
+      if (tu.dir === 1) segList.f.push(tu);
+      else segList.r.push(tu);
+    }
 
-      tu.t += (tu.dir * tu.speed * dt) / len;
-      if (tu.t > 0.98 || tu.t < 0.02) {
-        tu.dir *= -1;
-        tu.t = T.MathUtils.clamp(tu.t, 0.02, 0.98);
+    // 2. Evaluate leader gaps & braking along each lane
+    for (const [, lanes] of laneMap) {
+      // Forward lane (dir = +1): higher t is ahead
+      if (lanes.f.length > 1) {
+        lanes.f.sort((a, b) => a.t - b.t);
+      }
+      for (let i = 0; i < lanes.f.length; i++) {
+        const u = lanes.f[i];
+        let targetSpd = u.maxSpeed;
+        let braking = false;
+        if (i + 1 < lanes.f.length) {
+          const leader = lanes.f[i + 1];
+          const centerDist = (leader.t - u.t) * u.seg.len;
+          const gap = centerDist - (leader.halfLen + u.halfLen);
+          if (gap < 9.5) {
+            braking = true;
+            if (gap < 2.2) {
+              targetSpd = 0;
+            } else {
+              targetSpd = Math.min(u.maxSpeed, leader.speed * ((gap - 1.8) / 7.7));
+            }
+          }
+        }
+        // Also slow down if player auto is directly ahead in the same lane
+        const dpX = player.x - u.x;
+        const dpZ = player.z - u.z;
+        const fwdDot = dpX * u.seg.ux + dpZ * u.seg.uz;
+        const latDot = Math.abs(-dpX * u.seg.uz + dpZ * u.seg.ux);
+        if (fwdDot > 0 && fwdDot < 12 && latDot < 2.4) {
+          braking = true;
+          targetSpd = Math.min(targetSpd, Math.max(0, (fwdDot - 4.0) * 0.8));
+        }
+
+        u.braking = braking || (u.speed - targetSpd > 0.45);
+        const accel = targetSpd < u.speed ? 7.5 : 3.2;
+        u.speed += T.MathUtils.clamp(targetSpd - u.speed, -accel * safeDt, accel * safeDt);
+        u.speed = Math.max(0, u.speed);
       }
 
-      // India left-hand drive lane offset (1.7m from centreline)
-      const leftOff = 1.7;
-      tu.x = x1 + ux * len * tu.t - uz * leftOff * tu.dir;
-      tu.z = z1 + uz * len * tu.t + ux * leftOff * tu.dir;
-      tu.yaw = Math.atan2(ux * tu.dir, uz * tu.dir);
+      // Reverse/Oncoming lane (dir = -1): lower t is ahead
+      if (lanes.r.length > 1) {
+        lanes.r.sort((a, b) => b.t - a.t);
+      }
+      for (let i = 0; i < lanes.r.length; i++) {
+        const u = lanes.r[i];
+        let targetSpd = u.maxSpeed;
+        let braking = false;
+        if (i + 1 < lanes.r.length) {
+          const leader = lanes.r[i + 1];
+          const centerDist = (u.t - leader.t) * u.seg.len;
+          const gap = centerDist - (leader.halfLen + u.halfLen);
+          if (gap < 9.5) {
+            braking = true;
+            if (gap < 2.2) {
+              targetSpd = 0;
+            } else {
+              targetSpd = Math.min(u.maxSpeed, leader.speed * ((gap - 1.8) / 7.7));
+            }
+          }
+        }
+        const dpX = player.x - u.x;
+        const dpZ = player.z - u.z;
+        const fwdDot = -(dpX * u.seg.ux + dpZ * u.seg.uz);
+        const latDot = Math.abs(-dpX * u.seg.uz + dpZ * u.seg.ux);
+        if (fwdDot > 0 && fwdDot < 12 && latDot < 2.4) {
+          braking = true;
+          targetSpd = Math.min(targetSpd, Math.max(0, (fwdDot - 4.0) * 0.8));
+        }
+
+        u.braking = braking || (u.speed - targetSpd > 0.45);
+        const accel = targetSpd < u.speed ? 7.5 : 3.2;
+        u.speed += T.MathUtils.clamp(targetSpd - u.speed, -accel * safeDt, accel * safeDt);
+        u.speed = Math.max(0, u.speed);
+      }
+    }
+
+    // 3. Advance positions, transition segments, recycle distant units, and write matrices
+    for (let i = 0; i < trafficUnits.length; i++) {
+      const tu = trafficUnits[i];
+      tu.t += (tu.dir * tu.speed * safeDt) / tu.seg.len;
+
+      // Segment boundary transition
+      if (tu.t > 0.97 || tu.t < 0.03) {
+        const exitX = tu.t > 0.5 ? tu.seg.x2 : tu.seg.x1;
+        const exitZ = tu.t > 0.5 ? tu.seg.z2 : tu.seg.z1;
+        const fUx = tu.seg.ux * tu.dir;
+        const fUz = tu.seg.uz * tu.dir;
+        const next = findConnectedSegment(tu.seg, exitX, exitZ, fUx, fUz);
+        if (next) {
+          tu.seg = next.seg;
+          tu.dir = next.dir;
+          tu.t = next.dir === 1 ? 0.05 : 0.95;
+        } else {
+          tu.dir *= -1;
+          tu.t = T.MathUtils.clamp(tu.t, 0.04, 0.96);
+        }
+      }
+
+      let pos = computeLanePos(tu.seg, tu.t, tu.dir);
+
+      // Recycle if further than 260m from player OR inside a solid cell -> place 80..200m ahead of player heading
+      const dx = pos.x - player.x;
+      const dz = pos.z - player.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 260 || (solidFn && solidFn(pos.x, pos.z))) {
+        const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 80, 200, true, i + tu.t * 100);
+        tu.seg = picked.seg;
+        tu.t = picked.t;
+        tu.dir = (i % 2 === 0) ? 1 : -1;
+        tu.speed = tu.maxSpeed * 0.8;
+        pos = computeLanePos(tu.seg, tu.t, tu.dir);
+      }
+
+      tu.x = pos.x;
+      tu.z = pos.z;
+      tu.yaw = pos.yaw;
 
       q4.setFromAxisAngle(yAxis, tu.yaw);
       v3.set(tu.x, 0, tu.z);
       m4.compose(v3, q4, s3);
-      tu.inst.setMatrixAt(tu.subIdx, m4);
+
+      tu.td.bodyInst.setMatrixAt(tu.subIdx, m4);
+      tu.td.detailInst.setMatrixAt(tu.subIdx, m4);
+
+      if (tu.braking || isNight) {
+        tu.td.brakeInst.setMatrixAt(tu.subIdx, m4);
+      } else {
+        mBrake.compose(v3, q4, sBrakeOff);
+        tu.td.brakeInst.setMatrixAt(tu.subIdx, mBrake);
+      }
     }
 
-    carInst.instanceMatrix.needsUpdate = true;
-    suvInst.instanceMatrix.needsUpdate = true;
-    scInst.instanceMatrix.needsUpdate = true;
+    for (let m = 0; m < meshesToUpdate.length; m++) {
+      meshesToUpdate[m].instanceMatrix.needsUpdate = true;
+    }
   }
+
+  // Run one initial update step so matrices are immediately populated at frame 0
+  update(0.016, 17.8);
 
   return { group, update };
 }
 
-export function createParkedVehicles({ THREE: T = THREE, scene, roadSegs = [], solidFn = () => 0, nightUniform, seed = 42 }) {
+export function createParkedVehicles({
+  THREE: T = THREE,
+  scene,
+  roadSegs = [],
+  solidFn = () => 0,
+  nightUniform,
+  seed = 42
+}) {
   const group = new T.Group();
   scene.add(group);
 
-  const carGeo = buildCarGeometry(T, 'hatch');
-  const scooterGeo = buildScooterGeometry(T);
-  const mat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.15 });
+  const validSegs = normalizeRoadSegs(roadSegs, solidFn);
 
-  const parkedSpots = [];
+  // Build high-poly parked sets (hatchbacks, sedans, scooters without rider, autos)
+  const hatchSet = buildCarSet(T, 'hatch');
+  const scooterSet = buildScooterSet(T, false);
+  const autoSet = buildAutoRickshawSet(T);
 
-  for (let i = 0; i < roadSegs.length; i++) {
-    const s = roadSegs[i];
-    const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
-    const width = s.width ?? s[6] ?? 8.2;
-    const dx = x2 - x1, dz = z2 - z1;
-    const len = Math.hypot(dx, dz);
-    if (len < 16) continue;
-    const ux = dx / len, uz = dz / len;
-    const yaw = Math.atan2(ux, uz);
+  const bodyMat = new T.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.36,
+    metalness: 0.26
+  });
+  const detailMat = new T.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.50,
+    metalness: 0.20
+  });
 
-    const isDense = s.name && (s.name.includes('100 Feet') || s.name.includes('12th Main') || s.name.includes('Chinmaya'));
-    const step = isDense ? 5.2 : 8.5;
+  // Helper to check if a candidate parked spot overlaps any road carriageway
+  function isOnAnyRoad(px, pz, ignoreSeg) {
+    for (let i = 0; i < validSegs.length; i++) {
+      const s = validSegs[i];
+      if (s === ignoreSeg) continue;
+      const apx = px - s.x1;
+      const apz = pz - s.z1;
+      const proj = (apx * s.ux + apz * s.uz) / s.len;
+      if (proj < -0.05 || proj > 1.05) continue;
+      const clamped = T.MathUtils.clamp(proj, 0, 1);
+      const cx = s.x1 + s.ux * s.len * clamped;
+      const cz = s.z1 + s.uz * s.len * clamped;
+      const d = Math.hypot(px - cx, pz - cz);
+      if (d < s.width * 0.5 + 1.8) return true;
+    }
+    return false;
+  }
 
-    for (let d = 4; d < len - 4; d += step + hash(x1 + d, z1, seed) * 3.0) {
+  // Helper to ensure entire footprint of parked vehicle is clear of solidFn buildings/walls
+  function isClearOfSolids(px, pz, halfFootprint) {
+    if (!solidFn) return true;
+    if (solidFn(px, pz)) return false;
+    if (solidFn(px + halfFootprint, pz)) return false;
+    if (solidFn(px - halfFootprint, pz)) return false;
+    if (solidFn(px, pz + halfFootprint)) return false;
+    if (solidFn(px, pz - halfFootprint)) return false;
+    return true;
+  }
+
+  const parkedCars = [];
+  const parkedScooters = [];
+  const parkedAutos = [];
+
+  for (let i = 0; i < validSegs.length; i++) {
+    const s = validSegs[i];
+    if (s.len < 20) continue;
+    const baseYaw = Math.atan2(s.ux, s.uz);
+
+    const isDense = s.name && (
+      s.name.includes('100 Feet') ||
+      s.name.includes('12th Main') ||
+      s.name.includes('Chinmaya')
+    );
+    const step = isDense ? 6.5 : 10.5;
+
+    for (let d = 6; d < s.len - 6; d += step + hash(s.x1 + d, s.z1, seed) * 3.5) {
       for (const side of [-1, 1]) {
-        // Kerbside verge offset (road half-width + 2.6m minimum offset)
-        const vergeOff = width * 0.5 + 2.6;
-        const px = x1 + ux * d - uz * vergeOff * side;
-        const pz = z1 + uz * d + ux * vergeOff * side;
+        // Place strictly on the kerbside verge (outside road carriageway and clear of footpath core)
+        const vergeOff = s.width * 0.5 + 2.65;
+        const px = s.x1 + s.ux * d + s.uz * vergeOff * side;
+        const pz = s.z1 + s.uz * d - s.ux * vergeOff * side;
 
+        // Keep spawn area clear
         if (Math.hypot(px - (-133), pz - (-345)) < 18) continue;
-        if (solidFn && solidFn(px, pz)) continue;
+        if (!isClearOfSolids(px, pz, 1.45)) continue;
+        if (isOnAnyRoad(px, pz, s)) continue;
 
         const h = hash(px, pz, seed);
-        parkedSpots.push({ x: px, z: pz, yaw: yaw + (h > 0.5 ? 0.25 * side : 0), isCar: h > 0.45 });
+        // Align with left-hand kerb direction
+        const dirYaw = side === 1 ? baseYaw : baseYaw + Math.PI;
+        if (h > 0.56) {
+          parkedCars.push({ x: px, z: pz, yaw: dirYaw + (h - 0.75) * 0.08, seed: h });
+        } else if (h > 0.16) {
+          parkedScooters.push({ x: px, z: pz, yaw: dirYaw + 0.55 * side, seed: h });
+        } else {
+          parkedAutos.push({ x: px, z: pz, yaw: dirYaw + (h - 0.08) * 0.15, seed: h });
+        }
       }
     }
   }
 
-  const cars = parkedSpots.filter(p => p.isCar);
-  const scooters = parkedSpots.filter(p => !p.isCar);
+  const m4 = new T.Matrix4();
+  const q4 = new T.Quaternion();
+  const v3 = new T.Vector3();
+  const s3 = new T.Vector3(1, 1, 1);
+  const yAxis = new T.Vector3(0, 1, 0);
+  const colC = new T.Color();
 
-  if (cars.length) {
-    const carInst = new T.InstancedMesh(carGeo, mat, cars.length);
-    const m4 = new T.Matrix4(), q4 = new T.Quaternion(), v3 = new T.Vector3(), s3 = new T.Vector3(1, 1, 1);
-    const colC = new T.Color(0x94a3b8);
-    cars.forEach((p, idx) => {
-      q4.setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw);
+  const carPalette = [0x94a3b8, 0xe2e8f0, 0x334155, 0xb91c1c, 0x1d4ed8, 0x0f766e, 0xd97706];
+  if (parkedCars.length > 0) {
+    const bodyInst = new T.InstancedMesh(hatchSet.bodyGeo, bodyMat, parkedCars.length);
+    const detailInst = new T.InstancedMesh(hatchSet.detailGeo, detailMat, parkedCars.length);
+    for (let i = 0; i < parkedCars.length; i++) {
+      const p = parkedCars[i];
+      q4.setFromAxisAngle(yAxis, p.yaw);
       m4.compose(v3.set(p.x, 0, p.z), q4, s3);
-      carInst.setMatrixAt(idx, m4);
-      carInst.setColorAt(idx, colC);
-    });
-    carInst.castShadow = true;
-    carInst.instanceColor.needsUpdate = true;
-    group.add(carInst);
+      bodyInst.setMatrixAt(i, m4);
+      detailInst.setMatrixAt(i, m4);
+      colC.setHex(carPalette[i % carPalette.length]);
+      bodyInst.setColorAt(i, colC);
+    }
+    bodyInst.castShadow = true;
+    detailInst.castShadow = true;
+    bodyInst.instanceColor.needsUpdate = true;
+    group.add(bodyInst, detailInst);
   }
 
-  if (scooters.length) {
-    const scInst = new T.InstancedMesh(scooterGeo, mat, scooters.length);
-    const m4 = new T.Matrix4(), q4 = new T.Quaternion(), v3 = new T.Vector3(), s3 = new T.Vector3(1, 1, 1);
-    const colC = new T.Color(0xe2e8f0);
-    scooters.forEach((p, idx) => {
-      q4.setFromAxisAngle(new T.Vector3(0, 1, 0), p.yaw + 0.45);
+  const scooterPalette = [0xe2e8f0, 0x38bdf8, 0xf43f5e, 0x1e293b, 0xa855f7, 0x10b981];
+  if (parkedScooters.length > 0) {
+    const bodyInst = new T.InstancedMesh(scooterSet.bodyGeo, bodyMat, parkedScooters.length);
+    const detailInst = new T.InstancedMesh(scooterSet.detailGeo, detailMat, parkedScooters.length);
+    for (let i = 0; i < parkedScooters.length; i++) {
+      const p = parkedScooters[i];
+      q4.setFromAxisAngle(yAxis, p.yaw);
       m4.compose(v3.set(p.x, 0, p.z), q4, s3);
-      scInst.setMatrixAt(idx, m4);
-      scInst.setColorAt(idx, colC);
-    });
-    scInst.castShadow = true;
-    scInst.instanceColor.needsUpdate = true;
-    group.add(scInst);
+      bodyInst.setMatrixAt(i, m4);
+      detailInst.setMatrixAt(i, m4);
+      colC.setHex(scooterPalette[i % scooterPalette.length]);
+      bodyInst.setColorAt(i, colC);
+    }
+    bodyInst.castShadow = true;
+    detailInst.castShadow = true;
+    bodyInst.instanceColor.needsUpdate = true;
+    group.add(bodyInst, detailInst);
+  }
+
+  if (parkedAutos.length > 0) {
+    const bodyInst = new T.InstancedMesh(autoSet.bodyGeo, bodyMat, parkedAutos.length);
+    const detailInst = new T.InstancedMesh(autoSet.detailGeo, detailMat, parkedAutos.length);
+    for (let i = 0; i < parkedAutos.length; i++) {
+      const p = parkedAutos[i];
+      q4.setFromAxisAngle(yAxis, p.yaw);
+      m4.compose(v3.set(p.x, 0, p.z), q4, s3);
+      bodyInst.setMatrixAt(i, m4);
+      detailInst.setMatrixAt(i, m4);
+      colC.setHex(0x15803d);
+      bodyInst.setColorAt(i, colC);
+    }
+    bodyInst.castShadow = true;
+    detailInst.castShadow = true;
+    bodyInst.instanceColor.needsUpdate = true;
+    group.add(bodyInst, detailInst);
   }
 
   return { group };
