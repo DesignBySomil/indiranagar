@@ -42,7 +42,8 @@ export function createAsphaltMaterial() {
     side: THREE.DoubleSide
   });
 
-  return makeWetRoadMaterialPatch(mat);
+  mat.color.setScalar(0.74);
+  return mat; // wet-road shader patch disabled (too much water-like reflection)
 }
 
 export function createPavementMaterial() {
