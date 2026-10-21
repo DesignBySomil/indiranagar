@@ -82,7 +82,7 @@ export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene
   const matConcrete = new T.MeshStandardMaterial({ color: 0xd8d4cc, roughness: 0.82 });
   const matIron = new T.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.7, metalness: 0.1 });
   const matAc = new T.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6 });
-  const matTank = new T.MeshStandardMaterial({ color: 0x14171a, roughness: 0.45 });
+  const matTank = new T.MeshStandardMaterial({ color: 0x8d979c, roughness: 0.6 });
 
   // 1. Balconies (slab + railing)
   const balcGeo = T.BufferGeometryUtils ? null : new T.BoxGeometry(1.8, 0.18, 0.9);
