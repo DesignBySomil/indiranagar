@@ -147,7 +147,7 @@ export function buildAuto() {
   wsGroup.position.set(0, 1.46, 0.92);
   wsGroup.rotation.x = -0.26;
   const wsPane = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.64, 0.03), glassMat);
-  const wsTop = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.05, 0.05), blackMat);
+  const wsTop = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.07, 0.06), yellowMat);
   wsTop.position.y = 0.32;
   const wsBot = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.07, 0.05), yellowMat);
   wsBot.position.y = -0.32;
@@ -156,6 +156,7 @@ export function buildAuto() {
   wiper.position.set(0.15, 0.05, 0.03);
   wiper.rotation.z = 0.35;
   wsGroup.add(wsPane, wsTop, wsBot, wsMid, wiper);
+  for (const sd of [-1, 1]) { const sb = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.64, 0.06), yellowMat); sb.position.x = sd * 0.60; wsGroup.add(sb); }
   chassis.add(wsGroup); wsGroup.userData.hideInDriver = true;
 
   for (const s of [-1, 1]) {
