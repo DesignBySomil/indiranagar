@@ -32,3 +32,5 @@ html,body{height:100%;background:#14181c;color:#f1f4f8;font-family:'Bricolage Gr
 #say{bottom:92px;max-width:80vw;background:#fff;color:#111;border:3px solid #111;border-radius:18px;padding:10px 18px;font:700 18px 'Bricolage Grotesque',sans-serif;box-shadow:4px 4px 0 #111}
 #fare{top:64px;background:#facc15;color:#111;border-radius:10px;padding:8px 16px;font:700 15px 'Bricolage Grotesque',sans-serif;max-width:86vw}
 #toast{top:110px;background:#111c;color:#fff;border-radius:20px;padding:6px 14px;font:600 14px 'Bricolage Grotesque',sans-serif}
+
+.startcard{display:flex;flex-direction:column;gap:12px;align-items:stretch;min-width:280px;padding:24px;border-radius:22px;background:rgba(20,24,30,.55);backdrop-filter:blur(18px) saturate(1.3);border:1px solid rgba(255,255,255,.18);color:#f4f6f8;font-family:'Bricolage Grotesque',sans-serif}.startcard h2{margin:0 0 4px;font-size:26px}.startcard select{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;font:500 15px 'Bricolage Grotesque'}
