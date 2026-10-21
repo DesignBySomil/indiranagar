@@ -129,7 +129,7 @@ export function buildAuto() {
   const cowl = new THREE.Mesh(cowlGeo, greenMat);
   cowl.position.set(0, 0.42, 0.98);
   cowl.castShadow = true;
-  chassis.add(cowl);
+  chassis.add(cowl); cowl.userData.hideInDriver = true;
 
   const nosePts = [
     new THREE.Vector2(0.01, 0.28),
@@ -156,7 +156,7 @@ export function buildAuto() {
   wiper.position.set(0.15, 0.05, 0.03);
   wiper.rotation.z = 0.35;
   wsGroup.add(wsPane, wsTop, wsBot, wsMid, wiper);
-  chassis.add(wsGroup); wsGroup.userData.hideDriver = true;
+  chassis.add(wsGroup); wsGroup.userData.hideInDriver = true;
 
   for (const s of [-1, 1]) {
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.26, 6), chromeMat);
@@ -164,7 +164,7 @@ export function buildAuto() {
     arm.position.set(s * 0.67, 1.35, 0.92);
     const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.03), chromeMat);
     mirror.position.set(s * 0.78, 1.41, 0.92);
-    chassis.add(arm, mirror);
+    chassis.add(arm, mirror); arm.userData.hideInDriver = true; mirror.userData.hideInDriver = true;
   }
 
   const pillarGeo = new THREE.CylinderGeometry(0.024, 0.024, 0.98, 8);
@@ -238,7 +238,7 @@ export function buildAuto() {
     const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.13, 8), blackMat);
     grip.rotation.z = Math.PI / 2;
     grip.position.set(s * 0.29, 0.80, -0.34);
-    frontFork.add(grip);
+    grip.userData.keep = true; frontFork.add(grip);
   }
 
   const fMudguard = new THREE.Mesh(new THREE.SphereGeometry(0.33, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), greenMat);
@@ -283,6 +283,9 @@ export function buildAuto() {
   plate.position.set(0, 0.50, -1.24);
   plate.rotation.y = Math.PI;
   chassis.add(plate);
+  frontFork.children.forEach(c => { if (c !== hBar && c !== column && !c.userData.keep) c.userData.hideInDriver = true; });
+  frontFork.children.forEach(c => { if (c === column) c.userData.hideInDriver = false; });
+  nose.userData.hideInDriver = true;
 
   const tailMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
   for (const s of [-1, 1]) {
