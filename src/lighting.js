@@ -145,9 +145,9 @@ export function setupLighting(scene, renderer) {
         if (uNight > 0.05 && d.y > 0.06) {
           vec2 suv = floor(d.xz / (d.y + 0.32) * 290.0);
           float s = hash21(suv);
-          if (s > 0.9925) {
+          if (s > 0.9985) {
             float twinkle = 0.6 + 0.4 * sin(uTime * 3.2 + s * 110.0);
-            col += vec3(0.88, 0.93, 1.0) * uNight * twinkle * smoothstep(0.06, 0.28, d.y);
+            col += vec3(0.88, 0.93, 1.0) * uNight * twinkle * 0.55 * smoothstep(0.06, 0.28, d.y);
           }
         }
         gl_FragColor = vec4(col, 1.0);
