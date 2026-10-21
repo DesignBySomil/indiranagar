@@ -249,7 +249,7 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     m4.compose(v3, q4, s3);
     solInst.setMatrixAt(i, m4);
   });
-  tkInst.castShadow = true;
+  tkInst.count = 0; solInst.count = 0; tkInst.castShadow = true;
   scene.add(tkInst, solInst);
 
   // Commercial street shopfront signboards + striped 3D awnings positioned cleanly on the road-facing facade
