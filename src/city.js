@@ -10,16 +10,16 @@ const hash = (x, z) => {
 
 // Rich Indiranagar residential & commercial palette: warm pastels, ochre, terracotta, mango, sage, teal
 const PALETTE = [
-  0xf2e3c9, // Warm sandalwood cream
-  0xe39b56, // Bright Mysore ochre
-  0xd46a4c, // Terracotta red-clay
-  0xebbf83, // Pastel mango yellow
-  0x84b095, // Indiranagar pistachio / sage green
-  0x6da1b0, // Coastal pastel teal
-  0xe0a899, // Terracotta rose pastel
-  0xe8d074, // Warm turmeric pastel
-  0xd6cfc2, // Painted limestone
-  0xc97b63  // Burnt sienna pastel
+  0xe6dfd1, // off-white
+  0xd9d0bd, // cream
+  0xcfc4ae, // beige
+  0xc4c2bb, // light grey
+  0xb5b2a9, // weathered concrete
+  0xd8cdb9, // dusty cream
+  0xcfc0b0, // faded stone pink
+  0xbdb8a8, // sage-grey
+  0xc8a58a, // muted terracotta
+  0xa9a8a0  // stained grey
 ];
 
 const SHOP_NAMES = [
@@ -117,7 +117,7 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     }
     g.rotateX(-Math.PI / 2);
 
-    const baseCol = new THREE.Color(PALETTE[Math.floor(r * PALETTE.length)]).offsetHSL((r2 - 0.5) * 0.04, 0.05, (r - 0.5) * 0.08);
+    const baseCol = new THREE.Color(PALETTE[Math.floor(r * PALETTE.length)]).offsetHSL((r2 - 0.5) * 0.02, -0.04, (r - 0.5) * 0.10);
     const posAttr = g.attributes.position;
     const normAttr = g.attributes.normal;
     const n = posAttr.count;
@@ -127,7 +127,8 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
       const ny = normAttr.getY(i);
       const py = posAttr.getY(i);
       const isRoof = ny > 0.5;
-      const shade = isRoof ? 0.72 : (py < 3.4 ? 0.90 : 1.0);
+      const stain = 0.80 + 0.20 * Math.min(1, py / 7) - 0.07 * (((Math.floor(posAttr.getX(i) * 0.7) * 7 + Math.floor(posAttr.getZ(i) * 0.7) * 13) & 3) / 3);
+      const shade = isRoof ? 0.66 : stain;
       colArr[i * 3]     = Math.min(1, baseCol.r * shade);
       colArr[i * 3 + 1] = Math.min(1, baseCol.g * shade);
       colArr[i * 3 + 2] = Math.min(1, baseCol.b * shade);
