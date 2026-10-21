@@ -488,20 +488,37 @@ function step(dt, now) {
   if (blocked && Math.abs(thr) > 0.1) auto.blockT = (auto.blockT || 0) + dt; else auto.blockT = Math.max(0, (auto.blockT || 0) - dt * 3);
   if (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow) {
     auto.stuckT = 0; auto.blockT = 0; auto.unstickNow = false;
+    auto.clk = auto.clk || 0;
+    auto.unstickN = (auto.clk - (auto.unstickAt ?? -99) < 4) ? (auto.unstickN || 0) + 1 : 1;
+    auto.unstickAt = auto.clk;
+    let skipSnap = false;
+    if (auto.unstickN >= 3) {
+      // repeatedly blocked (parked car / queue): hop past it along the heading, else sideways
+      const fx = Math.sin(auto.a), fz = Math.cos(auto.a);
+      let hopped = false;
+      for (const [f, l] of [[7, 0], [9, 2.2], [9, -2.2], [12, 0], [0, 3], [0, -3], [14, 3], [14, -3]]) {
+        const nx = auto.x + fx * f + fz * l, nz = auto.z + fz * f - fx * l;
+        if (!hit(nx, nz) && !hit(nx + fx * 2, nz + fz * 2)) { auto.x = nx; auto.z = nz; auto.v = 0; hopped = true; break; }
+      }
+      if (hopped) { auto.unstickN = 0; skipSnap = true; }
+    }
     let freed = false;
     const sgn = thr >= 0 ? -1 : 1;
-    for (const d of [0.8, 1.6, 2.4, 3.5]) {
+    for (const d of (skipSnap ? [] : [0.8, 1.6, 2.4, 3.5])) {
       const nx = auto.x + Math.sin(auto.a) * d * sgn, nz = auto.z + Math.cos(auto.a) * d * sgn;
       if (!hit(nx, nz)) { auto.x = nx; auto.z = nz; auto.v = 0; freed = true; break; }
     }
     const pr = window.__placeOnRoad ? window.__placeOnRoad(auto.x, auto.z) : null;
-    if (pr && Math.hypot(pr.x - auto.x, pr.z - auto.z) < 14 && !hit(pr.x, pr.z)) {
+    if (!skipSnap && pr && Math.hypot(pr.x - auto.x, pr.z - auto.z) < 14 && !hit(pr.x, pr.z)) {
       // nudge to the road lane and line up with the road so throttle drives along it, never back into the wall
       const d1 = Math.abs(Math.atan2(Math.sin(pr.a - auto.a), Math.cos(pr.a - auto.a)));
       auto.x = pr.x; auto.z = pr.z; auto.a = d1 <= Math.PI / 2 ? pr.a : pr.a + Math.PI; auto.v = 0;
     }
   }
 
+  if (auto.unstickAt === undefined) { auto.unstickAt = -99; auto.unstickN = 0; }
+  auto.clk = (auto.clk || 0) + dt;
+  if (auto._didUnstick) { auto._didUnstick = false; }
   auto.x = THREE.MathUtils.clamp(auto.x, MAP.x0 + 10, MAP.x1 - 10);
   auto.z = THREE.MathUtils.clamp(auto.z, MAP.z0 + 10, MAP.z1 - 10);
 
