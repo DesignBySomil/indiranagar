@@ -525,7 +525,7 @@ try {
     getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a, speed: auto.v }),
     playerCar: car,
     stops,
-    ui: { $, showCard },
+    ui: { $, showCard: () => {} },
     addXP: (amt) => {
       if (!stopsGame) return;
       stopsGame.state.xp += amt;
@@ -552,7 +552,7 @@ try {
     auto,
     npcsRef: npcs,
     ui: {
-      say: (txt) => showCard('Auto Dialogue', 'Driver / Passenger', txt),
+      say: () => {},
       fare: (txt) => { if ($('streetName')) $('streetName').textContent = txt; },
       toast: (txt) => console.log('[Indiranagar]', txt)
     }
@@ -574,6 +574,8 @@ try {
       }
     }
   });
+  { const dp = document.getElementById('dest-panel'); if (dp) dp.style.display = 'none'; }
+
   rimLight = createRimLight({ THREE, scene, camera, targets: [car, trees.group] });
 
   try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
