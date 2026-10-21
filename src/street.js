@@ -157,7 +157,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         kind: r.k,
         width: w,
         lanes: is100Ft ? 2 : 1,
-        oneway: false,
+        oneway: is100Ft,
         divided: is100Ft
       });
       roadSegs.push(segObj);
@@ -340,11 +340,11 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     patGeo.setAttribute('position', new THREE.Float32BufferAttribute(patchPos, 3));
     patGeo.setAttribute('color', new THREE.Float32BufferAttribute(patchCol, 3));
     patGeo.setIndex(patchIdx);
-    scene.add(new THREE.Mesh(patGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+    scene.add(new THREE.Mesh(patGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })));
   }
 
   // Build Pothole Decal Quads
-  if (potholeSpots.length) {
+  if (false && potholeSpots.length) {
     const phMat = new THREE.MeshBasicMaterial({
       map: makePotholeTexture(),
       transparent: true,
@@ -857,6 +857,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
 
   scene.add(poleInst, armInst, headInst);
   return {
+    medianQuads,
     roadSegs,
     lampHead: headInst,
     lampSpots,
@@ -865,4 +866,4 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     bridgeVolumes,
     speedBreakers
   };
-}
+               }
