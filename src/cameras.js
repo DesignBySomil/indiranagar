@@ -84,7 +84,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     mirror.rotation.x = Math.PI / 2; mirror.position.set(sg * 0.385, 0.27, 0.02); mirror.rotation.y = -sg * 0.35;
     const glass = new T.Mesh(new T.CircleGeometry(0.052, 20), new T.MeshStandardMaterial({ color: 0x9fb8cc, roughness: 0.1, metalness: 0.9 }));
     glass.position.set(0, 0, -0.0075); glass.rotation.y = Math.PI; mirror.add(glass);
-    cockpitBar.add(grip, lever, stalk, mirror);
+    cockpitBar.add(grip, lever);
   }
   const pod = new T.Mesh(new T.CylinderGeometry(0.065, 0.075, 0.07, 24), rubberMat);
   pod.position.set(0, 0.06, 0.02); pod.rotation.x = -0.9;
@@ -109,10 +109,10 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   cockpitGroup.add(cockpitBar);
   // small Ganesha idol + tricolour tassel on the dash
   const idol = new T.Mesh(new T.SphereGeometry(0.035, 10, 8), new T.MeshStandardMaterial({ color: 0xd97706, roughness: 0.5, metalness: 0.3 }));
-  idol.position.set(0.30, 1.03, 0.90); cockpitGroup.add(idol);
+  idol.position.set(0.30, 1.03, 0.90); /* idol removed */
 
   // ---- Driver seen from behind (passenger view): human proportions ----
-  const shirtMat = new T.MeshStandardMaterial({ color: 0xb59b6a, roughness: 0.8 });
+  const shirtMat = new T.MeshStandardMaterial({ color: 0xb4aed0, roughness: 0.85 });
   const driverAvatar2 = new T.Group();
   const torso = new T.Mesh(new T.CylinderGeometry(0.17, 0.2, 0.5, 14), shirtMat); torso.position.set(0, 1.02, 0.26); torso.scale.z = 0.7;
   const shoulders = new T.Mesh(new T.CapsuleGeometry(0.075, 0.30, 4, 10), shirtMat); shoulders.rotation.z = Math.PI / 2; shoulders.position.set(0, 1.25, 0.26);
@@ -131,6 +131,28 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   }
   driverAvatar.add(driverAvatar2);
 
+  // ---- Back-seat rig (matches the reference photo): seat back, grab rails, extinguisher ----
+  const seatMat = new T.MeshStandardMaterial({ color: 0x4a3426, roughness: 0.9 });
+  const seatBack = new T.Mesh(new T.BoxGeometry(0.56, 0.34, 0.12), seatMat); seatBack.position.set(0, 0.86, 0.0);
+  const seatTop = new T.Mesh(new T.BoxGeometry(0.58, 0.04, 0.14), rubberMat); seatTop.position.set(0, 1.04, 0.0);
+  driverAvatar.add(seatBack, seatTop);
+  for (const yy of [0.80, 0.96]) {
+    const bar = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 1.3, 8), steelMat); bar.rotation.z = Math.PI / 2; bar.position.set(0, yy, -0.22); driverAvatar.add(bar);
+  }
+  for (const sg of [-1, 1]) for (const yy of [0.78, 0.98]) {
+    const rail = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 1.3, 8), steelMat); rail.rotation.x = Math.PI / 2; rail.position.set(sg * 0.66, yy, 0.2); driverAvatar.add(rail);
+  }
+  const ext = new T.Mesh(new T.CylinderGeometry(0.065, 0.065, 0.34, 14), redMat); ext.position.set(0.56, 0.9, -0.26);
+  const extTop = new T.Mesh(new T.CylinderGeometry(0.03, 0.05, 0.07, 10), rubberMat); extTop.position.set(0.56, 1.1, -0.26);
+  driverAvatar.add(ext, extTop);
+
+  const cabinLight = new T.PointLight(0xffe0a8, 1.6, 5, 1.5); cabinLight.position.set(0, 1.75, -0.2); driverAvatar.add(cabinLight);
+  for (const sg of [-1, 1]) {
+    const st = new T.Mesh(new T.CylinderGeometry(0.012, 0.012, 0.3, 6), steelMat); st.rotation.z = sg * 1.2; st.position.set(sg * 0.7, 1.42, 0.9);
+    const mr = new T.Mesh(new T.CylinderGeometry(0.09, 0.09, 0.025, 20), rubberMat); mr.rotation.x = Math.PI / 2; mr.position.set(sg * 0.86, 1.52, 0.9);
+    const gl = new T.Mesh(new T.CircleGeometry(0.078, 20), new T.MeshStandardMaterial({ color: 0x9fb8cc, roughness: 0.1, metalness: 0.9 })); gl.rotation.y = Math.PI; gl.position.set(sg * 0.86, 1.52, 0.878);
+    driverAvatar.add(st, mr, gl);
+  }
   const attachTarget = (carGroup && carGroup.userData && carGroup.userData.chassis) ? carGroup.userData.chassis : carGroup;
   if (attachTarget) {
     attachTarget.add(cockpitGroup);
@@ -157,7 +179,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   function applyVisibilityForMode(mode) {
     cockpitGroup.visible = mode === 'driver' || mode === 'passenger';
     driverAvatar.visible = mode === 'passenger';
-    if (attachTarget) attachTarget.traverse(o => { if (o.userData && o.userData.hideDriver) o.visible = !(mode === 'driver' || mode === 'passenger'); });
+    if (attachTarget) attachTarget.traverse(o => { if (o.userData && o.userData.hideDriver) o.visible = !(mode === 'driver' || mode === 'passenger'); if (o.userData && o.userData.hideInDriver) o.visible = mode !== 'driver'; });
   }
 
   function computePoseForMode(mode, dt, snap, outPos, outLook) {
@@ -225,9 +247,9 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     }
 
     // 'passenger' back-seat view: seated on rear bench looking slightly over the driver's right shoulder
-    const pLocalX = 0.40 * scale + steer * 0.04;
-    const pLocalY = (1.22 + bob * 1.2) * scale;
-    const pLocalZ = -0.62 * scale;
+    const pLocalX = 0.0 * scale + steer * 0.02;
+    const pLocalY = (1.52 + bob * 1.0) * scale;
+    const pLocalZ = -0.52 * scale;
     outPos.set(
       auto.x + cosA * pLocalX + sinA * pLocalZ,
       pLocalY,
@@ -235,11 +257,11 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     );
     outLook.set(
       auto.x + sinA * 14.0 - cosA * (steer * 1.5 - 0.15),
-      pLocalY - 0.15,
+      pLocalY - 0.2,
       auto.z + cosA * 14.0 + sinA * (steer * 1.5 - 0.15)
     );
     return {
-      fov: 58 + spd * 0.65,
+      fov: 54 + spd * 0.5,
       roll: -steer * (auto.v || 0) * 0.0038
     };
   }
