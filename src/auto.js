@@ -300,7 +300,7 @@ export function buildAuto() {
   rBumper.position.set(0, 0.34, -1.27);
   chassis.add(rBumper);
 
-  const spot = new THREE.SpotLight(0xfff0c8, 15, 42, 0.48, 0.72, 1.4);
+  const spot = new THREE.SpotLight(0xfff0c8, 8, 38, 0.48, 0.8, 1.6);
   spot.position.set(0, 0.95, 1.65);
   spot.target.position.set(0, 0.1, 15);
   chassis.add(spot, spot.target);
