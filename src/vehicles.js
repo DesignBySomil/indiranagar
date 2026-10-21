@@ -1051,6 +1051,8 @@ export function createTraffic({
     // 3. Advance positions, transition segments, recycle distant units, and write matrices
     for (let i = 0; i < trafficUnits.length; i++) {
       const tu = trafficUnits[i];
+      if (tu.seg.oneway) tu.dir = 1;
+      let forceRecycle = false;
       tu.t += (tu.dir * tu.speed * safeDt) / tu.seg.len;
 
       // Segment boundary transition
@@ -1060,10 +1062,12 @@ export function createTraffic({
         const fUx = tu.seg.ux * tu.dir;
         const fUz = tu.seg.uz * tu.dir;
         const next = findConnectedSegment(tu.seg, exitX, exitZ, fUx, fUz);
-        if (next) {
+        if (next && !(next.seg.oneway && next.dir !== 1) && !(tu.seg.oneway && false)) {
           tu.seg = next.seg;
           tu.dir = next.dir;
           tu.t = next.dir === 1 ? 0.05 : 0.95;
+        } else if (tu.seg.oneway) {
+          forceRecycle = true;
         } else {
           tu.dir *= -1;
           tu.t = T.MathUtils.clamp(tu.t, 0.04, 0.96);
@@ -1076,11 +1080,11 @@ export function createTraffic({
       const dx = pos.x - player.x;
       const dz = pos.z - player.z;
       const dist = Math.hypot(dx, dz);
-      if (dist > 260 || (solidFn && solidFn(pos.x, pos.z))) {
-        const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 80, 200, true, i + tu.t * 100);
+      if (forceRecycle || dist > 260 || (solidFn && solidFn(pos.x, pos.z))) {
+        const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 150, 240, true, i + tu.t * 100);
         tu.seg = picked.seg;
         tu.t = picked.t;
-        tu.dir = (i % 2 === 0) ? 1 : -1;
+        tu.dir = picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1);
         tu.speed = tu.maxSpeed * 0.8;
         pos = computeLanePos(tu.seg, tu.t, tu.dir);
       }
