@@ -12,7 +12,6 @@ import { createStreetLife } from './life.js';
 import { createNPCs } from './npcs.js';
 import { createRainTrees } from './trees.js';
 import { createCameraRig } from './cameras.js';
-import { createDestinationMode } from './destination.js';
 import { createRimLight } from './rim.js';
 import { buildIcons } from './icons.js';
 import { createTraffic } from './vehicles.js';
@@ -669,20 +668,6 @@ try {
   
   trees = createRainTrees({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, bridgeVolumes: street.bridgeVolumes, seed: 42 });
   camRig = createCameraRig({ THREE, camera, auto, carGroup: car, scene });
-  destination = createDestinationMode({
-    THREE, scene, world, roadSegs: street.roadSegs, stops, auto, solidFn: solid,
-    getTraffic: () => (npcs && npcs.npcs ? npcs.npcs.map(n => ({ x: n.x, z: n.z, radius: 0.9 })) : []),
-    onHorn: () => { honk(); if (life) life.onHorn(); },
-    ui: { $, showCard, toast: (t) => console.log('[Auto]', t) },
-    onArrive: (stop, fare) => {
-      if (stopsGame) {
-        stopsGame.state.coins += fare; stopsGame.state.xp += 80;
-        const cEl = $('shud-coins'), xEl = $('shud-xp');
-        if (cEl) cEl.textContent = stopsGame.state.coins;
-        if (xEl) xEl.textContent = stopsGame.state.xp;
-      }
-    }
-  });
   { const dp = document.getElementById('dest-panel'); if (dp) dp.style.display = 'none'; }
   { const st = document.createElement('style'); st.textContent = '.shud-pill, #combo-wrap, #combo-bar, #shud-combo { display: none !important; }'; document.head.appendChild(st); }
 
