@@ -379,7 +379,7 @@ function step(dt, now) {
     const s = Math.sin(auto.a), c = Math.cos(auto.a);
     for (const [lx, lz] of [[0.9, 1.9], [-0.9, 1.9], [0.9, -1.4], [-0.9, -1.4], [0, 2]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
-      if (solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz))) return true;
+      if (solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
     }
     return false;
   };
@@ -620,6 +620,6 @@ try {
     startAudio();
   };
   $('go').addEventListener('click', go);
-  window.__game = { get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
+  window.__game = { get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
 }
 boot();
