@@ -65,7 +65,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const solid = solidFn || (() => 0);
 
   // Dusty green/tan Bangalore ground plane
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x626654, roughness: 0.95, metalness: 0.0 });
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x57534d, roughness: 0.97, metalness: 0.0 });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
@@ -865,4 +865,4 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     bridgeVolumes,
     speedBreakers
   };
-        }
+}
