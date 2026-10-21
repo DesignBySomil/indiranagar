@@ -233,9 +233,10 @@ function syncCamera(dt, snap = false) {
     camRoll += ((-auto.steer * auto.v * 0.0028) - camRoll) * Math.min(1, dt * 6);
   }
 
+  function nearSolid(x, z) { const m = 1.4; return solid(x, z) || solid(x + m, z) || solid(x - m, z) || solid(x, z + m) || solid(x, z - m); }
   // keep the camera outside buildings: pull it toward the auto until the spot is free
   for (let k = 0; k < 14; k++) {
-    if (!(solid(camera.position.x, camera.position.z) || (parkedVehicles && parkedVehicles.solid(camera.position.x, camera.position.z)))) break;
+    if (!(nearSolid(camera.position.x, camera.position.z) || (parkedVehicles && parkedVehicles.solid(camera.position.x, camera.position.z)))) break;
     camera.position.x += (auto.x - camera.position.x) * 0.25;
     camera.position.z += (auto.z - camera.position.z) * 0.25;
   }
