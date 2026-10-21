@@ -133,17 +133,17 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
 
   // ---- Back-seat rig (matches the reference photo): seat back, grab rails, extinguisher ----
   const seatMat = new T.MeshStandardMaterial({ color: 0x4a3426, roughness: 0.9 });
-  const seatBack = new T.Mesh(new T.BoxGeometry(0.56, 0.34, 0.12), seatMat); seatBack.position.set(0, 1.0, 0.0);
+  const seatBack = new T.Mesh(new T.BoxGeometry(0.70, 0.36, 0.12), seatMat); seatBack.position.set(0, 1.08, 0.02);
   const seatTop = new T.Mesh(new T.BoxGeometry(0.58, 0.04, 0.14), rubberMat); seatTop.position.set(0, 1.19, 0.0);
   driverAvatar.add(seatBack, seatTop);
-  for (const yy of [1.10, 1.24]) {
-    const bar = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 1.3, 8), steelMat); bar.rotation.z = Math.PI / 2; bar.position.set(0, yy, -0.12); driverAvatar.add(bar);
+  for (const yy of [1.17, 1.31]) {
+    const bar = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 1.3, 8), steelMat); bar.rotation.z = Math.PI / 2; bar.position.set(0, yy, -0.08); driverAvatar.add(bar);
   }
   for (const sg of [-1, 1]) for (const yy of [1.12, 1.26]) {
     const rail = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 1.3, 8), steelMat); rail.rotation.x = Math.PI / 2; rail.position.set(sg * 0.66, yy, 0.2); driverAvatar.add(rail);
   }
-  const ext = new T.Mesh(new T.CylinderGeometry(0.065, 0.065, 0.34, 14), redMat); ext.position.set(-0.52, 1.18, -0.05);
-  const extTop = new T.Mesh(new T.CylinderGeometry(0.03, 0.05, 0.07, 10), rubberMat); extTop.position.set(-0.52, 1.37, -0.05);
+  const ext = new T.Mesh(new T.CylinderGeometry(0.065, 0.065, 0.34, 14), redMat); ext.position.set(-0.40, 1.18, -0.12);
+  const extTop = new T.Mesh(new T.CylinderGeometry(0.03, 0.05, 0.07, 10), rubberMat); extTop.position.set(-0.40, 1.37, -0.12);
   driverAvatar.add(ext, extTop);
 
   const cabinLight = new T.PointLight(0xffe0a8, 1.6, 5, 1.5); cabinLight.position.set(0, 1.75, -0.2); driverAvatar.add(cabinLight);
@@ -249,7 +249,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     // 'passenger' back-seat view: seated on rear bench looking slightly over the driver's right shoulder
     const pLocalX = 0.0 * scale + steer * 0.02;
     const pLocalY = (1.52 + bob * 1.0) * scale;
-    const pLocalZ = -0.52 * scale;
+    const pLocalZ = -0.56 * scale;
     outPos.set(
       auto.x + cosA * pLocalX + sinA * pLocalZ,
       pLocalY,
@@ -257,11 +257,11 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     );
     outLook.set(
       auto.x + sinA * 14.0 - cosA * (steer * 1.5 - 0.15),
-      pLocalY - 2.0,
+      pLocalY - 3.2,
       auto.z + cosA * 14.0 + sinA * (steer * 1.5 - 0.15)
     );
     return {
-      fov: 54 + spd * 0.5,
+      fov: 56 + spd * 0.5,
       roll: -steer * (auto.v || 0) * 0.0038
     };
   }
