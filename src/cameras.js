@@ -58,89 +58,78 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   const cockpitGroup = new T.Group();
   const driverAvatar = new T.Group();
 
-  // Digital fare meter canvas updated live when fare changes
-  const meterCanvas = document.createElement('canvas');
-  meterCanvas.width = 256;
-  meterCanvas.height = 128;
-  const meterCtx = meterCanvas.getContext('2d');
-  const meterTex = new T.CanvasTexture(meterCanvas);
-  meterTex.colorSpace = T.SRGBColorSpace;
-  let lastFareDrawn = -1;
-
-  function drawDigitalMeter(fareVal = 30) {
-    const f = Math.round(fareVal);
-    if (f === lastFareDrawn) return;
-    lastFareDrawn = f;
-    meterCtx.fillStyle = '#090b10';
-    meterCtx.fillRect(0, 0, 256, 128);
-    meterCtx.strokeStyle = '#334155';
-    meterCtx.lineWidth = 6;
-    meterCtx.strokeRect(4, 4, 248, 120);
-
-    meterCtx.fillStyle = '#facc15';
-    meterCtx.font = '700 18px sans-serif';
-    meterCtx.fillText('NAMMA METER · FOR HIRE', 18, 28);
-
-    meterCtx.fillStyle = '#ff2a2a';
-    meterCtx.font = '900 54px monospace';
-    meterCtx.fillText(`₹${String(f).padStart(3, '0')}.00`, 18, 86);
-
-    meterCtx.fillStyle = '#22c55e';
-    meterCtx.font = '700 16px monospace';
-    meterCtx.fillText('MIN ₹30 · WAIT 00:00', 18, 114);
-    meterTex.needsUpdate = true;
-  }
-  drawDigitalMeter(30);
-
   // Build cockpit details (windshield surround, digital red LED meter, dashboard sticker, steerable handlebar)
   const blkMat = new T.MeshStandardMaterial({ color: 0x15181c, roughness: 0.7 });
   const chromeMat = new T.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.2, metalness: 0.85 });
   const khakiMat = new T.MeshStandardMaterial({ color: 0xc2a36b, roughness: 0.75 });
   const skinMat = new T.MeshStandardMaterial({ color: 0xd4946a, roughness: 0.65 });
 
-  // Dashboard sticker ("METER HAAKU GURU · NAMMA BENGALURU")
-  const stickerTex = makeSign('ನಮ್ಮ ಬೆಂಗಳೂರು · DRIVE SAFE', '#facc15', '#111111', '800 32px sans-serif', 256, 64, 'NO CREDIT · CASH / UPI ONLY', '#b91c1c');
-  const stickerMesh = new T.Mesh(new T.PlaneGeometry(0.26, 0.065), new T.MeshBasicMaterial({ map: stickerTex }));
-  stickerMesh.position.set(-0.22, 1.05, 0.88);
-  stickerMesh.rotation.y = Math.PI;
-  cockpitGroup.add(stickerMesh);
-
-  // Live glowing digital fare meter housing
-  const meterHousing = new T.Mesh(new T.BoxGeometry(0.22, 0.14, 0.12), blkMat);
-  meterHousing.position.set(0.25, 1.07, 0.89);
-  const meterScreen = new T.Mesh(new T.PlaneGeometry(0.19, 0.10), new T.MeshBasicMaterial({ map: meterTex }));
-  meterScreen.position.set(0.25, 1.07, 0.828);
-  meterScreen.rotation.y = Math.PI;
-  cockpitGroup.add(meterHousing, meterScreen);
-
-  // Steerable cockpit handlebar with grips, brake levers & side mirrors
+  // ---- Driver POV: handlebar with grips, brake levers, mirrors, speedo pod ----
+  const rubberMat = new T.MeshStandardMaterial({ color: 0x0c0d0f, roughness: 0.9 });
+  const steelMat = new T.MeshStandardMaterial({ color: 0xaab2bd, roughness: 0.3, metalness: 0.85 });
+  const redMat = new T.MeshStandardMaterial({ color: 0xc81e1e, roughness: 0.5 });
   const cockpitBar = new T.Group();
-  cockpitBar.position.set(0, 0.96, 0.86);
-  const crossTube = new T.Mesh(new T.CylinderGeometry(0.016, 0.016, 0.58, 8), chromeMat);
+  cockpitBar.position.set(0, 0.92, 0.66);
+  const crossTube = new T.Mesh(new T.CylinderGeometry(0.014, 0.014, 0.64, 10), steelMat);
   crossTube.rotation.z = Math.PI / 2;
   cockpitBar.add(crossTube);
-  for (const s of [-1, 1]) {
-    const grip = new T.Mesh(new T.CylinderGeometry(0.024, 0.024, 0.13, 8), blkMat);
-    grip.rotation.z = Math.PI / 2;
-    grip.position.set(s * 0.25, 0, 0);
-    cockpitBar.add(grip);
+  for (const sg of [-1, 1]) {
+    const grip = new T.Mesh(new T.CylinderGeometry(0.021, 0.021, 0.12, 12), rubberMat);
+    grip.rotation.z = Math.PI / 2; grip.position.set(sg * 0.30, 0, 0);
+    const lever = new T.Mesh(new T.BoxGeometry(0.012, 0.012, 0.11), steelMat);
+    lever.position.set(sg * 0.22, -0.012, 0.05); lever.rotation.y = sg * 0.18;
+    const stalk = new T.Mesh(new T.CylinderGeometry(0.007, 0.007, 0.26, 6), steelMat);
+    stalk.position.set(sg * 0.34, 0.13, 0.02); stalk.rotation.z = -sg * 0.25;
+    const mirror = new T.Mesh(new T.CylinderGeometry(0.06, 0.06, 0.012, 20), steelMat);
+    mirror.rotation.x = Math.PI / 2; mirror.position.set(sg * 0.385, 0.27, 0.02); mirror.rotation.y = -sg * 0.35;
+    const glass = new T.Mesh(new T.CircleGeometry(0.052, 20), new T.MeshStandardMaterial({ color: 0x9fb8cc, roughness: 0.1, metalness: 0.9 }));
+    glass.position.set(0, 0, -0.0075); glass.rotation.y = Math.PI; mirror.add(glass);
+    cockpitBar.add(grip, lever, stalk, mirror);
   }
+  const pod = new T.Mesh(new T.CylinderGeometry(0.065, 0.075, 0.07, 24), rubberMat);
+  pod.position.set(0, 0.06, 0.02); pod.rotation.x = -0.9;
+  const speedoCanvas = document.createElement('canvas'); speedoCanvas.width = speedoCanvas.height = 128;
+  const speedoCtx = speedoCanvas.getContext('2d');
+  const speedoTex = new T.CanvasTexture(speedoCanvas); speedoTex.colorSpace = T.SRGBColorSpace;
+  let lastSpeedDrawn = -1;
+  function drawSpeedo(kmh) {
+    const k = Math.round(kmh);
+    if (k === lastSpeedDrawn) return; lastSpeedDrawn = k;
+    const c = speedoCtx; c.fillStyle = '#05070a'; c.fillRect(0, 0, 128, 128);
+    c.strokeStyle = '#e5e7eb'; c.lineWidth = 3;
+    for (let i = 0; i <= 8; i++) { const a = Math.PI * (0.75 + 1.5 * i / 8); c.beginPath(); c.moveTo(64 + Math.cos(a) * 46, 64 + Math.sin(a) * 46); c.lineTo(64 + Math.cos(a) * 56, 64 + Math.sin(a) * 56); c.stroke(); }
+    const a = Math.PI * (0.75 + 1.5 * Math.min(1, k / 80));
+    c.strokeStyle = '#ef4444'; c.lineWidth = 4; c.beginPath(); c.moveTo(64, 64); c.lineTo(64 + Math.cos(a) * 44, 64 + Math.sin(a) * 44); c.stroke();
+    c.fillStyle = '#facc15'; c.font = '700 22px monospace'; c.textAlign = 'center'; c.fillText(String(k), 64, 100);
+    speedoTex.needsUpdate = true;
+  }
+  const speedoFace = new T.Mesh(new T.CircleGeometry(0.058, 28), new T.MeshBasicMaterial({ map: speedoTex }));
+  speedoFace.position.set(0, 0.036, 0); speedoFace.rotation.x = -Math.PI / 2; pod.add(speedoFace);
+  cockpitBar.add(pod);
   cockpitGroup.add(cockpitBar);
+  // small Ganesha idol + tricolour tassel on the dash
+  const idol = new T.Mesh(new T.SphereGeometry(0.035, 10, 8), new T.MeshStandardMaterial({ color: 0xd97706, roughness: 0.5, metalness: 0.3 }));
+  idol.position.set(0.30, 1.03, 0.90); cockpitGroup.add(idol);
 
-  // Stylised Driver Avatar visible in 'passenger' back-seat mode (looking over driver's shoulder)
-  const dTorso = new T.Mesh(new T.BoxGeometry(0.44, 0.54, 0.26), khakiMat);
-  dTorso.position.set(0, 0.98, 0.36);
-  const dHead = new T.Mesh(new T.SphereGeometry(0.16, 12, 10), skinMat);
-  dHead.position.set(0, 1.38, 0.36);
-  const dHair = new T.Mesh(new T.SphereGeometry(0.168, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.58), blkMat);
-  dHair.position.set(0, 1.40, 0.35);
-  const dArmL = new T.Mesh(new T.BoxGeometry(0.11, 0.44, 0.11), khakiMat);
-  dArmL.position.set(-0.24, 1.06, 0.58);
-  dArmL.rotation.x = 1.15;
-  const dArmR = new T.Mesh(new T.BoxGeometry(0.11, 0.44, 0.11), khakiMat);
-  dArmR.position.set(0.24, 1.06, 0.58);
-  dArmR.rotation.x = 1.15;
-  driverAvatar.add(dTorso, dHead, dHair, dArmL, dArmR);
+  // ---- Driver seen from behind (passenger view): human proportions ----
+  const shirtMat = new T.MeshStandardMaterial({ color: 0xb59b6a, roughness: 0.8 });
+  const driverAvatar2 = new T.Group();
+  const torso = new T.Mesh(new T.CylinderGeometry(0.17, 0.2, 0.5, 14), shirtMat); torso.position.set(0, 1.02, 0.26); torso.scale.z = 0.7;
+  const shoulders = new T.Mesh(new T.CapsuleGeometry(0.075, 0.30, 4, 10), shirtMat); shoulders.rotation.z = Math.PI / 2; shoulders.position.set(0, 1.25, 0.26);
+  const neck = new T.Mesh(new T.CylinderGeometry(0.045, 0.05, 0.08, 10), skinMat); neck.position.set(0, 1.32, 0.26);
+  const head = new T.Mesh(new T.SphereGeometry(0.1, 16, 12), skinMat); head.scale.set(0.92, 1.12, 1.0); head.position.set(0, 1.43, 0.26);
+  const hair = new T.Mesh(new T.SphereGeometry(0.104, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), blkMat); hair.scale.set(0.95, 1.12, 1.05); hair.position.set(0, 1.45, 0.255);
+  const ears = [-1, 1].map(sg => { const e = new T.Mesh(new T.SphereGeometry(0.022, 8, 6), skinMat); e.position.set(sg * 0.095, 1.43, 0.26); return e; });
+  driverAvatar2.add(torso, shoulders, neck, head, hair, ...ears);
+  for (const sg of [-1, 1]) {
+    const up = new T.Mesh(new T.CapsuleGeometry(0.04, 0.2, 4, 8), shirtMat);
+    up.position.set(sg * 0.22, 1.12, 0.38); up.rotation.set(1.0, 0, sg * 0.25);
+    const fore = new T.Mesh(new T.CapsuleGeometry(0.034, 0.2, 4, 8), skinMat);
+    fore.position.set(sg * 0.27, 1.0, 0.56); fore.rotation.set(1.35, 0, sg * 0.12);
+    const hand = new T.Mesh(new T.SphereGeometry(0.036, 8, 6), skinMat); hand.position.set(sg * 0.30, 0.94, 0.66);
+    driverAvatar2.add(up, fore, hand);
+  }
+  driverAvatar.add(driverAvatar2);
 
   const attachTarget = (carGroup && carGroup.userData && carGroup.userData.chassis) ? carGroup.userData.chassis : carGroup;
   if (attachTarget) {
@@ -168,6 +157,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   function applyVisibilityForMode(mode) {
     cockpitGroup.visible = mode === 'driver' || mode === 'passenger';
     driverAvatar.visible = mode === 'passenger';
+    if (attachTarget) attachTarget.traverse(o => { if (o.userData && o.userData.hideDriver) o.visible = !(mode === 'driver' || mode === 'passenger'); });
   }
 
   function computePoseForMode(mode, dt, snap, outPos, outLook) {
@@ -216,8 +206,8 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     if (mode === 'driver') {
       // Driver head position just behind handlebar (~1.38m local * scale, looking straight out through windshield)
       const localX = -steer * 0.06;
-      const localY = (1.32 + bob) * scale;
-      const localZ = 0.28 * scale;
+      const localY = (1.30 + bob) * scale;
+      const localZ = 0.22 * scale;
       outPos.set(
         auto.x + cosA * localX + sinA * localZ,
         localY,
@@ -235,9 +225,9 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     }
 
     // 'passenger' back-seat view: seated on rear bench looking slightly over the driver's right shoulder
-    const pLocalX = 0.18 * scale + steer * 0.04;
-    const pLocalY = (1.36 + bob * 1.2) * scale;
-    const pLocalZ = -0.64 * scale;
+    const pLocalX = 0.40 * scale + steer * 0.04;
+    const pLocalY = (1.22 + bob * 1.2) * scale;
+    const pLocalZ = -0.62 * scale;
     outPos.set(
       auto.x + cosA * pLocalX + sinA * pLocalZ,
       pLocalY,
@@ -289,7 +279,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     bobPhase += dt * (10 + Math.abs(auto.v || 0) * 1.6);
     cockpitBar.rotation.y = (auto.steer || 0) * 0.48;
     driverAvatar.rotation.z = -(auto.steer || 0) * 0.12;
-    drawDigitalMeter(auto.liveFare || 30);
+    drawSpeedo(Math.abs(auto.v || 0) * 3.6);
 
     if (snap) {
       blend = 1.0;
