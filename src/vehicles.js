@@ -1386,5 +1386,24 @@ export function createParkedVehicles({
     }
   }
 
-  return { group, update };
+  const HALF = { hatch: [0.85, 2.0], sedan: [0.9, 2.3], suv: [1.0, 2.3], autoRickshaw: [0.75, 1.45], scooter: [0.45, 0.95], bike: [0.4, 0.95] };
+  function solid(x, z) {
+    const cx = Math.floor(x / cellSize), cz = Math.floor(z / cellSize);
+    for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) {
+      const cell = spatialGrid.get(`${i},${j}`);
+      if (!cell) continue;
+      for (let k = 0; k < cell.length; k++) {
+        const sp = cell[k];
+        const dx = x - sp.x, dz = z - sp.z;
+        if (dx * dx + dz * dz > 25) continue;
+        const h = HALF[sp.type] || [0.9, 2.1];
+        const s1 = Math.sin(sp.yaw), c1 = Math.cos(sp.yaw);
+        const lx = dx * c1 - dz * s1, lz = dx * s1 + dz * c1;
+        if (Math.abs(lx) < h[0] && Math.abs(lz) < h[1]) return true;
+      }
+    }
+    return false;
+  }
+
+  return { group, update, solid };
 }
