@@ -584,6 +584,7 @@ try {
     }
   });
   { const dp = document.getElementById('dest-panel'); if (dp) dp.style.display = 'none'; }
+  { const st = document.createElement('style'); st.textContent = '.shud-pill, #combo-bar, #shud-combo, .combo-wrap { display: none !important; }'; document.head.appendChild(st); }
 
   rimLight = createRimLight({ THREE, scene, camera, targets: [car, trees.group] });
 
