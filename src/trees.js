@@ -227,6 +227,33 @@ export function createRainTrees({
     return false;
   }
 
+  // True when parallel roads lie on BOTH sides within 20 m (i.e. the strip between two carriageways)
+  function isBetweenCarriageways(x, z) {
+    let best = null, bd = 1e9;
+    for (let i = 0; i < roadSegs.length; i++) {
+      const s = roadSegs[i];
+      const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
+      const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz) || 1;
+      const tt = T.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / (L * L), 0, 1);
+      const d = Math.hypot(x - (x1 + dx * tt), z - (z1 + dz * tt));
+      if (d < bd) { bd = d; best = { ux: dx / L, uz: dz / L }; }
+    }
+    if (!best) return false;
+    let left = false, right = false;
+    for (let i = 0; i < roadSegs.length; i++) {
+      const s = roadSegs[i];
+      const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
+      const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
+      if (Math.abs(ux * best.ux + uz * best.uz) < 0.9) continue;
+      const tt = T.MathUtils.clamp(((x - x1) * ux + (z - z1) * uz) / L, 0, 1);
+      const d = Math.hypot(x - (x1 + dx * tt), z - (z1 + dz * tt));
+      if (d > 20) continue;
+      const cr = (x - x1) * uz - (z - z1) * ux;
+      if (cr > 2.5) left = true; else if (cr < -2.5) right = true;
+    }
+    return left && right;
+  }
+
   // Place roadside trees along both sides of roads: dense on 100 Feet Road, CMH Road, 12th Main, sparser on side streets
   for (let idx = 0; idx < roadSegs.length; idx++) {
     const s = roadSegs[idx];
@@ -274,6 +301,7 @@ export function createRainTrees({
         ) continue;
 
         if (isUnderBridge(tx, tz)) continue;
+        if (isBetweenCarriageways(tx, tz)) continue;
         if (isTooCloseToOtherTree(tx, tz, minSpacing)) continue;
         if (checkJunctionOrCarriageway(tx, tz, idx)) continue;
 
