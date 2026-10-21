@@ -97,6 +97,7 @@ const WANT = [
   ['Starbucks', 'Coffee']
 ];
 
+const MAP = { x0: -650, x1: 830, z0: -805, z1: 775 };
 const stops = [];
 
 function nearestRoadInfo(x, z) {
@@ -435,8 +436,8 @@ function step(dt, now) {
     else auto.v *= -0.25;
   }
 
-  auto.x = THREE.MathUtils.clamp(auto.x, -880, 880);
-  auto.z = THREE.MathUtils.clamp(auto.z, -880, 880);
+  auto.x = THREE.MathUtils.clamp(auto.x, MAP.x0 + 10, MAP.x1 - 10);
+  auto.z = THREE.MathUtils.clamp(auto.z, MAP.z0 + 10, MAP.z1 - 10);
 
   if (stopsGame) auto.goldAuto = stopsGame.state.goldAuto;
   car.position.set(auto.x, 0, auto.z);
@@ -518,6 +519,68 @@ async function boot() {
   setLoad(8, 'Fetching the map');
   world = await (await fetch(import.meta.env.BASE_URL + 'data/world.json')).json();
   world.roads.push({ k: 3, n: 'Old Airport Road', p: LEELA_ACCESS_ROAD });
+  (function infill() {
+    const WM = { 5: 14.5, 4: 10.5, 3: 8.2, 2: 7, 1: 5.5 };
+    const segs = [];
+    for (const r of world.roads) {
+      if (!r.p || r.p.length < 2) continue;
+      const hw = ((r.n || '').includes('100 Feet') ? 10 : (WM[r.k] || 7)) / 2 + 3.2;
+      for (let i = 0; i < r.p.length - 1; i++) segs.push([r.p[i][0], r.p[i][1], r.p[i + 1][0], r.p[i + 1][1], hw]);
+    }
+    const G = 24, grid = new Map();
+    const put = (key, v) => { let a = grid.get(key); if (!a) grid.set(key, a = []); a.push(v); };
+    const bbs = [];
+    for (const b of world.buildings) {
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (const q of b.p) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); }
+      const bb = [x0 - 0.8, z0 - 0.8, x1 + 0.8, z1 + 0.8, b.p]; bbs.push(bb);
+      for (let gx = Math.floor(bb[0] / G); gx <= Math.floor(bb[2] / G); gx++) for (let gz = Math.floor(bb[1] / G); gz <= Math.floor(bb[3] / G); gz++) put(gx + ',' + gz, bb);
+    }
+    const sg = new Map();
+    for (const s of segs) {
+      const mnx = Math.min(s[0], s[2]) - s[4], mxx = Math.max(s[0], s[2]) + s[4], mnz = Math.min(s[1], s[3]) - s[4], mxz = Math.max(s[1], s[3]) + s[4];
+      for (let gx = Math.floor(mnx / G); gx <= Math.floor(mxx / G); gx++) for (let gz = Math.floor(mnz / G); gz <= Math.floor(mxz / G); gz++) { const k = gx + ',' + gz; let a = sg.get(k); if (!a) sg.set(k, a = []); a.push(s); }
+    }
+    const nearRoad = (x, z) => {
+      const a = sg.get(Math.floor(x / G) + ',' + Math.floor(z / G)); if (!a) return false;
+      for (const s of a) {
+        const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - s[0]) * dx + (z - s[1]) * dz) / L2));
+        if (Math.hypot(x - (s[0] + dx * t), z - (s[1] + dz * t)) < s[4]) return true;
+      }
+      return false;
+    };
+    const inBld = (x0, z0, x1, z1) => {
+      for (let gx = Math.floor(x0 / G); gx <= Math.floor(x1 / G); gx++) for (let gz = Math.floor(z0 / G); gz <= Math.floor(z1 / G); gz++) {
+        const a = grid.get(gx + ',' + gz); if (!a) continue;
+        for (const bb of a) {
+          if (bb[2] < x0 || bb[0] > x1 || bb[3] < z0 || bb[1] > z1) continue;
+          const poly = bb[4];
+          for (const q of poly) if (q[0] > x0 - 0.8 && q[0] < x1 + 0.8 && q[1] > z0 - 0.8 && q[1] < z1 + 0.8) return true;
+          for (const [px, pz] of [[x0, z0], [x1, z0], [x1, z1], [x0, z1], [(x0 + x1) / 2, (z0 + z1) / 2]]) {
+            let inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+              const a1 = poly[i], b1 = poly[j];
+              if ((a1[1] > pz) !== (b1[1] > pz) && px < (b1[0] - a1[0]) * (pz - a1[1]) / (b1[1] - a1[1]) + a1[0]) inside = !inside;
+            }
+            if (inside) return true;
+          }
+        }
+      }
+      return false;
+    };
+    let seed = 99; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const add = [];
+    for (let x = MAP.x0; x < MAP.x1; x += 12) for (let z = MAP.z0; z < MAP.z1; z += 14) {
+      const w = 11 * (0.9 + rnd() * 0.2), d = 13 * (0.9 + rnd() * 0.2);
+      const x1 = x + w, z1 = z + d;
+      if (nearRoad(x, z) || nearRoad(x1, z) || nearRoad(x, z1) || nearRoad(x1, z1) || nearRoad(x + w / 2, z + d / 2)) continue;
+      if (inBld(x, z, x1, z1)) continue;
+      add.push({ p: [[x, z], [x1, z], [x1, z1], [x, z1], [x, z]], h: 6.8 + Math.floor(rnd() * 4) * 3.3 });
+    }
+    world.buildings.push(...add);
+    console.log('infill buildings', add.length);
+  })();
 extras = null;
 try {
   extras = await (await fetch(import.meta.env.BASE_URL + 'data/extras.json')).json();
