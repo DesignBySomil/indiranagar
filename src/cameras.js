@@ -161,16 +161,21 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   box(1.9, 0.14, 0.05, 0, 1.86, 0.90, yelMat);           // header
   box(1.9, 0.02, 0.06, 0, 1.78, 0.89, dashMat);         // rubber seal top
   box(1.9, 0.05, 0.10, 0, 1.00, 0.90, yelMat);           // lower frame
-  box(1.9, 0.16, 0.10, 0, 0.90, 0.90, dashMat);           // dash cowl
+  box(1.9, 0.14, 0.12, 0, 0.94, 0.90, yelMat);           // yellow dash cowl
+  box(1.9, 0.10, 0.12, 0, 0.85, 0.89, dashMat);
   box(1.1, 0.10, 0.30, 0, 0.84, 0.80, dashMat);           // dark dash
+  const link = (x1, y1, z1, x2, y2, z2, r, m) => { const v = new T.Vector3(x2 - x1, y2 - y1, z2 - z1); const o = new T.Mesh(new T.CylinderGeometry(r, r, v.length(), 8), m); o.position.set((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2); o.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), v.normalize()); driverRig.add(o); return o; };
   for (const sg of [-1, 1]) {
     box(0.07, 0.9, 0.06, sg * 0.93, 1.40, 0.90, yelMat);  // pillars
-    box(0.03, 0.40, 0.06, sg * 0.755, 1.36, 0.89, dashMat);
-    const st = new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.30, 6), steelMat); st.rotation.z = sg * 0.9; st.position.set(sg * 0.62, 1.28, 0.86); driverRig.add(st);
-    const rim = new T.Mesh(new T.CylinderGeometry(0.095, 0.095, 0.03, 24), dashMat); rim.rotation.x = Math.PI / 2; rim.position.set(sg * 0.52, 1.42, 0.86); driverRig.add(rim);
-    const glass = new T.Mesh(new T.CircleGeometry(0.082, 24), new T.MeshStandardMaterial({ color: 0x3a4a5c, roughness: 0.15, metalness: 0.8 })); glass.rotation.y = Math.PI; glass.position.set(sg * 0.52, 1.42, 0.844); driverRig.add(glass);
+    box(0.03, 0.80, 0.07, sg * 0.885, 1.40, 0.89, dashMat); // rubber seal side
+    link(sg * 0.60, 1.38, 0.84, sg * 0.89, 1.24, 0.88, 0.009, steelMat); // mirror stalk
+    const rim = new T.Mesh(new T.CylinderGeometry(0.058, 0.058, 0.025, 24), dashMat); rim.rotation.x = Math.PI / 2; rim.position.set(sg * 0.60, 1.40, 0.84); driverRig.add(rim);
+    const glass = new T.Mesh(new T.CircleGeometry(0.048, 24), new T.MeshStandardMaterial({ color: 0x55677a, roughness: 0.1, metalness: 0.9 })); glass.rotation.y = Math.PI; glass.position.set(sg * 0.60, 1.40, 0.826); driverRig.add(glass);
   }
-  const wiperBlade = box(0.62, 0.012, 0.012, -0.05, 1.205, 0.885, dashMat); wiperBlade.rotation.z = 0.05;
+  box(1.9, 0.05, 0.07, 0, 1.03, 0.89, dashMat);            // rubber seal bottom
+  // wiper: pivot low centre, blade arcing across the glass
+  link(-0.05, 1.075, 0.87, -0.42, 1.13, 0.87, 0.013, dashMat);
+  link(-0.05, 1.075, 0.87, 0.32, 1.13, 0.87, 0.013, dashMat);
   driverRig.position.z = 0.35; driverRig.visible = false;
 
   const attachTarget = (carGroup && carGroup.userData && carGroup.userData.chassis) ? carGroup.userData.chassis : carGroup;
