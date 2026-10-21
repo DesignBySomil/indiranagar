@@ -790,5 +790,5 @@ export function createCrowd({
     return false;
   }
 
-  return { group, update, solid };
+  return { group, update, solid, peds };
 }
