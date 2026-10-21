@@ -485,8 +485,9 @@ function step(dt, now) {
   // unstick fallback: throttle held but not moving against a collider -> back off, then snap to the road lane
   if (blocked && Math.abs(thr) > 0.1 && Math.abs(auto.v) < 1.2) auto.stuckT = (auto.stuckT || 0) + dt;
   else auto.stuckT = Math.max(0, (auto.stuckT || 0) - dt * 2);
-  if (auto.stuckT > 0.6 || auto.unstickNow) {
-    auto.stuckT = 0; auto.unstickNow = false;
+  if (blocked && Math.abs(thr) > 0.1) auto.blockT = (auto.blockT || 0) + dt; else auto.blockT = Math.max(0, (auto.blockT || 0) - dt * 3);
+  if (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow) {
+    auto.stuckT = 0; auto.blockT = 0; auto.unstickNow = false;
     let freed = false;
     const sgn = thr >= 0 ? -1 : 1;
     for (const d of [0.8, 1.6, 2.4, 3.5]) {
@@ -494,7 +495,11 @@ function step(dt, now) {
       if (!hit(nx, nz)) { auto.x = nx; auto.z = nz; auto.v = 0; freed = true; break; }
     }
     const pr = window.__placeOnRoad ? window.__placeOnRoad(auto.x, auto.z) : null;
-    if (!freed && pr && Math.hypot(pr.x - auto.x, pr.z - auto.z) < 14 && !hit(pr.x, pr.z)) { auto.x = pr.x; auto.z = pr.z; auto.v = 0; }
+    if (pr && Math.hypot(pr.x - auto.x, pr.z - auto.z) < 14 && !hit(pr.x, pr.z)) {
+      // nudge to the road lane and line up with the road so throttle drives along it, never back into the wall
+      const d1 = Math.abs(Math.atan2(Math.sin(pr.a - auto.a), Math.cos(pr.a - auto.a)));
+      auto.x = pr.x; auto.z = pr.z; auto.a = d1 <= Math.PI / 2 ? pr.a : pr.a + Math.PI; auto.v = 0;
+    }
   }
 
   auto.x = THREE.MathUtils.clamp(auto.x, MAP.x0 + 10, MAP.x1 - 10);
