@@ -294,8 +294,33 @@ function startAudio() {
   let l = 0;
   for (let i = 0; i < d.length; i++) { l = (l + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = l * 3.5; }
   const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
-  amb = AC.createGain(); amb.gain.value = 0.35;
-  src.connect(amb); amb.connect(master); src.start();
+  amb = AC.createGain(); amb.gain.value = 0.10;
+  const wl = AC.createBiquadFilter(); wl.type = 'lowpass'; wl.frequency.value = 500;
+  src.connect(wl); wl.connect(amb); amb.connect(master); src.start();
+  const chirp = (f0, f1, dur, vol, when) => {
+    const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(f0, when); o.frequency.exponentialRampToValueAtTime(f1, when + dur);
+    g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(vol, when + dur * 0.2); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(g); g.connect(master); o.start(when); o.stop(when + dur + 0.05);
+  };
+  const bird = () => {
+    if (!started) return;
+    const t = AC.currentTime, night = nightUniform.value > 0.5;
+    if (night) { for (let i = 0; i < 4; i++) chirp(4200, 4300, 0.06, 0.012, t + i * 0.09); return; }
+    const base = 2200 + Math.random() * 1800, n = 2 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) chirp(base * (1 + Math.random() * 0.3), base * (1.3 + Math.random() * 0.5), 0.09 + Math.random() * 0.08, 0.02, t + i * (0.13 + Math.random() * 0.08));
+  };
+  const pom = () => {
+    if (!started) return;
+    const t = AC.currentTime;
+    for (let k = 0; k < 2; k++) {
+      const o = AC.createOscillator(), g = AC.createGain(); o.type = 'triangle'; o.frequency.value = 330;
+      g.gain.setValueAtTime(0.0001, t + k * 0.28); g.gain.exponentialRampToValueAtTime(0.03, t + k * 0.28 + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + k * 0.28 + 0.2);
+      o.connect(g); g.connect(master); o.start(t + k * 0.28); o.stop(t + k * 0.28 + 0.25);
+    }
+  };
+  setInterval(() => { if (Math.random() < 0.7) bird(); }, 2200);
+  setInterval(() => { if (Math.random() < 0.5) pom(); }, 9000);
 }
 function honk() {
   if (!AC) return;
@@ -440,9 +465,9 @@ function step(dt, now) {
   if (eg) {
     const spd = Math.abs(auto.v);
     const gearRatio = spd < 5.5 ? spd / 5.5 : (spd < 11.5 ? (spd - 4.0) / 7.5 : (spd - 9.0) / 8.0);
-    eg.gain.value = 0.025 + (spd / max) * 0.055;
+    eg.gain.value = spd < 0.35 ? 0 : 0.02 + (spd / max) * 0.05;
     engine.frequency.value = 48 + gearRatio * 62 + Math.sin(performance.now() * 0.04) * 2.5;
-    amb.gain.value = 0.25 + nightUniform.value * 0.1;
+    amb.gain.value = 0.10;
   }
 
   frame++;
@@ -668,6 +693,6 @@ try {
     startAudio();
   };
   $('go').addEventListener('click', go);
-  window.__game = { get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
+  window.__game = { get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();
