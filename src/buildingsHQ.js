@@ -272,7 +272,7 @@ export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene
     balcRailInst.count = bCount;
     acInst.count = aCount;
     chajjaInst.count = cCount;
-    tankInst.count = tCount;
+    tankInst.count = 0;
     corniceInst.count = cornCount;
 
     balcSlabInst.instanceMatrix.needsUpdate = true;
