@@ -379,11 +379,20 @@ function step(dt, now) {
     const s = Math.sin(auto.a), c = Math.cos(auto.a);
     for (const [lx, lz] of [[0.9, 1.9], [-0.9, 1.9], [0.9, -1.4], [-0.9, -1.4], [0, 2]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
-      if (solid(px, pz) || (life && life.solid(px, pz))) return true;
+      if (solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz))) return true;
     }
     return false;
   };
-  if (!hit(auto.x + dx, auto.z + dz)) { auto.x += dx; auto.z += dz; }
+  if (hit(auto.x, auto.z)) {
+    // stuck inside something: push out toward the nearest free spot
+    let done = false;
+    for (let r = 0.6; r <= 14 && !done; r += 0.6) {
+      for (let k = 0; k < 16; k++) {
+        const ang = k * Math.PI / 8, nx = auto.x + Math.sin(ang) * r, nz = auto.z + Math.cos(ang) * r;
+        if (!hit(nx, nz)) { auto.x = nx; auto.z = nz; auto.v = 0; done = true; break; }
+      }
+    }
+  } else if (!hit(auto.x + dx, auto.z + dz)) { auto.x += dx; auto.z += dz; }
   else {
     if (stopsGame) stopsGame.state.cleanDriveTimer = 0;
     if (!hit(auto.x + dx, auto.z)) { auto.x += dx; auto.v *= 0.8; }
@@ -610,6 +619,6 @@ try {
     startAudio();
   };
   $('go').addEventListener('click', go);
-  window.__game = { get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
+  window.__game = { get parked() { return parkedVehicles; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; } };
 }
 boot();
