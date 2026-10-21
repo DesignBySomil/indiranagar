@@ -100,7 +100,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   });
   const nbrSide = new Map();
   const medianQuads = [];
-  const W100 = 8.6;
+  const W100 = 10;
   for (const a of hundredSegs) {
     const nx = -a.uz, nz = a.ux;
     const mx = (a.x1 + a.x2) / 2, mz = (a.z1 + a.z2) / 2;
@@ -128,7 +128,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     const w = is100Ft ? W100 : (widthMap[r.k] || 7.0);
     // 100 Feet Road is pale white-topped concrete slabs with patches; other roads are worn mid-grey asphalt
     const baseCol = is100Ft
-      ? [0.56, 0.55, 0.52]
+      ? [0.40, 0.40, 0.39]
       : (r.k >= 4 ? [0.36, 0.37, 0.39] : [0.32, 0.33, 0.35]);
     const y = 0.03 + r.k * 0.01;
 
@@ -310,35 +310,6 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     divPos.push(q[0], dh, q[1], q[2], dh, q[3], q[4], dh, q[5], q[6], dh, q[7]);
     divIdx.push(divV, divV + 1, divV + 2, divV + 1, divV + 3, divV + 2, divV, divV + 2, divV + 1, divV + 1, divV + 2, divV + 3);
     divV += 4;
-  }
-
-  // Median planting: low shrubs and bougainvillea on the kerbed strip between the two 100 Feet carriageways
-  {
-    const sp = [];
-    for (const q of medianQuads) {
-      const sx = (q[0] + q[2]) / 2, sz = (q[1] + q[3]) / 2, ex = (q[4] + q[6]) / 2, ez = (q[5] + q[7]) / 2;
-      const len = Math.hypot(ex - sx, ez - sz);
-      for (let d = 1.0; d < len - 0.8; d += 2.1) sp.push([sx + (ex - sx) * d / len, sz + (ez - sz) * d / len, d]);
-    }
-    if (sp.length) {
-      const shrubGeo = new THREE.IcosahedronGeometry(0.42, 1);
-      shrubGeo.scale(1, 0.85, 1.25);
-      const shrub = new THREE.InstancedMesh(shrubGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), sp.length);
-      const dm = new THREE.Object3D(), cc = new THREE.Color();
-      sp.forEach((p, i) => {
-        const h = hash(p[0], p[1]);
-        dm.position.set(p[0], 0.3 + 0.28, p[1]);
-        dm.rotation.set(0, h * 6.28, 0);
-        dm.scale.setScalar(0.55 + h * 0.4);
-        dm.updateMatrix();
-        shrub.setMatrixAt(i, dm.matrix);
-        cc.setHex(h < 0.28 ? 0xc2185b : (h < 0.6 ? 0x2f6b32 : 0x3f7d37));
-        shrub.setColorAt(i, cc);
-      });
-      shrub.instanceMatrix.needsUpdate = true;
-      shrub.castShadow = true;
-      scene.add(shrub);
-    }
   }
 
   // Build Road Mesh
@@ -894,4 +865,4 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     bridgeVolumes,
     speedBreakers
   };
-             }
+        }
