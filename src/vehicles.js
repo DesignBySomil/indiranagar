@@ -1116,17 +1116,21 @@ export function createParkedVehicles({
   roadSegs = [],
   solidFn = () => 0,
   nightUniform,
-  seed = 42
+  seed = 42,
+  getAuto
 }) {
   const group = new T.Group();
   scene.add(group);
 
   const validSegs = normalizeRoadSegs(roadSegs, solidFn);
 
-  // Build high-poly parked sets (hatchbacks, sedans, scooters without rider, autos)
+  // 1. Build geometry sets for parked vehicle types
   const hatchSet = buildCarSet(T, 'hatch');
-  const scooterSet = buildScooterSet(T, false);
+  const sedanSet = buildCarSet(T, 'sedan');
+  const suvSet = buildCarSet(T, 'suv');
   const autoSet = buildAutoRickshawSet(T);
+  const scooterSet = buildScooterSet(T, false);
+  const bikeSet = buildSpokedWheel(T, 0.32, 0.08); // fallback/placeholder or standalone bike representation if needed, or use scooterSet for bikes
 
   const bodyMat = new T.MeshStandardMaterial({
     vertexColors: true,
@@ -1139,7 +1143,7 @@ export function createParkedVehicles({
     metalness: 0.20
   });
 
-  // Helper to check if a candidate parked spot overlaps any road carriageway
+  // Helper checks
   function isOnAnyRoad(px, pz, ignoreSeg) {
     for (let i = 0; i < validSegs.length; i++) {
       const s = validSegs[i];
@@ -1157,7 +1161,6 @@ export function createParkedVehicles({
     return false;
   }
 
-  // Helper to ensure entire footprint of parked vehicle is clear of solidFn buildings/walls
   function isClearOfSolids(px, pz, halfFootprint) {
     if (!solidFn) return true;
     if (solidFn(px, pz)) return false;
@@ -1168,13 +1171,26 @@ export function createParkedVehicles({
     return true;
   }
 
-  const parkedCars = [];
-  const parkedScooters = [];
-  const parkedAutos = [];
+  // Precompute ALL spots across the map
+  const allSpots = [];
+  const spatialGrid = new Map();
+  const cellSize = 40;
+
+  function addToGrid(spot) {
+    const cx = Math.floor(spot.x / cellSize);
+    const cz = Math.floor(spot.z / cellSize);
+    const key = `${cx},${cz}`;
+    let cell = spatialGrid.get(key);
+    if (!cell) {
+      cell = [];
+      spatialGrid.set(key, cell);
+    }
+    cell.push(spot);
+  }
 
   for (let i = 0; i < validSegs.length; i++) {
     const s = validSegs[i];
-    if (s.len < 20) continue;
+    if (s.len < 15) continue;
     const baseYaw = Math.atan2(s.ux, s.uz);
 
     const isDense = s.name && (
@@ -1182,32 +1198,85 @@ export function createParkedVehicles({
       s.name.includes('12th Main') ||
       s.name.includes('Chinmaya')
     );
-    const step = isDense ? 6.5 : 10.5;
+    const step = isDense ? 5.5 : 9.5;
 
-    for (let d = 6; d < s.len - 6; d += step + hash(s.x1 + d, s.z1, seed) * 3.5) {
+    for (let d = 5; d < s.len - 5; d += step + hash(s.x1 + d, s.z1, seed) * 2.5) {
       for (const side of [-1, 1]) {
-        // Place strictly on the kerbside verge (outside road carriageway and clear of footpath core)
+        // Outer verge placement
         const vergeOff = s.width * 0.5 + 2.65;
         const px = s.x1 + s.ux * d + s.uz * vergeOff * side;
         const pz = s.z1 + s.uz * d - s.ux * vergeOff * side;
 
-        // Keep spawn area clear
-        if (Math.hypot(px - (-133), pz - (-345)) < 18) continue;
+        if (Math.hypot(px - (-133), pz - (-345)) < 16) continue;
         if (!isClearOfSolids(px, pz, 1.45)) continue;
         if (isOnAnyRoad(px, pz, s)) continue;
 
         const h = hash(px, pz, seed);
-        // Align with left-hand kerb direction
         const dirYaw = side === 1 ? baseYaw : baseYaw + Math.PI;
-        if (h > 0.56) {
-          parkedCars.push({ x: px, z: pz, yaw: dirYaw + (h - 0.75) * 0.08, seed: h });
-        } else if (h > 0.16) {
-          parkedScooters.push({ x: px, z: pz, yaw: dirYaw + 0.55 * side, seed: h });
-        } else {
-          parkedAutos.push({ x: px, z: pz, yaw: dirYaw + (h - 0.08) * 0.15, seed: h });
-        }
+
+        // Classify type: hatch, sedan, suv, autoRickshaw, scooter, bike
+        let type = 'hatch';
+        let colorIdx = Math.floor(h * 99) % 7;
+        if (h > 0.82) type = 'suv';
+        else if (h > 0.65) type = 'sedan';
+        else if (h > 0.45) type = 'autoRickshaw';
+        else if (h > 0.20) type = 'scooter';
+        else if (h > 0.10) type = 'bike';
+        else type = 'hatch';
+
+        const spot = {
+          x: px,
+          z: pz,
+          yaw: dirYaw + (h - 0.5) * 0.12,
+          type,
+          colorIdx
+        };
+        allSpots.push(spot);
+        addToGrid(spot);
       }
     }
+  }
+
+  // Define capacities as requested: hatch 70, sedan 50, suv 30, autoRickshaw 24, scooter 110, bike 40
+  const capacities = {
+    hatch: 70,
+    sedan: 50,
+    suv: 30,
+    autoRickshaw: 24,
+    scooter: 110,
+    bike: 40
+  };
+
+  const palettes = {
+    hatch: [0x94a3b8, 0xe2e8f0, 0x334155, 0xb91c1c, 0x1d4ed8, 0x0f766e, 0xd97706],
+    sedan: [0xd93829, 0x2563eb, 0xe2e8f0, 0x334155, 0x0284c7, 0xd97706, 0x991b1b],
+    suv: [0xf8fafc, 0x1e293b, 0x475569, 0x991b1b, 0x1d4ed8, 0x78350f, 0xd4d4d8],
+    autoRickshaw: [0x15803d, 0x166534, 0x14532d, 0x1f7a43],
+    scooter: [0xe2e8f0, 0x38bdf8, 0xf43f5e, 0x1e293b, 0xa855f7, 0x10b981],
+    bike: [0x1a1c20, 0x334155, 0x64748b, 0x94a3b8]
+  };
+
+  const typeDefs = [
+    { key: 'hatch', set: hatchSet, max: capacities.hatch },
+    { key: 'sedan', set: sedanSet, max: capacities.sedan },
+    { key: 'suv', set: suvSet, max: capacities.suv },
+    { key: 'autoRickshaw', set: autoSet, max: capacities.autoRickshaw },
+    { key: 'scooter', set: scooterSet, max: capacities.scooter },
+    { key: 'bike', set: scooterSet, max: capacities.bike } // reuse scooter set or compact geo for bike
+  ];
+
+  const meshes = {};
+  for (const td of typeDefs) {
+    const bodyInst = new T.InstancedMesh(td.set.bodyGeo, bodyMat, td.max);
+    const detailInst = new T.InstancedMesh(td.set.detailGeo, detailMat, td.max);
+    bodyInst.castShadow = true;
+    detailInst.castShadow = true;
+    bodyInst.frustumCulled = false;
+    detailInst.frustumCulled = false;
+    bodyInst.count = 0;
+    detailInst.count = 0;
+    group.add(bodyInst, detailInst);
+    meshes[td.key] = { bodyInst, detailInst };
   }
 
   const m4 = new T.Matrix4();
@@ -1216,62 +1285,106 @@ export function createParkedVehicles({
   const s3 = new T.Vector3(1, 1, 1);
   const yAxis = new T.Vector3(0, 1, 0);
   const colC = new T.Color();
+  const hiddenMatrix = new T.Matrix4().makeScale(0, 0, 0);
 
-  const carPalette = [0x94a3b8, 0xe2e8f0, 0x334155, 0xb91c1c, 0x1d4ed8, 0x0f766e, 0xd97706];
-  if (parkedCars.length > 0) {
-    const bodyInst = new T.InstancedMesh(hatchSet.bodyGeo, bodyMat, parkedCars.length);
-    const detailInst = new T.InstancedMesh(hatchSet.detailGeo, detailMat, parkedCars.length);
-    for (let i = 0; i < parkedCars.length; i++) {
-      const p = parkedCars[i];
-      q4.setFromAxisAngle(yAxis, p.yaw);
-      m4.compose(v3.set(p.x, 0, p.z), q4, s3);
-      bodyInst.setMatrixAt(i, m4);
-      detailInst.setMatrixAt(i, m4);
-      colC.setHex(carPalette[i % carPalette.length]);
-      bodyInst.setColorAt(i, colC);
+  let accumDt = 0;
+
+  function refreshStreaming(forced = false) {
+    let px = -133;
+    let pz = -345;
+    if (getAuto) {
+      const auto = getAuto();
+      if (auto && typeof auto.x === 'number') px = auto.x;
+      if (auto && typeof auto.z === 'number') pz = auto.z;
     }
-    bodyInst.castShadow = true;
-    detailInst.castShadow = true;
-    bodyInst.instanceColor.needsUpdate = true;
-    group.add(bodyInst, detailInst);
+
+    // Gather spots within 130m using spatial grid
+    const centerCellX = Math.floor(px / cellSize);
+    const centerCellZ = Math.floor(pz / cellSize);
+    const nearbySpots = [];
+    const radiusCells = Math.ceil(130 / cellSize);
+
+    for (let cx = centerCellX - radiusCells; cx <= centerCellX + radiusCells; cx++) {
+      for (let cz = centerCellZ - radiusCells; cz <= centerCellZ + radiusCells; cz++) {
+        const cell = spatialGrid.get(`${cx},${cz}`);
+        if (!cell) continue;
+        for (let i = 0; i < cell.length; i++) {
+          const sp = cell[i];
+          const distSq = (sp.x - px) * (sp.x - px) + (sp.z - pz) * (sp.z - pz);
+          if (distSq <= 130 * 130) {
+            nearbySpots.push({ spot: sp, distSq });
+          }
+        }
+      }
+    }
+
+    // Sort by distance (nearest first)
+    nearbySpots.sort((a, b) => a.distSq - b.distSq);
+
+    // Group by type and fill up to capacity
+    const typeBuckets = {
+      hatch: [],
+      sedan: [],
+      suv: [],
+      autoRickshaw: [],
+      scooter: [],
+      bike: []
+    };
+
+    for (let i = 0; i < nearbySpots.length; i++) {
+      const item = nearbySpots[i];
+      const t = item.spot.type;
+      if (typeBuckets[t] && typeBuckets[t].length < capacities[t]) {
+        typeBuckets[t].push(item.spot);
+      }
+    }
+
+    // Update InstancedMeshes
+    for (const td of typeDefs) {
+      const key = td.key;
+      const list = typeBuckets[key] || [];
+      const m = meshes[key];
+      const maxCap = capacities[key];
+      const palette = palettes[key];
+
+      m.bodyInst.count = list.length;
+      m.detailInst.count = list.length;
+
+      for (let i = 0; i < maxCap; i++) {
+        if (i < list.length) {
+          const sp = list[i];
+          q4.setFromAxisAngle(yAxis, sp.yaw);
+          v3.set(sp.x, 0, sp.z);
+          m4.compose(v3, q4, s3);
+          m.bodyInst.setMatrixAt(i, m4);
+          m.detailInst.setMatrixAt(i, m4);
+
+          const hex = palette[sp.colorIdx % palette.length];
+          colC.setHex(hex);
+          m.bodyInst.setColorAt(i, colC);
+        } else {
+          // Hide unused instances
+          m.bodyInst.setMatrixAt(i, hiddenMatrix);
+          m.detailInst.setMatrixAt(i, hiddenMatrix);
+        }
+      }
+
+      m.bodyInst.instanceMatrix.needsUpdate = true;
+      m.detailInst.instanceMatrix.needsUpdate = true;
+      if (m.bodyInst.instanceColor) m.bodyInst.instanceColor.needsUpdate = true;
+    }
   }
 
-  const scooterPalette = [0xe2e8f0, 0x38bdf8, 0xf43f5e, 0x1e293b, 0xa855f7, 0x10b981];
-  if (parkedScooters.length > 0) {
-    const bodyInst = new T.InstancedMesh(scooterSet.bodyGeo, bodyMat, parkedScooters.length);
-    const detailInst = new T.InstancedMesh(scooterSet.detailGeo, detailMat, parkedScooters.length);
-    for (let i = 0; i < parkedScooters.length; i++) {
-      const p = parkedScooters[i];
-      q4.setFromAxisAngle(yAxis, p.yaw);
-      m4.compose(v3.set(p.x, 0, p.z), q4, s3);
-      bodyInst.setMatrixAt(i, m4);
-      detailInst.setMatrixAt(i, m4);
-      colC.setHex(scooterPalette[i % scooterPalette.length]);
-      bodyInst.setColorAt(i, colC);
+  // Initial populate
+  refreshStreaming(true);
+
+  function update(dt = 0.016) {
+    accumDt += dt;
+    if (accumDt >= 0.35) {
+      accumDt = 0;
+      refreshStreaming(false);
     }
-    bodyInst.castShadow = true;
-    detailInst.castShadow = true;
-    bodyInst.instanceColor.needsUpdate = true;
-    group.add(bodyInst, detailInst);
   }
 
-  if (parkedAutos.length > 0) {
-    const bodyInst = new T.InstancedMesh(autoSet.bodyGeo, bodyMat, parkedAutos.length);
-    const detailInst = new T.InstancedMesh(autoSet.detailGeo, detailMat, parkedAutos.length);
-    for (let i = 0; i < parkedAutos.length; i++) {
-      const p = parkedAutos[i];
-      q4.setFromAxisAngle(yAxis, p.yaw);
-      m4.compose(v3.set(p.x, 0, p.z), q4, s3);
-      bodyInst.setMatrixAt(i, m4);
-      detailInst.setMatrixAt(i, m4);
-      colC.setHex(0x15803d);
-      bodyInst.setColorAt(i, colC);
-    }
-    bodyInst.castShadow = true;
-    detailInst.castShadow = true;
-    bodyInst.instanceColor.needsUpdate = true;
-    group.add(bodyInst, detailInst);
-  }
-
-  return { group };
+  return { group, update };
 }
