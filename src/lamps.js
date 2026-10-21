@@ -409,11 +409,11 @@ export function attachHeadlightsToNearest(vehicles = [], playerPos, max = 4, sce
 
       slL.position.copy(wPos).addScaledVector(right, -0.32).addScaledVector(fwd, 1.4).setY(wPos.y + 0.65);
       slL.target.position.copy(slL.position).addScaledVector(fwd, 14);
-      slL.intensity = nightVal * 26;
+      slL.intensity = nightVal * 15;
 
       slR.position.copy(wPos).addScaledVector(right, 0.32).addScaledVector(fwd, 1.4).setY(wPos.y + 0.65);
       slR.target.position.copy(slR.position).addScaledVector(fwd, 14);
-      slR.intensity = nightVal * 26;
+      slR.intensity = nightVal * 15;
     } else {
       if (slL) slL.intensity = 0;
       if (slR) slR.intensity = 0;
