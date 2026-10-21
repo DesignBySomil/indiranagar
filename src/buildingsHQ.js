@@ -73,14 +73,14 @@ function makeShutterTexture() {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
 }
 
-export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSegs = [], solidFn = () => 0, nightUniform, getAuto }) {
+export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene, world, roadSegs = [], solidFn = () => 0, nightUniform, getAuto }) {
   const group = new T.Group();
   scene.add(group);
 
   // Instanced pool capacity for high-detail road-facing facade elements
   const MAX_INSTANCES = 3500;
   const matConcrete = new T.MeshStandardMaterial({ color: 0xd8d4cc, roughness: 0.82 });
-  const matIron = new T.MeshStandardMaterial({ color: 0x1e2229, roughness: 0.5, metalness: 0.5 });
+  const matIron = new T.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.7, metalness: 0.1 });
   const matAc = new T.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.6 });
   const matTank = new T.MeshStandardMaterial({ color: 0x14171a, roughness: 0.45 });
 
@@ -141,6 +141,7 @@ export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSeg
       area = Math.abs(area) / 2;
       if (area < 12) continue;
       cx /= pts.length; cz /= pts.length;
+      { let ov = false; for (const lm of landmarks) { if (Math.hypot(cx - lm.x, cz - lm.z) < 13.5) { ov = true; break; } } if (ov) continue; }
 
       if (Math.hypot(cx - px, cz - pz) > 90) continue;
 
@@ -224,8 +225,8 @@ export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSeg
               const ti2 = (ti + 3) % NSIGN;
               if (sgC[ti2] < 500) {
                 q4.setFromAxisAngle(yAxisS, yawN + Math.PI / 2);
-                v3.set(gx + nx * 0.62 + dirX * 1.3, 2.55, gz + nz * 0.62 + dirZ * 1.3);
-                m4.compose(v3, q4, s3.set(0.55, 0.55, 1));
+                v3.set(gx + nx * 0.5 + dirX * 1.3, 3.5, gz + nz * 0.5 + dirZ * 1.3);
+                m4.compose(v3, q4, s3.set(0.4, 0.4, 1));
                 signInsts[ti2].setMatrixAt(sgC[ti2]++, m4);
               }
             }
@@ -243,6 +244,7 @@ export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSeg
           for (let f = 1; f < floors; f++) {
             const fy = 3.3 + f * 3.3;
             const bayHash = hash(bx + f, bz + bay);
+            if (fy + 1.2 > h) continue;
 
             if (bayHash > 0.45 && bCount < MAX_INSTANCES) {
               v3.set(bx + nx * 0.45, fy - 0.45, bz + nz * 0.45);
