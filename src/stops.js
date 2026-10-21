@@ -649,8 +649,8 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
       chip.textContent = (stop.secret ? '★ SECRET · ' : '') + stop.tag;
       chip.style.background = stop.colorHex;
     }
-    document.getElementById('sc-reward').textContent =
-      `+${xpGain} XP · +₹${coinGain} (x${state.combo})${tipBonus ? ' +₹25 Smooth Tip!' : ''}`;
+    document.getElementById('sc-reward').style.display = 'none';
+    document.getElementById('btn-fav').style.display = 'none';
     document.getElementById('sc-title').textContent = stop.p.n;
     document.getElementById('sc-order').textContent = copy.order;
     document.getElementById('sc-fact').textContent = copy.fact;
