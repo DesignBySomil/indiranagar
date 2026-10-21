@@ -626,6 +626,11 @@ function buildTempoSet(T) {
     paintGeo(T, rBump, 0x181c24),
     paintGeo(T, grille, 0x11141a)
   );
+  for (const sd of [-1, 1]) {
+    const hlp = new T.BoxGeometry(0.36, 0.16, 0.06); hlp.translate(sd * (hw - 0.30), 0.80, hl + 0.06);
+    const tlp = new T.BoxGeometry(0.16, 0.34, 0.05); tlp.translate(sd * (hw - 0.08), 0.95, -hl - 0.04);
+    detailParts.push(paintGeo(T, hlp, 0xfff3b0), paintGeo(T, tlp, 0xc81e1e));
+  }
 
   const plateF = new T.BoxGeometry(0.46, 0.11, 0.04);
   plateF.translate(0, 0.36, hl + 0.10);
