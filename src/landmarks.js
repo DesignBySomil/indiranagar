@@ -54,7 +54,7 @@ function addAwning(group, w, y, z, colorHex = 0x8b261d) {
 }
 
 function addRooftopProps(group, w, d, h) {
-  const pMat = new THREE.MeshStandardMaterial({ color: 0x2b2d30, roughness: 0.7 });
+  const pMat = new THREE.MeshStandardMaterial({ color: 0x9aa3a8, roughness: 0.7 });
   const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 1.6, 12), pMat);
   tank.position.set(-w * 0.25, h + 0.8, -d * 0.2);
   const hvac = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 1.6), new THREE.MeshStandardMaterial({ color: 0x8a929a, roughness: 0.5 }));
@@ -68,7 +68,7 @@ function buildToit() {
   const brickTex = createBrickTexture('#8b3222', '#4a423d');
   brickTex.repeat.set(4, 3);
   const brickMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.85 });
-  const steelMat = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.4, metalness: 0.7 });
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0x555a62, roughness: 0.5, metalness: 0.1 });
 
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), brickMat);
   body.position.y = h / 2;
@@ -86,7 +86,7 @@ function buildToit() {
   g.add(beamTop);
 
   // Copper brew kettles visible through ground-floor glass
-  const copperMat = new THREE.MeshStandardMaterial({ color: 0xd4743b, roughness: 0.25, metalness: 0.8 });
+  const copperMat = new THREE.MeshStandardMaterial({ color: 0xd4743b, roughness: 0.25, metalness: 0.15 });
   for (const kx of [-3.5, 0, 3.5]) {
     const vat = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2.8, 14), copperMat);
     vat.position.set(kx, 1.8, d / 2 - 1.1);
@@ -180,7 +180,7 @@ function buildArenaBrewhouse() {
   const pyrH = h - 4.5;
   const pyrGeo = new THREE.ConeGeometry(w * 0.65, pyrH, 4);
   pyrGeo.rotateY(Math.PI / 4);
-  const pyrMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.2, metalness: 0.7 });
+  const pyrMat = new THREE.MeshStandardMaterial({ color: 0x4d6a85, roughness: 0.4, metalness: 0.15 });
   const pyr = new THREE.Mesh(pyrGeo, pyrMat);
   pyr.position.y = 4.5 + pyrH / 2;
   pyr.castShadow = true;
