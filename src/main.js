@@ -183,25 +183,27 @@ function setupLandmarks() {
 const labelPool = [];
 function makeLabel() {
   const c = document.createElement('canvas'); c.width = 512; c.height = 96;
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, fog: false }));
-  s.scale.set(16, 3, 1);
-  s.userData = { c, t, name: '' };
-  scene.add(s);
-  return s;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const g = new THREE.Group();
+  const back = new THREE.Mesh(new THREE.BoxGeometry(7.2, 1.4, 0.18), new THREE.MeshStandardMaterial({ color: 0x1b1d22, roughness: 0.7 }));
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(7.0, 1.31), new THREE.MeshBasicMaterial({ map: t }));
+  face.position.z = 0.1;
+  g.add(back, face);
+  g.userData = { c, t, name: '' };
+  scene.add(g);
+  return g;
 }
 function setLabel(s, text) {
   if (s.userData.name === text) return;
   s.userData.name = text;
   const c = s.userData.c, x = c.getContext('2d');
-  x.clearRect(0, 0, 512, 96);
-  x.font = '600 38px "Bricolage Grotesque", sans-serif';
-  x.textAlign = 'center';
-  x.lineWidth = 8;
-  x.strokeStyle = 'rgba(10,14,18,.85)';
-  x.strokeText(text, 256, 56);
-  x.fillStyle = '#f1f4f8';
-  x.fillText(text, 256, 56);
+  x.fillStyle = '#20242b'; x.fillRect(0, 0, 512, 96);
+  x.strokeStyle = '#f5c542'; x.lineWidth = 5; x.strokeRect(5, 5, 502, 86);
+  let fs = 40; x.font = '700 ' + fs + 'px "Bricolage Grotesque", sans-serif';
+  while (x.measureText(text).width > 470 && fs > 18) { fs -= 2; x.font = '700 ' + fs + 'px "Bricolage Grotesque", sans-serif'; }
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillStyle = '#fff6d8';
+  x.fillText(text, 256, 50);
   s.userData.t.needsUpdate = true;
 }
 
@@ -216,7 +218,7 @@ function syncCamera(dt, snap = false) {
   const tx = auto.x - Math.sin(auto.a) * back + Math.cos(auto.a) * sideSwing;
   const tz = auto.z - Math.cos(auto.a) * back - Math.sin(auto.a) * sideSwing;
   const bounceY = snap ? 0 : Math.sin(performance.now() * 0.018) * Math.abs(auto.v) * 0.008;
-  const ty = 6.0 + Math.abs(auto.v) * 0.06 + bounceY;
+  const ty = 4.3 + Math.abs(auto.v) * 0.05 + bounceY;
 
   if (snap) {
     camera.position.set(tx, ty, tz);
@@ -229,6 +231,12 @@ function syncCamera(dt, snap = false) {
     camRoll += ((-auto.steer * auto.v * 0.0028) - camRoll) * Math.min(1, dt * 6);
   }
 
+  // keep the camera outside buildings: pull it toward the auto until the spot is free
+  for (let k = 0; k < 14; k++) {
+    if (!(solid(camera.position.x, camera.position.z) || (parkedVehicles && parkedVehicles.solid(camera.position.x, camera.position.z)))) break;
+    camera.position.x += (auto.x - camera.position.x) * 0.25;
+    camera.position.z += (auto.z - camera.position.z) * 0.25;
+  }
   camera.up.set(0, 1, 0);
   const lookAhead = 7.5;
   const sideLook = snap ? 0 : auto.steer * 1.1;
@@ -461,7 +469,7 @@ function step(dt, now) {
     labelPool.forEach((l, i) => {
       const p = near[i];
       l.visible = !!p;
-      if (p) { setLabel(l, p.n); l.position.set(p.x, 11.5 + (i % 3) * 3.0, p.z); }
+      if (p) { setLabel(l, p.n); const ri = nearestRoadInfo(p.x, p.z); l.rotation.y = ri.yaw; l.position.set(p.x + Math.sin(ri.yaw) * 1.2, 4.6 + (i % 2) * 1.6, p.z + Math.cos(ri.yaw) * 1.2); }
     });
   }
 
@@ -593,7 +601,7 @@ try {
   traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: 90 });
   parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
   crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z }), nightUniform, count: 120 });
-  bldgHQ = upgradeBuildingFacades({ THREE, scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
+  bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   buildMini();
 
   auto.x = stops[0].p.x + 15.5;
