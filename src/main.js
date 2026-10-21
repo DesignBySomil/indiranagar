@@ -19,6 +19,7 @@ import { createTraffic } from './vehicles.js';
 import { createParkedVehicles } from './vehicles.js';
 import { createCrowd } from './people.js';
 import { upgradeBuildingFacades } from './buildingsHQ.js';
+import { createHazards } from './hazards.js';
 import { buildBrandStore, updateBrandStores } from './brands.js';
 import { STOP_LIST, STOP_PLACES, LEELA_ACCESS_ROAD } from './stopsdata.js';
 import { createAmbientOcclusion, tuneShadows } from './ao.js';
@@ -383,6 +384,7 @@ function drawMini() {
 }
 
 // ---------- loop ----------
+let hazards = null;
 let last = performance.now(), cardT = 0, frame = 0, started = false, camRoll = 0;
 function showCard(kind, name, text) {
   if ($('cardKind')) $('cardKind').textContent = kind;
@@ -440,7 +442,8 @@ function step(dt, now) {
   car.position.set(auto.x, 0, auto.z);
   car.rotation.y = auto.a;
   updateAuto(car, auto, dt);
-  if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap));
+  if (hazards) { const sh = hazards.update(dt, auto); if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); camera.position.y += sh; }
+  else if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap));
   if (trees) trees.update(dt);
   if (parkedVehicles && parkedVehicles.update) parkedVehicles.update(dt);
   if (traffic) traffic.update(dt, state.hour);
@@ -623,10 +626,11 @@ try {
 
   try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
   shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
-  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: 90 });
+  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: 150 });
   parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
   crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z }), nightUniform, count: 120 });
   bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
+  hazards = createHazards({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid });
   buildMini();
 
   function placeOnRoad(x, z) {
@@ -681,6 +685,24 @@ try {
   $('start').classList.add('on');
   requestAnimationFrame(loop);
 
+  (function togglesPanel() {
+    const items = [
+      ['Traffic', () => traffic && traffic.group], ['Pedestrians', () => crowd && crowd.group], ['Parked vehicles', () => parkedVehicles && parkedVehicles.group],
+      ['Trees', () => trees && trees.group], ['Potholes and puddles', () => hazards && hazards.group]
+    ];
+    const box = document.createElement('div'); box.id = 'toggles';
+    box.innerHTML = '<button id="tgbtn">Settings</button><div id="tgpanel"></div>';
+    document.body.appendChild(box);
+    const panel = box.querySelector('#tgpanel');
+    for (const [name, get] of items) {
+      const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.checked = true;
+      c.addEventListener('change', () => { const o = get(); if (o) o.visible = c.checked; });
+      l.append(c, ' ' + name); panel.appendChild(l);
+    }
+    const nl = document.createElement('label'); const nc = document.createElement('input'); nc.type = 'checkbox';
+    nc.addEventListener('change', () => { state.hour = nc.checked ? 22 : 15; applyTime(state.hour); }); nl.append(nc, ' Night'); panel.appendChild(nl);
+    box.querySelector('#tgbtn').addEventListener('click', () => box.classList.toggle('open'));
+  })();
   const pick = document.getElementById('startpick');
   if (pick) {
     pick.innerHTML = stops.map((s, i) => `<option value="${i}">${s.p.n}</option>`).join('');
@@ -693,6 +715,6 @@ try {
     startAudio();
   };
   $('go').addEventListener('click', go);
-  window.__game = { get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
+  window.__game = { get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();
