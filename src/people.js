@@ -672,7 +672,8 @@ export function createCrowd({
   const qSwing = new T.Quaternion();
   const qLimb = new T.Quaternion();
   const vPos = new T.Vector3();
-  const s3 = new T.Vector3(1, 1, 1);
+  const PS = 1.12;
+  const s3 = new T.Vector3(PS, PS, PS);
   const yAxis = new T.Vector3(0, 1, 0);
   const xAxis = new T.Vector3(1, 0, 0);
   let elapsed = 0;
@@ -724,12 +725,12 @@ export function createCrowd({
       qYaw.setFromAxisAngle(yAxis, p.yaw);
 
       // 1. Torso matrix
-      vPos.set(p.x, bob, p.z);
+      vPos.set(p.x, bob * PS, p.z);
       m4.compose(vPos, qYaw, s3);
       p.torsoInst.setMatrixAt(p.torsoSub, m4);
 
       // 2. Head matrix (with subtle natural head turn/nod)
-      vPos.set(p.x, 1.38 + bob, p.z);
+      vPos.set(p.x, (1.38 + bob) * PS, p.z);
       m4.compose(vPos, qYaw, s3);
       p.headInst.setMatrixAt(p.headSub, m4);
 
@@ -740,13 +741,13 @@ export function createCrowd({
       const legStride = p.isSaree ? swing * 0.45 : swing;
       qSwing.setFromAxisAngle(xAxis, legStride);
       qLimb.copy(qYaw).multiply(qSwing);
-      vPos.set(p.x + cosY * 0.085, 0.68 + bob * 0.5, p.z - sinY * 0.085);
+      vPos.set(p.x + cosY * 0.085 * PS, (0.68 + bob * 0.5) * PS, p.z - sinY * 0.085 * PS);
       m4.compose(vPos, qLimb, s3);
       legLInst.setMatrixAt(i, m4);
 
       qSwing.setFromAxisAngle(xAxis, -legStride);
       qLimb.copy(qYaw).multiply(qSwing);
-      vPos.set(p.x - cosY * 0.085, 0.68 + bob * 0.5, p.z + sinY * 0.085);
+      vPos.set(p.x - cosY * 0.085 * PS, (0.68 + bob * 0.5) * PS, p.z + sinY * 0.085 * PS);
       m4.compose(vPos, qLimb, s3);
       legRInst.setMatrixAt(i, m4);
 
@@ -754,13 +755,13 @@ export function createCrowd({
       const armSwing = swing * 0.72;
       qSwing.setFromAxisAngle(xAxis, -armSwing);
       qLimb.copy(qYaw).multiply(qSwing);
-      vPos.set(p.x + cosY * 0.215, 1.13 + bob, p.z - sinY * 0.215);
+      vPos.set(p.x + cosY * 0.215 * PS, (1.13 + bob) * PS, p.z - sinY * 0.215 * PS);
       m4.compose(vPos, qLimb, s3);
       armLInst.setMatrixAt(i, m4);
 
       qSwing.setFromAxisAngle(xAxis, armSwing);
       qLimb.copy(qYaw).multiply(qSwing);
-      vPos.set(p.x - cosY * 0.215, 1.13 + bob, p.z + sinY * 0.215);
+      vPos.set(p.x - cosY * 0.215 * PS, (1.13 + bob) * PS, p.z + sinY * 0.215 * PS);
       m4.compose(vPos, qLimb, s3);
       armRInst.setMatrixAt(i, m4);
     }
