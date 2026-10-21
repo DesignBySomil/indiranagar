@@ -781,5 +781,14 @@ export function createCrowd({
   // Populate initial transforms immediately at startup
   update(0.016, 17.8);
 
-  return { group, update };
+  function solid(x, z) {
+    for (let i = 0; i < peds.length; i++) {
+      const q = peds[i];
+      const dx = x - q.x, dz = z - q.z;
+      if (dx * dx + dz * dz < 0.36) return true;
+    }
+    return false;
+  }
+
+  return { group, update, solid };
 }
