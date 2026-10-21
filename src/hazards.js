@@ -19,7 +19,7 @@ export function createHazards({ THREE: T, scene, roadSegs, solidFn = () => 0 }) 
     }
   }
   const geo = new T.CircleGeometry(1, 20); geo.rotateX(-Math.PI / 2);
-  const potMat = new T.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const potMat = new T.MeshStandardMaterial({ color: 0x3a3733, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   const pudMat = new T.MeshStandardMaterial({ color: 0x2a3138, roughness: 0.55, metalness: 0.0, transparent: true, opacity: 0.8, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
   const potI = new T.InstancedMesh(geo, potMat, Math.max(1, potholes.length));
   const pudI = new T.InstancedMesh(geo, pudMat, Math.max(1, puddles.length));
