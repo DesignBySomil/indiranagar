@@ -1063,10 +1063,13 @@ export function createTraffic({
         const fUx = tu.seg.ux * tu.dir;
         const fUz = tu.seg.uz * tu.dir;
         const next = findConnectedSegment(tu.seg, exitX, exitZ, fUx, fUz);
-        if (next && !(next.seg.oneway && next.dir !== 1) && !(tu.seg.oneway && false)) {
-          tu.seg = next.seg;
-          tu.dir = next.dir;
-          tu.t = next.dir === 1 ? 0.05 : 0.95;
+        const nxt = next && !(next.seg.oneway && next.dir !== 1) ? next : null;
+        let jumpOk = !!nxt;
+        if (nxt) { const cp = computeLanePos(tu.seg, T.MathUtils.clamp(tu.t, 0, 1), tu.dir); const np2 = computeLanePos(nxt.seg, nxt.dir === 1 ? 0.05 : 0.95, nxt.dir); if (Math.hypot(np2.x - cp.x, np2.z - cp.z) > 4) jumpOk = false; }
+        if (nxt && jumpOk) {
+          tu.seg = nxt.seg;
+          tu.dir = nxt.dir;
+          tu.t = nxt.dir === 1 ? 0.05 : 0.95;
         } else if (tu.seg.oneway) {
           forceRecycle = true;
         } else {
@@ -1081,15 +1084,24 @@ export function createTraffic({
       const dx = pos.x - player.x;
       const dz = pos.z - player.z;
       const dist = Math.hypot(dx, dz);
-      if (forceRecycle || dist > 260 || (solidFn && solidFn(pos.x, pos.z))) {
-        const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 150, 240, true, i + tu.t * 100);
-        tu.seg = picked.seg;
-        tu.t = picked.t;
-        tu.dir = picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1);
-        tu.speed = tu.maxSpeed * 0.8;
+      const wantsRecycle = forceRecycle || dist > 320 || (solidFn && solidFn(pos.x, pos.z));
+      if (wantsRecycle && dist <= 200 && tu.lastSeg) {
+        // never pop a vehicle in or out where the player can see it: hold at the last good spot until the player is far
+        tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir;
         pos = computeLanePos(tu.seg, tu.t, tu.dir);
+      } else if (wantsRecycle) {
+        const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 210, 300, true, i + tu.t * 100);
+        const cand = computeLanePos(picked.seg, picked.t, picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1));
+        if (Math.hypot(cand.x - player.x, cand.z - player.z) >= 190) {
+          tu.seg = picked.seg;
+          tu.t = picked.t;
+          tu.dir = picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1);
+          tu.speed = tu.maxSpeed * 0.8;
+          pos = computeLanePos(tu.seg, tu.t, tu.dir);
+        } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
       }
 
+      tu.lastSeg = tu.seg; tu.lastT = tu.t; tu.lastDir = tu.dir;
       tu.x = pos.x;
       tu.z = pos.z;
       tu.yaw = pos.yaw;
