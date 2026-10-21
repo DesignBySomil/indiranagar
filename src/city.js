@@ -229,11 +229,11 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
 
   // Rooftop water tanks + solar panels
   const tankGeo = new THREE.CylinderGeometry(0.78, 0.78, 1.45, 12);
-  const tankMat = new THREE.MeshStandardMaterial({ color: 0x1c2026, roughness: 0.45 });
+  const tankMat = new THREE.MeshStandardMaterial({ color: 0x8d979c, roughness: 0.6 });
   const tkInst = new THREE.InstancedMesh(tankGeo, tankMat, tanks.length);
   const solarGeo = new THREE.BoxGeometry(1.6, 0.08, 1.1);
   solarGeo.rotateX(0.35);
-  const solarMat = new THREE.MeshStandardMaterial({ color: 0x1e3a5f, roughness: 0.25, metalness: 0.5 });
+  const solarMat = new THREE.MeshStandardMaterial({ color: 0x8697a8, roughness: 0.55, metalness: 0.1 });
   const solInst = new THREE.InstancedMesh(solarGeo, solarMat, tanks.length);
 
   const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3();
