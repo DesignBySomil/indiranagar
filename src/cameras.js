@@ -69,7 +69,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   const steelMat = new T.MeshStandardMaterial({ color: 0xaab2bd, roughness: 0.3, metalness: 0.85 });
   const redMat = new T.MeshStandardMaterial({ color: 0xc81e1e, roughness: 0.5 });
   const cockpitBar = new T.Group();
-  cockpitBar.position.set(0, 0.92, 0.66);
+  cockpitBar.position.set(0, 1.02, 0.70);
   const crossTube = new T.Mesh(new T.CylinderGeometry(0.014, 0.014, 0.64, 10), steelMat);
   crossTube.rotation.z = Math.PI / 2;
   cockpitBar.add(crossTube);
@@ -153,10 +153,31 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     const gl = new T.Mesh(new T.CircleGeometry(0.078, 20), new T.MeshStandardMaterial({ color: 0x9fb8cc, roughness: 0.1, metalness: 0.9 })); gl.rotation.y = Math.PI; gl.position.set(sg * 0.86, 1.52, 0.878);
     driverAvatar.add(st, mr, gl);
   }
+  // ---- Driver cockpit frame (matches the reference photo): yellow canopy and windshield frame, round mirrors, wiper, dark dash ----
+  const driverRig = new T.Group();
+  const yelMat = new T.MeshStandardMaterial({ color: 0xf2b705, roughness: 0.45 });
+  const dashMat = new T.MeshStandardMaterial({ color: 0x14161a, roughness: 0.8 });
+  const box = (w, h, d, x, y, z, m) => { const o = new T.Mesh(new T.BoxGeometry(w, h, d), m); o.position.set(x, y, z); driverRig.add(o); return o; };
+  box(1.9, 0.14, 0.05, 0, 1.86, 0.90, yelMat);           // header
+  box(1.9, 0.02, 0.06, 0, 1.78, 0.89, dashMat);         // rubber seal top
+  box(1.9, 0.05, 0.10, 0, 1.00, 0.90, yelMat);           // lower frame
+  box(1.9, 0.16, 0.10, 0, 0.90, 0.90, dashMat);           // dash cowl
+  box(1.1, 0.10, 0.30, 0, 0.84, 0.80, dashMat);           // dark dash
+  for (const sg of [-1, 1]) {
+    box(0.07, 0.9, 0.06, sg * 0.93, 1.40, 0.90, yelMat);  // pillars
+    box(0.03, 0.40, 0.06, sg * 0.755, 1.36, 0.89, dashMat);
+    const st = new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.30, 6), steelMat); st.rotation.z = sg * 0.9; st.position.set(sg * 0.62, 1.28, 0.86); driverRig.add(st);
+    const rim = new T.Mesh(new T.CylinderGeometry(0.095, 0.095, 0.03, 24), dashMat); rim.rotation.x = Math.PI / 2; rim.position.set(sg * 0.52, 1.42, 0.86); driverRig.add(rim);
+    const glass = new T.Mesh(new T.CircleGeometry(0.082, 24), new T.MeshStandardMaterial({ color: 0x3a4a5c, roughness: 0.15, metalness: 0.8 })); glass.rotation.y = Math.PI; glass.position.set(sg * 0.52, 1.42, 0.844); driverRig.add(glass);
+  }
+  const wiperBlade = box(0.62, 0.012, 0.012, -0.05, 1.205, 0.885, dashMat); wiperBlade.rotation.z = 0.05;
+  driverRig.position.z = 0.35; driverRig.visible = false;
+
   const attachTarget = (carGroup && carGroup.userData && carGroup.userData.chassis) ? carGroup.userData.chassis : carGroup;
   if (attachTarget) {
     attachTarget.add(cockpitGroup);
     attachTarget.add(driverAvatar);
+    attachTarget.add(driverRig);
   }
 
   let currentIdx = 0;
@@ -179,6 +200,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   function applyVisibilityForMode(mode) {
     cockpitGroup.visible = mode === 'driver' || mode === 'passenger';
     driverAvatar.visible = mode === 'passenger';
+    driverRig.visible = mode === 'driver';
     if (attachTarget) attachTarget.traverse(o => { if (o.userData && o.userData.hideDriver) o.visible = !(mode === 'driver' || mode === 'passenger'); if (o.userData && o.userData.hideInDriver) o.visible = mode !== 'driver'; });
   }
 
@@ -223,7 +245,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
 
     // World-space transform from carGroup (accounting for 1.22 carGroup scale and suspension pitch/roll)
     const scale = carGroup ? carGroup.scale.x : 1.05;
-    const bob = Math.sin(bobPhase * 1.4) * (0.004 + spd * 0.0014);
+    const bob = Math.sin(bobPhase * 1.4) * Math.min(0.004, spd * 0.00025);
 
     if (mode === 'driver') {
       // Driver head position just behind handlebar (~1.38m local * scale, looking straight out through windshield)
@@ -297,6 +319,20 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   const posB = new T.Vector3(), lookB = new T.Vector3();
   const finalPos = new T.Vector3(), finalLook = new T.Vector3();
 
+  const look = { yaw: 0, pitch: 0, ty: 0, tp: 0, drag: false, x: 0, y: 0 };
+  const cv = camera && document.querySelector('canvas');
+  const dn = (e) => { if (e.target && e.target.tagName && e.target.tagName !== 'CANVAS') return; look.drag = true; look.x = e.clientX; look.y = e.clientY; };
+  const mv = (e) => { if (!look.drag) return; const dx = e.clientX - look.x, dy = e.clientY - look.y; look.x = e.clientX; look.y = e.clientY;
+    look.ty = T.MathUtils.clamp(look.ty + dx * 0.006, -1.3, 1.3); look.tp = T.MathUtils.clamp(look.tp + dy * 0.004, -0.3, 0.3); };
+  const up = () => { look.drag = false; };
+  window.addEventListener('pointerdown', dn); window.addEventListener('pointermove', mv);
+  window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  function applyLook(dt) {
+    if (MODES[currentIdx] === 'chase') { look.ty = look.tp = look.yaw = look.pitch = 0; return; }
+    if (!look.drag) { const k = Math.min(1, dt * 2.5); look.ty -= look.ty * k; look.tp -= look.tp * k; }
+    look.yaw += (look.ty - look.yaw) * Math.min(1, dt * 14 + 0.01); look.pitch += (look.tp - look.pitch) * Math.min(1, dt * 14 + 0.01);
+    if (Math.abs(look.yaw) > 0.001 || Math.abs(look.pitch) > 0.001) { camera.rotateOnWorldAxis(new T.Vector3(0, 1, 0), -look.yaw); camera.rotateX(-look.pitch); }
+  }
   function update(dt = 0.016, snap = false) {
     bobPhase += dt * (10 + Math.abs(auto.v || 0) * 1.6);
     cockpitBar.rotation.y = (auto.steer || 0) * 0.48;
@@ -309,6 +345,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
       camera.position.copy(finalPos);
       camera.up.set(0, 1, 0);
       camera.lookAt(finalLook);
+      applyLook(0.016);
       camera.fov = cur.fov;
       camera.updateProjectionMatrix();
       camRoll = 0;
@@ -343,6 +380,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     camera.up.set(0, 1, 0);
     camera.lookAt(finalLook);
     if (Math.abs(camRoll) > 0.0001) camera.rotateZ(camRoll);
+    applyLook(dt);
     camera.updateProjectionMatrix();
   }
 
