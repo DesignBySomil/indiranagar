@@ -370,13 +370,13 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
       <span style="font-size:12px;font-weight:800;color:#4ade80" id="sc-reward">+100 XP · +₹50</span>
     </div>
     <div class="sc-title" id="sc-title">Toit</div>
-    <div class="sc-line"><strong>Order this:</strong> <span id="sc-order"></span></div>
-    <div class="sc-line"><strong>Local fact:</strong> <span id="sc-fact"></span></div>
+    <div class="sc-line"><strong>Yeh try karo:</strong> <span id="sc-order"></span></div>
+    <div class="sc-line"><strong>Jaano:</strong> <span id="sc-fact"></span></div>
     <div class="sc-driver" id="sc-driver"></div>
     <div class="sc-actions">
       <button id="btn-fav">★ Pin Favourite (+50% ₹)</button>
       <button id="btn-photo">Photo Moment (F)</button>
-      <button id="btn-sc-close">Drive On</button>
+      <button id="btn-sc-close">Aage Chalo</button>
     </div>
   `;
   document.body.appendChild(cardEl);
@@ -388,7 +388,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
       <div class="pp-top">
         <div>
           <div style="font-size:12px;font-weight:800;color:#b45309;letter-spacing:0.08em">OFFICIAL BENGALURU AUTO UNION</div>
-          <div style="font-size:24px;font-weight:900">Indiranagar Stamp Passport</div>
+          <div style="font-size:24px;font-weight:900">Indiranagar Stamp Passport (Stamp jama karo!)</div>
         </div>
         <button class="shud-btn" id="btn-pp-close">Close (P)</button>
       </div>
@@ -667,7 +667,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
     if (!grid) return;
     grid.innerHTML = '';
     const visitedCount = stops.filter(s => s.got).length;
-    document.getElementById('pp-progress').textContent = `Stamps Collected: ${visitedCount} / ${stops.length}`;
+    document.getElementById('pp-progress').textContent = `Stamps mile: ${visitedCount} / ${stops.length}`;
     document.getElementById('pp-best').textContent = `Best Combo Streak: x${state.bestStreak}`;
     document.getElementById('pp-fav').textContent = `Favourite Order: ${state.favouriteStop}`;
 
@@ -880,7 +880,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
 
       const d = Math.hypot(s.p.x - autoState.x, s.p.z - autoState.z);
       if (s.secret && d < 120) s.revealed = true;
-      if (!s.got && d < 13.5) triggerStopArrival(s);
+      if (!s.got && d < 13.5 && !(window.__noCardUntil > performance.now())) triggerStopArrival(s);
       nearest.push({ s, d });
     }
 
