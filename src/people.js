@@ -464,10 +464,32 @@ export function createCrowd({
   }
 
   // Compute valid footpath/verge offset strictly between 3.4m and 6.0m from road centreline
+  function pointOnAnyCarriageway(x, z) {
+    for (let i = 0; i < roadSegs.length; i++) {
+      const r = roadSegs[i];
+      const x1 = r.x1 ?? r[0], z1 = r.z1 ?? r[1], x2 = r.x2 ?? r[2], z2 = r.z2 ?? r[3];
+      if (x < Math.min(x1, x2) - 9 || x > Math.max(x1, x2) + 9 || z < Math.min(z1, z2) - 9 || z > Math.max(z1, z2) + 9) continue;
+      const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
+      const t = T.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / L2, 0, 1);
+      const d = Math.hypot(x - (x1 + dx * t), z - (z1 + dz * t));
+      const w = r.width ?? r[6] ?? 7;
+      if (d < w * 0.5 + 0.4) return true;
+    }
+    return false;
+  }
+  function offsetClear(seg, off) {
+    for (const t of [0.05, 0.3, 0.55, 0.8, 0.95]) {
+      const p = evalFootpathPoint(seg, t, off);
+      if (pointOnAnyCarriageway(p.x, p.z)) return false;
+    }
+    return true;
+  }
   function computeFootpathOffset(seg, side, seedVal) {
     const minOff = Math.max(3.4, seg.width * 0.5 + 0.65);
     const maxOff = Math.min(6.0, Math.max(minOff + 0.4, seg.width * 0.5 + 1.85));
     const mag = T.MathUtils.clamp(minOff + hash(seedVal, seg.mx, 19) * (maxOff - minOff), 3.4, 6.0);
+    if (offsetClear(seg, mag * side)) return mag * side;
+    if (offsetClear(seg, -mag * side)) return -mag * side;
     return mag * side;
   }
 
