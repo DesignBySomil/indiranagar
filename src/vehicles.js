@@ -910,7 +910,7 @@ export function createTraffic({
   const mBrake = new T.Matrix4();
   const q4 = new T.Quaternion();
   const v3 = new T.Vector3();
-  const s3 = new T.Vector3(1, 1, 1);
+  const s3 = new T.Vector3(1.12, 1.12, 1.12);
   const sBrakeOff = new T.Vector3(0.0001, 0.0001, 0.0001);
   const yAxis = new T.Vector3(0, 1, 0);
 
@@ -1282,7 +1282,7 @@ export function createParkedVehicles({
   const m4 = new T.Matrix4();
   const q4 = new T.Quaternion();
   const v3 = new T.Vector3();
-  const s3 = new T.Vector3(1, 1, 1);
+  const s3 = new T.Vector3(1.12, 1.12, 1.12);
   const yAxis = new T.Vector3(0, 1, 0);
   const colC = new T.Color();
   const hiddenMatrix = new T.Matrix4().makeScale(0, 0, 0);
@@ -1386,7 +1386,7 @@ export function createParkedVehicles({
     }
   }
 
-  const HALF = { hatch: [0.85, 2.0], sedan: [0.9, 2.3], suv: [1.0, 2.3], autoRickshaw: [0.75, 1.45], scooter: [0.45, 0.95], bike: [0.4, 0.95] };
+  const HALF = { hatch: [0.95, 2.25], sedan: [1.0, 2.55], suv: [1.1, 2.55], autoRickshaw: [0.85, 1.6], scooter: [0.5, 1.05], bike: [0.45, 1.05] };
   function solid(x, z) {
     const cx = Math.floor(x / cellSize), cz = Math.floor(z / cellSize);
     for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) {
