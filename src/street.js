@@ -87,10 +87,45 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
 
   let v = 0, fpV = 0, kbV = 0, dv = 0, divV = 0, patV = 0;
 
+  // 100 Feet Road: two OSM one-way carriageways. Pre-pass finds the opposite carriageway so the gap becomes a narrow median
+  const hundredSegs = [];
+  world.roads.forEach((r, ri) => {
+    if (!(r.n && r.n.includes('100 Feet'))) return;
+    for (let i = 0; i < r.p.length - 1; i++) {
+      const [ax, az] = r.p[i], [bx, bz] = r.p[i + 1];
+      const L = Math.hypot(bx - ax, bz - az);
+      if (L < 0.2) continue;
+      hundredSegs.push({ ri, i, x1: ax, z1: az, x2: bx, z2: bz, ux: (bx - ax) / L, uz: (bz - az) / L, L });
+    }
+  });
+  const nbrSide = new Map();
+  const medianQuads = [];
+  const W100 = 10;
+  for (const a of hundredSegs) {
+    const nx = -a.uz, nz = a.ux;
+    const mx = (a.x1 + a.x2) / 2, mz = (a.z1 + a.z2) / 2;
+    let best = null;
+    for (const b of hundredSegs) {
+      if (b.ri === a.ri) continue;
+      if (Math.abs(a.ux * b.ux + a.uz * b.uz) < 0.9) continue;
+      const rx = (b.x1 + b.x2) / 2 - mx, rz = (b.z1 + b.z2) / 2 - mz;
+      const along = rx * a.ux + rz * a.uz, perp = rx * nx + rz * nz;
+      if (Math.abs(perp) < 5 || Math.abs(perp) > 30 || Math.abs(along) > (a.L + b.L) / 2) continue;
+      if (!best || Math.abs(perp) < Math.abs(best.perp)) best = { b, perp };
+    }
+    if (!best) continue;
+    const sg = Math.sign(best.perp);
+    nbrSide.set(a.ri + ':' + a.i, sg);
+    if (a.ri < best.b.ri) {
+      const o1 = sg * W100 / 2, o2 = best.perp - sg * W100 / 2;
+      if (Math.abs(o2) > Math.abs(o1)) medianQuads.push([a.x1 + nx * o1, a.z1 + nz * o1, a.x1 + nx * o2, a.z1 + nz * o2, a.x2 + nx * o1, a.z2 + nz * o1, a.x2 + nx * o2, a.z2 + nz * o2]);
+    }
+  }
+
   for (const r of world.roads) {
     const is100Ft = Boolean(r.n && r.n.includes('100 Feet'));
     const isCMH = Boolean(r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras')));
-    const w = is100Ft ? 14.5 : (widthMap[r.k] || 7.0);
+    const w = is100Ft ? W100 : (widthMap[r.k] || 7.0);
     // 100 Feet Road is pale white-topped concrete slabs with patches; other roads are worn mid-grey asphalt
     const baseCol = is100Ft
       ? [0.56, 0.55, 0.52]
@@ -128,7 +163,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       roadSegs.push(segObj);
 
       // 100 Feet Road: narrow 0.5m unpainted concrete central divider + transverse slab joint lines
-      if (is100Ft) {
+      if (false && is100Ft) {
         const dw = 0.25, dh = 0.28;
         const dnx = -uz * dw, dnz = ux * dw;
         // Top & side faces of 0.5m concrete divider
@@ -139,7 +174,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         divIdx.push(divV, divV + 1, divV + 2, divV + 1, divV + 3, divV + 2);
         divV += 4;
 
-            } else if (r.k >= 2) {
+            } else if (r.k >= 2 && !is100Ft) {
         // Hand-painted faded broken centre line (two-way single lane each way)
         for (let s = 1.5; s + 2.5 < L; s += 7.5) {
           if (hash(x1 + s, z1) < 0.18) continue; // Occasional worn-out missing dash
@@ -203,6 +238,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       if (r.k >= 2) {
         const fw = r.k >= 4 ? 2.3 : 1.5;
         for (const s of [-1, 1]) {
+          if (is100Ft && nbrSide.get(world.roads.indexOf(r) + ':' + i) === s) continue;
           const slabJitter = (hash(x1 * s, z1 + i) - 0.5) * 0.07;
           const fy = 0.16 + slabJitter;
           const inX = -uz * (w / 2) * s, inZ = ux * (w / 2) * s;
@@ -243,7 +279,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
           if (Math.hypot(px - (-133), pz - (-345)) < 25) continue;
 
           const hVal = hash(px, pz);
-          if (hVal < 0.26 && parkedSpots.length < 260 && !solid(px, pz)) {
+          if (hVal < 0.26 && parkedSpots.length < 0 && !solid(px, pz)) {
             parkedSpots.push({
               x: px,
               z: pz,
@@ -267,6 +303,13 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         }
       }
     }
+  }
+
+  for (const q of medianQuads) {
+    const dh = 0.3;
+    divPos.push(q[0], dh, q[1], q[2], dh, q[3], q[4], dh, q[5], q[6], dh, q[7]);
+    divIdx.push(divV, divV + 1, divV + 2, divV + 1, divV + 3, divV + 2, divV, divV + 2, divV + 1, divV + 1, divV + 2, divV + 3);
+    divV += 4;
   }
 
   // Build Road Mesh
@@ -822,4 +865,4 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     bridgeVolumes,
     speedBreakers
   };
-}
+                                          }
