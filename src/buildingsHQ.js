@@ -48,6 +48,31 @@ function makeShopSignCanvas(kannada, eng, sub) {
   return tex;
 }
 
+
+const SIGN_BG = ['#0f3d2e', '#7a1f1f', '#14305c', '#5a2d82', '#8a5a00', '#0b5563', '#2b2b2b', '#a3341c'];
+function makeColouredSign(i) {
+  const t = SHOP_BILINGUAL_TITLES[i % SHOP_BILINGUAL_TITLES.length];
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 160;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = SIGN_BG[i % SIGN_BG.length];
+  ctx.fillRect(0, 0, 512, 160);
+  ctx.strokeStyle = '#fde047'; ctx.lineWidth = 8; ctx.strokeRect(6, 6, 500, 148);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fef08a'; ctx.font = '700 34px sans-serif'; ctx.fillText(t.kannada || t.smart || '', 256, 42);
+  ctx.fillStyle = '#ffffff'; ctx.font = '800 44px sans-serif'; ctx.fillText(t.eng, 256, 92);
+  ctx.fillStyle = '#7dd3fc'; ctx.font = '600 20px sans-serif'; ctx.fillText(t.sub, 256, 132);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; return tex;
+}
+function makeShutterTexture() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#5b6470'; ctx.fillRect(0, 0, 128, 256);
+  for (let y = 0; y < 256; y += 8) { ctx.fillStyle = y % 16 ? '#4a525c' : '#69727e'; ctx.fillRect(0, y, 128, 5); }
+  ctx.fillStyle = '#22262c'; ctx.fillRect(54, 232, 20, 8);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+}
+
 export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSegs = [], solidFn = () => 0, nightUniform, getAuto }) {
   const group = new T.Group();
   scene.add(group);
@@ -73,6 +98,20 @@ export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSeg
   const tankInst = new T.InstancedMesh(new T.CylinderGeometry(0.82, 0.82, 1.5, 12), matTank, 600);
   const corniceInst = new T.InstancedMesh(new T.BoxGeometry(2.0, 0.22, 0.25), matConcrete, MAX_INSTANCES);
 
+  // 4. Shopfronts: coloured bilingual signboards (8 designs) and roller shutters on ground floors
+  const NSIGN = SHOP_BILINGUAL_TITLES.length;
+  const signInsts = [];
+  for (let i = 0; i < NSIGN; i++) {
+    const tex = makeColouredSign(i);
+    const m = new T.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: new T.Color(0xffffff), emissiveIntensity: 0.28, roughness: 0.6 });
+    const im = new T.InstancedMesh(new T.BoxGeometry(2.6, 0.8, 0.12), m, 500);
+    im.frustumCulled = false; im.count = 0; signInsts.push(im); group.add(im);
+  }
+  const shutTex = makeShutterTexture();
+  const shutterInst = new T.InstancedMesh(new T.BoxGeometry(2.3, 2.5, 0.07), new T.MeshStandardMaterial({ map: shutTex, roughness: 0.55, metalness: 0.4 }), 3500);
+  shutterInst.frustumCulled = false; shutterInst.count = 0; group.add(shutterInst);
+  const yAxisS = new T.Vector3(0, 1, 0);
+
   balcSlabInst.castShadow = balcRailInst.castShadow = acInst.castShadow = chajjaInst.castShadow = tankInst.castShadow = true;
   group.add(balcSlabInst, balcRailInst, acInst, chajjaInst, tankInst, corniceInst);
 
@@ -83,6 +122,7 @@ export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSeg
 
   function rebuildDecorations(px, pz) {
     let bCount = 0, aCount = 0, cCount = 0, tCount = 0, cornCount = 0;
+    const sgC = new Array(NSIGN).fill(0); let shC = 0;
     balcSlabInst.count = 0; balcRailInst.count = 0; acInst.count = 0; chajjaInst.count = 0; tankInst.count = 0; corniceInst.count = 0;
 
     const buildings = world && world.buildings ? world.buildings : [];
@@ -160,6 +200,38 @@ export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSeg
           tankInst.setMatrixAt(tCount++, m4);
         }
 
+        // Ground-floor shopfronts: signboards, projecting boards and roller shutters
+        {
+          const yawN = Math.atan2(nx, nz);
+          for (let sd = 1.6; sd < eLen - 1.6; sd += 3.1) {
+            const gx = x1 + dirX * sd + nx * 0.16, gz = z1 + dirZ * sd + nz * 0.16;
+            const hh = hash(gx * 1.3, gz * 0.7);
+            if (hh < 0.12) continue;
+            const ti = Math.floor(hash(gz, gx) * NSIGN) % NSIGN;
+            if (sgC[ti] < 500) {
+              q4.setFromAxisAngle(yAxisS, yawN);
+              v3.set(gx, 3.05, gz);
+              m4.compose(v3, q4, s3.set(1, 1, 1));
+              signInsts[ti].setMatrixAt(sgC[ti]++, m4);
+            }
+            if (hh > 0.45 && shC < 3500) {
+              q4.setFromAxisAngle(yAxisS, yawN);
+              v3.set(gx - nx * 0.04, 1.25, gz - nz * 0.04);
+              m4.compose(v3, q4, s3.set(1, 1, 1));
+              shutterInst.setMatrixAt(shC++, m4);
+            }
+            if (hh > 0.7) {
+              const ti2 = (ti + 3) % NSIGN;
+              if (sgC[ti2] < 500) {
+                q4.setFromAxisAngle(yAxisS, yawN + Math.PI / 2);
+                v3.set(gx + nx * 0.62 + dirX * 1.3, 2.55, gz + nz * 0.62 + dirZ * 1.3);
+                m4.compose(v3, q4, s3.set(0.55, 0.55, 1));
+                signInsts[ti2].setMatrixAt(sgC[ti2]++, m4);
+              }
+            }
+          }
+        }
+
         // Add balconies and AC units on upper floors (floors 2+)
         const bayWidth = 2.4;
         const bays = Math.floor(eLen / bayWidth);
@@ -192,6 +264,8 @@ export function upgradeBuildingFacades({ THREE: T = THREE, scene, world, roadSeg
       }
     }
 
+    for (let i = 0; i < NSIGN; i++) { signInsts[i].count = sgC[i]; signInsts[i].instanceMatrix.needsUpdate = true; }
+    shutterInst.count = shC; shutterInst.instanceMatrix.needsUpdate = true;
     balcSlabInst.count = bCount;
     balcRailInst.count = bCount;
     acInst.count = aCount;
