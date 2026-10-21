@@ -210,7 +210,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     }
 
     // World-space transform from carGroup (accounting for 1.22 carGroup scale and suspension pitch/roll)
-    const scale = carGroup ? carGroup.scale.x : 1.22;
+    const scale = carGroup ? carGroup.scale.x : 1.05;
     const bob = Math.sin(bobPhase * 1.4) * (0.004 + spd * 0.0014);
 
     if (mode === 'driver') {
