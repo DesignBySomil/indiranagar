@@ -995,9 +995,9 @@ export function createTraffic({
         const dpZ = player.z - u.z;
         const fwdDot = dpX * u.seg.ux + dpZ * u.seg.uz;
         const latDot = Math.abs(-dpX * u.seg.uz + dpZ * u.seg.ux);
-        if (fwdDot > 0 && fwdDot < 12 && latDot < 2.4) {
+        if (fwdDot > 0 && fwdDot < 14 && latDot < 2.6) {
           braking = true;
-          targetSpd = Math.min(targetSpd, Math.max(0, (fwdDot - 4.0) * 0.8));
+          targetSpd = Math.min(targetSpd, Math.max(0, (fwdDot - (u.halfLen + 3.0)) * 0.9));
         }
 
         u.braking = braking || (u.speed - targetSpd > 0.45);
@@ -1029,7 +1029,7 @@ export function createTraffic({
         }
         const dpX = player.x - u.x;
         const dpZ = player.z - u.z;
-        const fwdDot = -(dpX * u.seg.ux + dpZ * u.seg.uz);
+        const fwdDot = (dpX * u.seg.ux + dpZ * u.seg.uz) * u.dir;
         const latDot = Math.abs(-dpX * u.seg.uz + dpZ * u.seg.ux);
         if (fwdDot > 0 && fwdDot < 12 && latDot < 2.4) {
           braking = true;
@@ -1107,7 +1107,20 @@ export function createTraffic({
   // Run one initial update step so matrices are immediately populated at frame 0
   update(0.016, 17.8);
 
-  return { group, update };
+  const HW = { sedan: 1.05, suv: 1.1, scooter: 0.55, auto: 0.9, tempo: 1.2 };
+  function solid(x, z) {
+    for (let i = 0; i < trafficUnits.length; i++) {
+      const u = trafficUnits[i];
+      const dx = x - u.x, dz = z - u.z;
+      if (dx * dx + dz * dz > 49) continue;
+      const s1 = Math.sin(u.yaw), c1 = Math.cos(u.yaw);
+      const lx = dx * c1 - dz * s1, lz = dx * s1 + dz * c1;
+      if (Math.abs(lx) < (HW[u.td.key] || 1.0) * 1.1 && Math.abs(lz) < u.halfLen * 1.12) return true;
+    }
+    return false;
+  }
+
+  return { group, update, solid, units: trafficUnits };
 }
 
 export function createParkedVehicles({
