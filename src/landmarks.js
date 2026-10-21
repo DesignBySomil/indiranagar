@@ -258,7 +258,7 @@ function buildStyledLandmark(name, cfg) {
 
 const STYLE_MAP = {
   'Truffles': {
-    wallHex: '#24272c', trimHex: '#f5b818', awningHex: '#d43828', glowHex: 0xffd27a,
+    wallHex: '#7d8590', trimHex: '#f5b818', awningHex: '#d43828', glowHex: 0xffd27a,
     title: 'TRUFFLES', sub: 'ALL AMERICAN BURGERS & CAFE', signBg: '#16181c', signFg: '#ffcf24', signBorder: '#ffffff'
   },
   'MTR 1924': {
@@ -267,11 +267,11 @@ const STYLE_MAP = {
     font: '700 54px Georgia, serif'
   },
   'Burma Burma Restaurant & Tea Room': {
-    wallHex: '#244732', trimHex: '#c89d54', awningHex: '#1b3626', glowHex: 0xffe49e, leafy: true,
+    wallHex: '#5f8a6d', trimHex: '#c89d54', awningHex: '#2f8a55', glowHex: 0xffe49e, leafy: true,
     title: 'BURMA BURMA', sub: 'RESTAURANT & TEA ROOM', signBg: '#163020', signFg: '#f2cf7e', signBorder: '#c89d54'
   },
   'Indiranagar Social': {
-    wallHex: '#783426', trimHex: '#1f2226', awningHex: '#22252a', glowHex: 0xff9436, brick: true, roofSign: true,
+    wallHex: '#783426', trimHex: '#c9ccd1', awningHex: '#d9a441', glowHex: 0xff9436, brick: true, roofSign: true,
     title: 'INDIRANAGAR SOCIAL', sub: 'CAFE · BAR · CO-WORKING', signBg: '#18181b', signFg: '#ff7b24', signBorder: '#ff7b24'
   },
   'Meghana Biryani': {
@@ -279,7 +279,7 @@ const STYLE_MAP = {
     title: 'MEGHANA FOODS', sub: 'ANDHRA STYLE BIRYANI', signBg: '#a81812', signFg: '#ffea54', signBorder: '#ffffff'
   },
   "Pizza 4P's": {
-    wallHex: '#2b2927', trimHex: '#8c5830', awningHex: '#262422', glowHex: 0xffc878, woodSlats: true, leafy: true,
+    wallHex: '#8a7f73', trimHex: '#8c5830', awningHex: '#c0703a', glowHex: 0xffc878, woodSlats: true, leafy: true,
     title: "PIZZA 4P's", sub: 'WOOD-FIRED · ARTISANAL CHEESE', signBg: '#1c1b1a', signFg: '#f5efe6', signBorder: '#b88652'
   },
   'Jamie Oliver Kitchen': {
@@ -287,11 +287,11 @@ const STYLE_MAP = {
     title: 'JAMIE OLIVER', sub: 'KITCHEN · ALL DAY DINING', signBg: '#1f3d3a', signFg: '#ffffff', signBorder: '#f08a6c'
   },
   'Third Wave': {
-    wallHex: '#1f2124', trimHex: '#b37440', awningHex: '#18191c', glowHex: 0xffca7a, woodSlats: true,
+    wallHex: '#6e747c', trimHex: '#b37440', awningHex: '#3b6ea5', glowHex: 0xffca7a, woodSlats: true,
     title: 'THIRD WAVE COFFEE', sub: 'ROASTERS · INDIRANAGAR', signBg: '#121316', signFg: '#f5e6d3', signBorder: '#d48848'
   },
   'The Fatty Bao': {
-    wallHex: '#2b242c', trimHex: '#d42c38', awningHex: '#c42430', glowHex: 0xff7582,
+    wallHex: '#9a8090', trimHex: '#d42c38', awningHex: '#c42430', glowHex: 0xff7582,
     title: 'THE FATTY BAO', sub: 'ASIAN GASTROBAR', signBg: '#b81d2a', signFg: '#fff2d6', signBorder: '#ffcf48'
   },
   'Sri Udupi Park': {
@@ -299,11 +299,11 @@ const STYLE_MAP = {
     title: 'SRI UDUPI PARK', sub: 'PURE VEG · FILTER COFFEE · DOSA', signBg: '#14662a', signFg: '#ffffff', signBorder: '#ffdf38'
   },
   'Chin Lung Brewery': {
-    wallHex: '#332424', trimHex: '#c92a2a', awningHex: '#9e1c1c', glowHex: 0xffa64d, rows: 3, roofSign: true,
+    wallHex: '#9a6a60', trimHex: '#c92a2a', awningHex: '#9e1c1c', glowHex: 0xffa64d, rows: 3, roofSign: true,
     title: 'CHIN LUNG', sub: 'RESTOBAR & BREWERY', signBg: '#8c1414', signFg: '#ffd43b', signBorder: '#ffd43b'
   },
   'Starbucks': {
-    wallHex: '#2e2b29', trimHex: '#006241', awningHex: '#006241', glowHex: 0xffe09e, woodSlats: true,
+    wallHex: '#8f8578', trimHex: '#006241', awningHex: '#006241', glowHex: 0xffe09e, woodSlats: true,
     title: 'STARBUCKS', sub: 'COFFEE · 12TH MAIN', signBg: '#006241', signFg: '#ffffff', signBorder: '#cba258'
   }
 };
