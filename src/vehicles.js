@@ -51,7 +51,7 @@ function extrudeProfile(T, pts, width, bevelSize = 0.06, bevelThick = 0.06) {
   // Extrude is in XY (X = vehicle Z length, Y = height) extruded along +Z (width)
   geo.translate(0, 0, -depth * 0.5);
   // Rotate +90 deg around Y so local X becomes +Z (forward) and local Z becomes +X (width)
-  geo.rotateY(Math.PI / 2);
+  geo.rotateY(-Math.PI / 2);
   return geo;
 }
 
