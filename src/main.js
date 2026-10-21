@@ -555,7 +555,7 @@ function step(dt, now) {
     if (name && best < 14 && $('streetName') && $('streetName').textContent !== name) $('streetName').textContent = name;
   }
 
-  if (frame % 12 === 0) {
+  if (false && frame % 12 === 0) {
     const near = world.pois
       .filter(p => Math.abs(p.x - auto.x) < 48 && Math.abs(p.z - auto.z) < 48)
       .sort((a, b) => Math.hypot(a.x - auto.x, a.z - auto.z) - Math.hypot(b.x - auto.x, b.z - auto.z))
