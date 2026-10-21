@@ -16,7 +16,7 @@ import { createDestinationMode } from './destination.js';
 import { createRimLight } from './rim.js';
 import { buildIcons } from './icons.js';
 import { createTraffic } from './vehicles.js';
-import { createParkedVehicles } from './parkedLow.js';
+import { createParkedVehicles } from './vehicles.js';
 import { createCrowd } from './people.js';
 import { upgradeBuildingFacades } from './buildingsHQ.js';
 import { buildBrandStore, updateBrandStores } from './brands.js';
@@ -400,6 +400,7 @@ function step(dt, now) {
   updateAuto(car, auto, dt);
   if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap));
   if (trees) trees.update(dt);
+  if (parkedVehicles && parkedVehicles.update) parkedVehicles.update(dt);
   if (traffic) traffic.update(dt, state.hour);
   if (crowd) crowd.update(dt, state.hour);
   if (bldgHQ && bldgHQ.update) bldgHQ.update(dt);
@@ -578,7 +579,7 @@ try {
   try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
   shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
   traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: 90 });
-//   parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42 });
+  parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
   crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z }), nightUniform, count: 120 });
   bldgHQ = upgradeBuildingFacades({ THREE, scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   buildMini();
