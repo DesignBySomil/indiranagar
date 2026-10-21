@@ -156,7 +156,7 @@ export function buildAuto() {
   wiper.position.set(0.15, 0.05, 0.03);
   wiper.rotation.z = 0.35;
   wsGroup.add(wsPane, wsTop, wsBot, wsMid, wiper);
-  chassis.add(wsGroup);
+  chassis.add(wsGroup); wsGroup.userData.hideDriver = true;
 
   for (const s of [-1, 1]) {
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.26, 6), chromeMat);
@@ -217,6 +217,7 @@ export function buildAuto() {
   const meterLed = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.05), new THREE.MeshBasicMaterial({ color: 0x38ff7a }));
   meterLed.position.set(0.24, 1.13, 0.858);
   meterLed.rotation.y = Math.PI;
+  meterBox.userData.hideDriver = true; meterLed.userData.hideDriver = true;
   chassis.add(meterBox, meterLed);
 
   const frontFork = new THREE.Group();
