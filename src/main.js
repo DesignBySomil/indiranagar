@@ -336,15 +336,24 @@ function startAudio() {
   setInterval(() => { if (Math.random() < 0.7) bird(); }, 2200);
   setInterval(() => { if (Math.random() < 0.5) pom(); }, 9000);
 }
+let lastHonk = 0;
 function honk() {
   if (!AC) return;
-  const o = AC.createOscillator(), o2 = AC.createOscillator(), g = AC.createGain();
-  o.type = 'square'; o.frequency.value = 420;
-  o2.type = 'square'; o2.frequency.value = 530;
-  g.gain.setValueAtTime(0.14, AC.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.45);
-  o.connect(g); o2.connect(g); g.connect(AC.destination);
-  o.start(); o2.start(); o.stop(AC.currentTime + 0.5); o2.stop(AC.currentTime + 0.5);
+  const now = performance.now(); if (now - lastHonk < 600) return; lastHonk = now;
+  // rubber bulb reed horn: two short nasal squeezes ("pom-pom"), reed-like saw through a nasal bandpass
+  const squeeze = (t0, f0, len) => {
+    const t = AC.currentTime + t0;
+    const o = AC.createOscillator(), o2 = AC.createOscillator(), bp = AC.createBiquadFilter(), g = AC.createGain();
+    o.type = 'sawtooth'; o2.type = 'square';
+    o.frequency.setValueAtTime(f0 * 0.82, t); o.frequency.exponentialRampToValueAtTime(f0, t + 0.04); o.frequency.exponentialRampToValueAtTime(f0 * 0.9, t + len);
+    o2.frequency.setValueAtTime(f0 * 1.5 * 0.82, t); o2.frequency.exponentialRampToValueAtTime(f0 * 1.5, t + 0.04); o2.frequency.exponentialRampToValueAtTime(f0 * 1.35, t + len);
+    bp.type = 'bandpass'; bp.frequency.value = 1150; bp.Q.value = 2.2;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.015);
+    g.gain.setValueAtTime(0.16, t + len * 0.55); g.gain.exponentialRampToValueAtTime(0.001, t + len + 0.06);
+    o.connect(bp); o2.connect(bp); bp.connect(g); g.connect(AC.destination);
+    o.start(t); o2.start(t); o.stop(t + len + 0.08); o2.stop(t + len + 0.08);
+  };
+  squeeze(0, 395, 0.13); squeeze(0.2, 440, 0.17);
 }
 
 // ---------- minimap ----------
@@ -764,6 +773,8 @@ try {
     const r = placeOnRoad(x, z);
     let a = r.a;
     if (aPref !== undefined) { const d = Math.abs(Math.atan2(Math.sin(a - aPref), Math.cos(a - aPref))); if (d > Math.PI / 2) a += Math.PI; }
+    window.__noCardUntil = performance.now() + 3500;
+    { const ce = document.getElementById('stop-card-v2'); if (ce) ce.classList.remove('on'); }
     auto.x = r.x; auto.z = r.z; auto.a = a; auto.v = 0; auto.steer = 0;
     car.position.set(auto.x, 0, auto.z); car.rotation.set(0, auto.a, 0);
     updateAuto(car, auto, 0.016);
