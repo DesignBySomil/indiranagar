@@ -604,9 +604,44 @@ try {
   bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   buildMini();
 
-  auto.x = stops[0].p.x + 15.5;
-  auto.z = stops[0].p.z + 32;
-  auto.a = Math.PI;
+  function placeOnRoad(x, z) {
+    const cands = [];
+    for (const s of street.roadSegs) {
+      const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
+      const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
+      const t = THREE.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / L2, 0, 1);
+      const px = x1 + dx * t, pz = z1 + dz * t;
+      cands.push({ d: Math.hypot(x - px, z - pz), x1, z1, dx, dz, L: Math.sqrt(L2), t });
+    }
+    cands.sort((a, b) => a.d - b.d);
+    for (const c of cands.slice(0, 12)) {
+      const ux = c.dx / c.L, uz = c.dz / c.L, ang = Math.atan2(c.dx, c.dz);
+      const nx = uz, nz = -ux;
+      for (const along of [0, 6, -6, 12, -12, 20, -20, 30, -30]) {
+        const base = c.t * c.L + along;
+        if (base < 1 || base > c.L - 1) continue;
+        for (const off of [2.2, -2.2, 3.4, -3.4, 0]) {
+          const cx = c.x1 + ux * base + nx * off, cz = c.z1 + uz * base + nz * off;
+          if (!hitAt(cx, cz)) return { x: cx, z: cz, a: ang };
+        }
+      }
+    }
+    return { x, z, a: Math.PI };
+  }
+  function hitAt(px, pz) {
+    return !!(solid(px, pz) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)));
+  }
+  function spawnAt(x, z, aPref) {
+    const r = placeOnRoad(x, z);
+    let a = r.a;
+    if (aPref !== undefined) { const d = Math.abs(Math.atan2(Math.sin(a - aPref), Math.cos(a - aPref))); if (d > Math.PI / 2) a += Math.PI; }
+    auto.x = r.x; auto.z = r.z; auto.a = a; auto.v = 0; auto.steer = 0;
+    car.position.set(auto.x, 0, auto.z); car.rotation.set(0, auto.a, 0);
+    updateAuto(car, auto, 0.016);
+    if (camRig) camRig.update(0.016, true); else syncCamera(0.016, true);
+  }
+  window.__spawnAt = spawnAt;
+  spawnAt(stops[0].p.x, stops[0].p.z, Math.PI);
   auto.v = 0;
   auto.steer = 0;
   car.position.set(auto.x, 0, auto.z);
@@ -621,6 +656,11 @@ try {
   $('start').classList.add('on');
   requestAnimationFrame(loop);
 
+  const pick = document.getElementById('startpick');
+  if (pick) {
+    pick.innerHTML = stops.map((s, i) => `<option value="${i}">${s.p.n}</option>`).join('');
+    pick.addEventListener('change', () => { const s = stops[+pick.value]; spawnAt(s.p.x, s.p.z); });
+  }
   const go = () => {
     $('start').classList.remove('on');
     $('hud').classList.add('on');
