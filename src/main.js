@@ -456,6 +456,16 @@ function step(dt, now) {
     return false;
   };
   const hit = (x, z) => hitA(x, z, auto.a);
+  // what is blocking? 1 = static geometry (solid, divider, pier, parked car), 2 = ordinary moving obstruction (traffic, street life, crowd)
+  const hitKind = (x, z, a) => {
+    const s = Math.sin(a), c = Math.cos(a); let dyn = 0;
+    for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]]) {
+      const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
+      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (parkedVehicles && parkedVehicles.solid(px, pz))) return 1;
+      if ((life && life.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) dyn = 2;
+    }
+    return dyn;
+  };
   // turning never drives the body into something: try full, half, then no rotation (unless already inside)
   if (dA !== 0) {
     if (hit(auto.x, auto.z) || !hitA(auto.x, auto.z, auto.a + dA)) auto.a += dA;
@@ -467,13 +477,14 @@ function step(dt, now) {
     blocked = true;
     // inside something: ease out to the nearest free spot (small steps, no big teleport)
     let done = false;
-    for (let r = 0.25; r <= 6 && !done; r += 0.25) {
+    const rMax = hitKind(auto.x, auto.z, auto.a) === 2 ? 1.5 : 6; // overlapped by a moving obstruction: only a small nudge, never a long relocation
+    for (let r = 0.25; r <= rMax && !done; r += 0.25) {
       for (let k = 0; k < 16; k++) {
         const ang = k * Math.PI / 8, nx = auto.x + Math.sin(ang) * r, nz = auto.z + Math.cos(ang) * r;
         if (!hit(nx, nz)) { auto.x = nx; auto.z = nz; auto.v *= 0.3; done = true; break; }
       }
     }
-    if (!done) auto.unstickNow = true;
+    if (!done && rMax > 1.5) auto.unstickNow = true;
   } else if (!hit(auto.x + dx, auto.z + dz)) { auto.x += dx; auto.z += dz; }
   else {
     blocked = true;
@@ -486,9 +497,15 @@ function step(dt, now) {
     if (!moved) auto.v = thr > 0 ? Math.min(auto.v, 0) * 0.2 : Math.max(auto.v, 0) * 0.2;
   }
   // unstick fallback: throttle held but not moving against a collider -> back off, then snap to the road lane
-  if (blocked && Math.abs(thr) > 0.1 && Math.abs(auto.v) < 1.2) auto.stuckT = (auto.stuckT || 0) + dt;
+  // Only static geometry triggers the recovery hop. Waiting behind traffic, a cow or a crowd never moves the player: they can wait, reverse or steer around.
+  const bk = blocked ? Math.max(hitKind(auto.x + dx, auto.z + dz, auto.a), hitKind(auto.x, auto.z, auto.a)) : 0;
+  const staticBlock = bk === 1;
+  if (blocked && bk === 2 && Math.abs(thr) > 0.1) auto.dynT = (auto.dynT || 0) + dt; else auto.dynT = Math.max(0, (auto.dynT || 0) - dt * 3);
+  if (staticBlock && Math.abs(thr) > 0.1 && Math.abs(auto.v) < 1.2) auto.stuckT = (auto.stuckT || 0) + dt;
   else auto.stuckT = Math.max(0, (auto.stuckT || 0) - dt * 2);
-  if (blocked && Math.abs(thr) > 0.1) auto.blockT = (auto.blockT || 0) + dt; else auto.blockT = Math.max(0, (auto.blockT || 0) - dt * 3);
+  if (staticBlock && Math.abs(thr) > 0.1) auto.blockT = (auto.blockT || 0) + dt; else auto.blockT = Math.max(0, (auto.blockT || 0) - dt * 3);
+  // last resort: boxed in by moving obstructions for a long time (30 s of continuous pushing) with no way out
+  if (auto.dynT > 30) { auto.dynT = 0; auto.blockT = 1; }
   if (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow) {
     auto.stuckT = 0; auto.blockT = 0; auto.unstickNow = false;
     auto.clk = auto.clk || 0;

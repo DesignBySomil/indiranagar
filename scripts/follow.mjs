@@ -33,7 +33,7 @@ const out = await p.evaluate((NAME, DIR, LANE0, MAXSTEPS) => {
     const px = g.auto.x, pz = g.auto.z, pv = g.auto.v, pa = g.auto.a;
     window.__step(0.05, performance.now());
     const mv = Math.hypot(g.auto.x - px, g.auto.z - pz);
-    if (mv > 6) { teleports++; hops.push({ i, from: [+px.toFixed(1), +pz.toFixed(1)], to: [+g.auto.x.toFixed(1), +g.auto.z.toFixed(1)], v: +pv.toFixed(1), W: JSON.stringify(W), lane: LANE }); }
+    if (mv > 1.5) { teleports++; hops.push({ i, from: [+px.toFixed(1), +pz.toFixed(1)], to: [+g.auto.x.toFixed(1), +g.auto.z.toFixed(1)], v: +pv.toFixed(1), W: JSON.stringify(W), lane: LANE }); }
     slowC = g.auto.v < 4 ? slowC + 1 : 0; if (slowC >= 25 && d - toggleAt > 15) { LANE = LANE >= 0 ? -2.2 : 2.2; toggleAt = d; toggles++; slowC = 0; } if (LANE !== LANE0 && d - toggleAt > 40) LANE = LANE0;
     { const want = Math.abs(pv) * 0.05; if (i >= 600 && want > 0.08 && mv < want * 0.5 && (window.__bl = window.__bl || []).length < 8) { const s0 = Math.sin(pa), c0 = Math.cos(pa), h = []; [[0.85,1.8],[-0.85,1.8],[0.85,-1.3],[-0.85,-1.3],[0,1.95],[0,0.3],[0,-1.3]].forEach(([lx, lz], k) => { const qx = px + c0*lx + s0*lz, qz = pz - s0*lx + c0*lz; const r = preds(qx, qz); if (r.length) h.push(k + ':' + r.join('+') + '@' + qx.toFixed(1) + ',' + qz.toFixed(1)); }); window.__bl.push({ W: JSON.stringify(W), i, v: +pv.toFixed(1), want: +want.toFixed(2), mv: +mv.toFixed(3), h }); } }
     if (g.auto.v < 1.0) slow++; else slow = Math.max(0, slow - 2);
