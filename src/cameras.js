@@ -158,15 +158,15 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   const yelMat = new T.MeshStandardMaterial({ color: 0xf2b705, roughness: 0.45 });
   const dashMat = new T.MeshStandardMaterial({ color: 0x14161a, roughness: 0.8 });
   const box = (w, h, d, x, y, z, m) => { const o = new T.Mesh(new T.BoxGeometry(w, h, d), m); o.position.set(x, y, z); driverRig.add(o); return o; };
-  box(1.36, 0.085, 0.05, 0, 1.82, 0.90, yelMat);          // header
+  box(1.36, 0.065, 0.05, 0, 1.815, 0.90, yelMat);          // header
   box(1.36, 0.02, 0.06, 0, 1.775, 0.89, dashMat);        // rubber seal top
   box(1.36, 0.045, 0.10, 0, 1.06, 0.90, yelMat);          // lower frame
-  box(1.36, 0.10, 0.12, 0, 1.005, 0.90, yelMat);          // yellow dash cowl
+  box(1.36, 0.10, 0.12, 0, 1.005, 0.90, dashMat);          // dark dash cowl
   box(1.36, 0.10, 0.12, 0, 0.90, 0.89, dashMat);
   box(1.16, 0.09, 0.30, 0, 0.845, 0.80, dashMat);          // dark dash
   const link = (x1, y1, z1, x2, y2, z2, r, m) => { const v = new T.Vector3(x2 - x1, y2 - y1, z2 - z1); const o = new T.Mesh(new T.CylinderGeometry(r, r, v.length(), 8), m); o.position.set((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2); o.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), v.normalize()); driverRig.add(o); return o; };
   for (const sg of [-1, 1]) {
-    box(0.05, 0.72, 0.05, sg * 0.655, 1.43, 0.90, yelMat);  // pillars
+    box(0.042, 0.70, 0.045, sg * 0.655, 1.44, 0.90, yelMat);  // pillars
     box(0.025, 0.70, 0.06, sg * 0.62, 1.43, 0.89, dashMat); // rubber seal side
     link(sg * 0.60, 1.38, 0.84, sg * 0.89, 1.24, 0.88, 0.009, steelMat); // mirror stalk
     const rim = new T.Mesh(new T.CylinderGeometry(0.058, 0.058, 0.025, 24), dashMat); rim.rotation.x = Math.PI / 2; rim.position.set(sg * 0.60, 1.40, 0.84); driverRig.add(rim);

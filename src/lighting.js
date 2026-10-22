@@ -10,8 +10,8 @@ const skyKeys = [
   [6.2,  0x2c3e6b, 0xd98a6c, 0xffb380, 1.85, 0.42, 0.22, 0.98],
   [9.0,  0x3d6fa8, 0xb8cad9, 0xfff0d4, 2.75, 0.55, 0.28, 0.94],
   [13.0, 0x35649c, 0xc4d4e0, 0xfff8eb, 3.10, 0.60, 0.30, 0.90],
-  [16.5, 0x3b5d8f, 0xd9bf9c, 0xffe0b2, 2.55, 0.50, 0.25, 0.95],
-  [17.8, 0x262957, 0xd47a55, 0xff9e5e, 1.95, 0.36, 0.18, 1.02], // Painterly blue-violet dusk zenith + warm horizon
+  [16.5, 0x3b5d8f, 0xd9bf9c, 0xffe0b2, 2.75, 0.54, 0.27, 0.98],
+  [17.8, 0x262957, 0xd47a55, 0xff9e5e, 2.55, 0.46, 0.24, 1.07], // Painterly blue-violet dusk zenith + warm horizon
   [18.6, 0x16163b, 0x6b385c, 0xc47ac0, 0.55, 0.22, 0.11, 1.00],
   [19.5, 0x090b21, 0x1f1a3d, 0x7b96d4, 0.24, 0.15, 0.08, 0.95],
   [24.0, 0x060818, 0x161432, 0x7b96d4, 0.22, 0.14, 0.08, 0.92]

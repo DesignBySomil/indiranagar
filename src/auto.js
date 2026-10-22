@@ -291,7 +291,7 @@ export function buildAuto() {
 
   // permit card tucked at the lower-left corner of the windshield
   const photoTex = makeSign('KA-05', '#f8fafc', '#0f172a', '800 30px sans-serif', 128, 80, '', '#0f172a');
-  const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.10, 0.062), new THREE.MeshBasicMaterial({ map: photoTex }));
+  const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.10, 0.062), new THREE.MeshStandardMaterial({ map: photoTex, roughness: 0.85 }));
   photo.position.set(-0.38, 1.16, 0.885); photo.rotation.y = Math.PI; photo.rotation.x = -0.26;
   chassis.add(photo);
 
