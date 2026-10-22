@@ -2,7 +2,7 @@
 export function createMapEdge({ THREE, scene, MAP, margin = 28 }) {
   const x0 = MAP.x0 + margin, x1 = MAP.x1 - margin, z0 = MAP.z0 + margin, z1 = MAP.z1 - margin;
   const g = new THREE.Group(); g.name = 'mapEdgeWall';
-  const H = 16, T = 0.6, off = 1.6; // wall sits just beyond the clamp so the car stops against its face
+  const H = 16, T = 0.6, off = 2.55; // face sits 2.0 m beyond the clamp = the car footprint front extent (hitA uses up to 1.95 m ahead of centre)
   const c = document.createElement('canvas'); c.width = 256; c.height = 256;
   const x = c.getContext('2d');
   x.fillStyle = '#12002a'; x.fillRect(0, 0, 256, 256);
