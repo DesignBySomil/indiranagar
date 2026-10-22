@@ -337,6 +337,27 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
   const occ = new Uint8Array(OCC.n * OCC.n);
   for (let i = 0; i < occ.length; i++) occ[i] = imgData[i * 4 + 3] > 140 ? 1 : 0;
 
+  // Footprints that cover a road (OSM compound outlines, 2 m raster) must never block the road itself:
+  // clear a 4 m corridor along every road centreline.
+  const CARVE = 2.0;
+  for (const r of world.roads) {
+    const p = r.p;
+    for (let j = 0; j < p.length - 1; j++) {
+      const ax = p[j][0], az = p[j][1], bx = p[j + 1][0], bz = p[j + 1][1];
+      const L = Math.hypot(bx - ax, bz - az), steps = Math.max(1, Math.ceil(L / 0.75));
+      for (let k = 0; k <= steps; k++) {
+        const cx = ax + (bx - ax) * k / steps, cz = az + (bz - az) * k / steps;
+        const i0 = Math.floor((cx - CARVE + 1000) / OCC.s), i1 = Math.floor((cx + CARVE + 1000) / OCC.s);
+        const j0 = Math.floor((cz - CARVE + 1000) / OCC.s), j1 = Math.floor((cz + CARVE + 1000) / OCC.s);
+        for (let jj = j0; jj <= j1; jj++) for (let ii = i0; ii <= i1; ii++) {
+          if (ii < 0 || jj < 0 || ii >= OCC.n || jj >= OCC.n) continue;
+          const mx = (ii + 0.5) * OCC.s - 1000, mz = (jj + 0.5) * OCC.s - 1000;
+          if (Math.hypot(mx - cx, mz - cz) <= CARVE + 0.5) occ[jj * OCC.n + ii] = 0;
+        }
+      }
+    }
+  }
+
   const solid = (x, z) => {
     const i = Math.floor((x + 1000) / OCC.s), j = Math.floor((z + 1000) / OCC.s);
     return i < 0 || j < 0 || i >= OCC.n || j >= OCC.n ? 1 : occ[j * OCC.n + i];
