@@ -799,6 +799,8 @@ try {
     const r = placeOnRoad(x, z);
     let a = r.a;
     if (aPref !== undefined) { const d = Math.abs(Math.atan2(Math.sin(a - aPref), Math.cos(a - aPref))); if (d > Math.PI / 2) a += Math.PI; }
+    { const fx1 = Math.sin(a), fz1 = Math.cos(a), ex = r.x + fx1 * 70, ez = r.z + fz1 * 70;
+      if (ex < MAP.x0 + 28 || ex > MAP.x1 - 28 || ez < MAP.z0 + 28 || ez > MAP.z1 - 28) a += Math.PI; } // face away from the map edge
     // Never spawn facing a wall: if the lane ahead is blocked within 5m but clear behind, face the other way
     { const fx0 = Math.sin(a), fz0 = Math.cos(a);
       if (hitAt(r.x + fx0 * 5, r.z + fz0 * 5) && !hitAt(r.x - fx0 * 5, r.z - fz0 * 5)) a += Math.PI; }
