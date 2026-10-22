@@ -1,0 +1,16 @@
+import puppeteer from 'puppeteer-core';
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 600000, args: ['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--window-size=390,844'] });
+const p = await b.newPage(); await p.setViewport({ width: 390, height: 844, isMobile:true, hasTouch:true, deviceScaleFactor:1 });
+await p.goto('http://localhost:4175/?ao=0',{waitUntil:'load'});
+await p.waitForFunction('window.__game && window.__step',{timeout:180000});
+const info=await p.evaluate(()=>{const g=window.__game;g.state.hour=14;g.state.auto=false;g.go();window.__paused=true;window.__noRender=true;
+ const list=g.npcs.npcs;const n=list.find(q=>q.group&&q.group.position)||list[0];const pos=n.group?n.group.position:{x:n.x,z:n.z};
+ g.auto.x=pos.x-4;g.auto.z=pos.z;g.auto.a=Math.PI/2;g.auto.v=0;for(let i=0;i<30;i++)window.__step(0.05,performance.now());
+ const c=document.getElementById('npc-card');return {n:list.length,name:n.name,pos:[pos.x,pos.z],card:c?c.className:null,text:c?c.innerText:null}});
+console.log(JSON.stringify(info));
+await p.evaluate(()=>{window.__noRender=false;});
+await new Promise(r=>setTimeout(r,20000));
+await p.evaluate(()=>{window.__paused=true});await new Promise(r=>setTimeout(r,4000));
+const r=await p.evaluate(()=>{const c=document.getElementById('npc-card');if(!c)return null;const b=c.getBoundingClientRect();return {cls:c.className,x:b.x,y:b.y,w:b.width,h:b.height,vw:innerWidth}});
+console.log(JSON.stringify(r));
+await p.screenshot({path:'/tmp/pill-mob.png'});await b.close();
