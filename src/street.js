@@ -84,6 +84,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const potholeSpots = [];
   const utilityPoles = [];
   const metroPiers = [], cmhSegs = [], cmhCands = [];
+  let gantryRef = null;
 
   let v = 0, fpV = 0, kbV = 0, dv = 0, divV = 0, patV = 0;
 
@@ -134,12 +135,14 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     const headGeo = new THREE.BoxGeometry(0.34, 0.95, 0.22);
     const lampGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.03, 10);
     const lastPlaced = new Map();
+    gantry.userData.centers = [];
     for (const sg of hundredSegs) {
       if (sg.L < 25) continue;
       const mx = (sg.x1 + sg.x2) / 2, mz = (sg.z1 + sg.z2) / 2;
       const last = lastPlaced.get(sg.ri);
       if (last && Math.hypot(mx - last.x, mz - last.z) < 170) continue;
       lastPlaced.set(sg.ri, { x: mx, z: mz });
+      gantry.userData.centers.push([mx, mz]);
       const nx2 = -sg.uz, nz2 = sg.ux;
       const half = W100 / 2 + 0.7;
       for (const sgn of [1, -1]) {
@@ -168,6 +171,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       }
     }
     scene.add(gantry);
+    gantryRef = gantry;
   }
 
   let ri = -1;
@@ -948,6 +952,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     parkedSpots,
     bridgeVolumes,
     speedBreakers,
-    metroPiers
+    metroPiers,
+    gantry: gantryRef
   };
                }

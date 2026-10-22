@@ -529,6 +529,11 @@ function step(dt, now) {
   car.position.set(auto.x, 0, auto.z);
   car.rotation.y = auto.a;
   updateAuto(car, auto, dt);
+  if (window.__gantry) { // the chase camera must never look through a signal gantry beam: hide the gantry while the camera is near it and at its height
+    const G = window.__gantry, C = G.userData.centers || []; let near = false;
+    for (let i = 0; i < C.length; i++) { if (Math.hypot(camera.position.x - C[i][0], camera.position.z - C[i][1]) < 14 && camera.position.y > 2.6) { near = true; break; } }
+    G.visible = !near;
+  }
   if (hazards) { const sh = hazards.update(dt, auto); if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); clampCam(); camera.position.y += sh; }
   else { if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); clampCam(); }
   if (trees) trees.update(dt);
@@ -691,7 +696,7 @@ try {
   setLoad(55, 'Laying 100 Feet Road, metro & trees');
   await new Promise(r => setTimeout(r, 20));
   const street = buildStreet(world, scene, nightUniform, solid, extras);
-  window.__piers = street.metroPiers;
+  window.__piers = street.metroPiers; window.__gantry = street.gantry;
   streetRef = street;
   roadSegs = street.roadSegs;
   lampHead = street.lampHead;
