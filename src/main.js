@@ -365,7 +365,7 @@ const mini = $('mini'), mx = mini.getContext('2d');
 let miniBase;
 function buildMini() {
   miniBase = document.createElement('canvas');
-  miniBase.width = miniBase.height = 1800;
+  miniBase.width = 1800; miniBase.height = 3000; // x -900..900, z -900..2100 (covers the Domlur area)
   const c = miniBase.getContext('2d');
   c.translate(900, 900); c.lineCap = 'round'; c.lineJoin = 'round';
   c.fillStyle = '#3a4048';
