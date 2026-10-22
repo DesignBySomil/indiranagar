@@ -60,7 +60,7 @@ export function buildAuto() {
   const yellowMat = new THREE.MeshStandardMaterial({
     color: 0xf6c30f,
     emissive: 0x3b2c00,
-    emissiveIntensity: 0.20,
+    emissiveIntensity: 0.08,
     roughness: 0.38,
     metalness: 0.05
   });
@@ -279,6 +279,91 @@ export function buildAuto() {
   spareCover.position.set(0, 0.82, -1.28);
   chassis.add(spare, spareCover);
 
+  // ---- Interior detail pack: dash, liner, panels, floor, dome light ----
+  const interiorMat = new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.9, metalness: 0.04 });
+  const dashMat = new THREE.MeshStandardMaterial({ color: 0x24262a, roughness: 0.85 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.7 });
+
+  // roof liner (kills the raw yellow seen from inside)
+  const liner = new THREE.Mesh(new THREE.BoxGeometry(1.30, 0.035, 2.02), interiorMat);
+  liner.position.set(0, 1.855, -0.10);
+  chassis.add(liner);
+
+  // dashboard spanning the cabin ahead of the driver
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.30, 0.22), dashMat);
+  dash.position.set(0, 1.02, 0.80);
+  chassis.add(dash);
+  const dashTop = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.04, 0.30), trimMat);
+  dashTop.position.set(0, 1.19, 0.78);
+  chassis.add(dashTop);
+  // glove box lid + handle
+  const glove = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.02), trimMat);
+  glove.position.set(-0.36, 1.02, 0.688);
+  chassis.add(glove);
+  // instrument cluster: speedo dial face + needle + small lamps
+  const clusterTex = makeSign('', '#101215', '#e8f2ff', '700 20px sans-serif', 128, 128);
+  const cluster = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.04, 18), dashMat);
+  cluster.rotation.x = Math.PI / 2 - 0.35;
+  cluster.position.set(0.0, 1.13, 0.72);
+  chassis.add(cluster);
+  const dialC = document.createElement('canvas'); dialC.width = dialC.height = 128;
+  const dctx = dialC.getContext('2d');
+  dctx.fillStyle = '#0c0e10'; dctx.beginPath(); dctx.arc(64, 64, 62, 0, 7); dctx.fill();
+  dctx.strokeStyle = '#e8f2ff'; dctx.lineWidth = 3;
+  for (let i = 0; i <= 8; i++) { const an = Math.PI * 0.75 + i * Math.PI * 1.5 / 8; dctx.beginPath(); dctx.moveTo(64 + Math.cos(an) * 48, 64 + Math.sin(an) * 48); dctx.lineTo(64 + Math.cos(an) * 56, 64 + Math.sin(an) * 56); dctx.stroke(); }
+  dctx.fillStyle = '#ff5544'; dctx.beginPath(); dctx.moveTo(64, 64); dctx.lineTo(64 + Math.cos(Math.PI * 0.9) * 44, 64 + Math.sin(Math.PI * 0.9) * 44); dctx.lineTo(64 + 4, 64 + 4); dctx.fill();
+  const dialTex = new THREE.CanvasTexture(dialC); dialTex.colorSpace = THREE.SRGBColorSpace;
+  const dial = new THREE.Mesh(new THREE.CircleGeometry(0.068, 18), new THREE.MeshBasicMaterial({ map: dialTex }));
+  dial.position.set(0.0, 1.145, 0.698);
+  dial.rotation.x = -0.35;
+  chassis.add(dial);
+  // dash knick-knacks: small idol sticker + photo card (very Indiranagar auto)
+  const stickerTex = makeSign('GANESH', '#7f1d1d', '#fef08a', '800 28px sans-serif', 96, 96, '', '#fde047');
+  const sticker = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.07), new THREE.MeshBasicMaterial({ map: stickerTex }));
+  sticker.position.set(0.42, 1.23, 0.72); sticker.rotation.x = -0.5;
+  chassis.add(sticker);
+  const photoTex = makeSign('KA-05', '#f8fafc', '#0f172a', '800 30px sans-serif', 128, 80, '', '#0f172a');
+  const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.06), new THREE.MeshBasicMaterial({ map: photoTex }));
+  photo.position.set(-0.05, 1.5, 0.90); photo.rotation.y = Math.PI; photo.rotation.x = 0.2;
+  chassis.add(photo);
+  // ignition key + keychain
+  const key = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.05, 0.01), chromeMat);
+  key.position.set(0.14, 1.05, 0.70); key.rotation.x = 0.4;
+  const fob = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.012), new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.6 }));
+  fob.position.set(0.14, 1.005, 0.695);
+  chassis.add(key, fob);
+
+  // interior side panels (cover raw body colour at elbow height)
+  for (const sd of [-1, 1]) {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.42, 1.7), interiorMat);
+    panel.position.set(sd * 0.625, 1.05, -0.25);
+    chassis.add(panel);
+    const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.14, 0.4), trimMat);
+    pocket.position.set(sd * 0.615, 0.95, -0.55);
+    chassis.add(pocket);
+  }
+  // floor with ribbed mat
+  const matC = document.createElement('canvas'); matC.width = 128; matC.height = 128;
+  const mctx = matC.getContext('2d');
+  mctx.fillStyle = '#1d1f22'; mctx.fillRect(0, 0, 128, 128);
+  mctx.fillStyle = '#26282c';
+  for (let y2 = 0; y2 < 128; y2 += 10) mctx.fillRect(0, y2, 128, 4);
+  const matTex = new THREE.CanvasTexture(matC);
+  matTex.wrapS = matTex.wrapT = THREE.RepeatWrapping; matTex.repeat.set(2, 3); matTex.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.03, 2.2), new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.95 }));
+  floor.position.set(0, 0.485, -0.05);
+  chassis.add(floor);
+
+  // cabin dome light: warm point light so cockpit and back seat read at dusk/night
+  const dome = new THREE.PointLight(0xffd9a0, 0.0, 4.5, 1.8);
+  dome.position.set(0, 1.72, -0.15);
+  chassis.add(dome);
+  const domeLens = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.07), new THREE.MeshBasicMaterial({ color: 0x3a3d42 }));
+  domeLens.position.set(0, 1.83, -0.15);
+  chassis.add(domeLens);
+  root.userData.dome = dome;
+  root.userData.domeLens = domeLens;
+
   const plateTex = makeSign('KA 03 AG 4210', '#f6c30f', '#111111', '800 38px sans-serif', 256, 64, '', '#111111');
   const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.48, 0.12), new THREE.MeshBasicMaterial({ map: plateTex }));
   plate.position.set(0, 0.50, -1.24);
@@ -350,6 +435,12 @@ export function updateAuto(group, state, dt = 0.016) {
 
   u.pitch += (targetPitch - u.pitch) * Math.min(1, dt * 10);
   u.roll += (targetRoll - u.roll) * Math.min(1, dt * 10);
+
+  if (u.dome) {
+    const nf = (typeof nightUniform !== 'undefined' && nightUniform.value) || 0;
+    u.dome.intensity = 0.55 + nf * 1.6;
+    if (u.domeLens) u.domeLens.material.color.setHex(nf > 0.3 ? 0xffe2b0 : 0x3a3d42);
+  }
 
   u.phase += dt * (14 + Math.abs(v) * 2.2);
   const bounce = Math.sin(u.phase) * (0.004 + Math.abs(v) * 0.0012) + Math.cos(u.phase * 2.3) * 0.003;
