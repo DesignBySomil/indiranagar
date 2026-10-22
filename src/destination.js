@@ -416,7 +416,7 @@ export function createDestinationMode({
         <button class="dp-btn dp-btn-go" id="dp-go">Go by Auto</button>
         <button class="dp-btn dp-btn-cancel" id="dp-cancel">Stop Autopilot</button>
       </div>
-      <div id="dest-speech">"Where to drop sir? Meter haaktini!"</div>
+      <div id="dest-speech">"Where to, sir? I will switch on the meter!"</div>
     </div>
   `;
   document.body.appendChild(panel);

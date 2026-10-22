@@ -776,7 +776,7 @@ export function createStreetLife({
           stats.fare += activeQuest.reward;
           stats.detours++;
           playCashBell();
-          safeUI.say(`You: "Nodi sir, shortcut alli karkondu bande! Give Rs.${activeQuest.reward}!"`, 4200);
+          safeUI.say(`You: "Sir, I took a shortcut for you! Give Rs.${activeQuest.reward}!"`, 4200);
           safeUI.fare(`Detour Complete! Fare: Rs.${stats.fare}`);
           detourGroup.visible = false;
           activeQuest = null;

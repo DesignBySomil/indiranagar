@@ -157,7 +157,7 @@ const STOP_COPY = {
     driver: 'Metro riders need a last-mile drop, and our auto is the king of that!'
   },
   'Swami Vivekananda Road station': {
-    order: 'Quick Purple Line hop or grab roadside elaneer outside the concourse.',
+    order: 'Quick Purple Line hop or grab roadside tender coconut water outside the concourse.',
     fact: 'Major Purple Line terminal hub at the Old Madras Road edge of Indiranagar.',
     driver: 'Crossing the SV Road signal feels like climbing Everest, sir!'
   },
