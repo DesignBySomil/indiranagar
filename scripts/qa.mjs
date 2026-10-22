@@ -6,7 +6,7 @@ const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', hea
 const p = await b.newPage(); await p.setViewport({ width: 960, height: 540 });
 const errors = [];
 p.on('pageerror', e => errors.push('pageerror: ' + e.message));
-await p.goto('http://localhost:4173/', { waitUntil: 'load' });
+await p.goto((process.env.URL||'http://localhost:4173/'), { waitUntil: 'load' });
 await p.waitForFunction('window.__game', { timeout: 120000 });
 const R = { stops: [], views: {}, buttons: {}, misc: {}, errors };
 

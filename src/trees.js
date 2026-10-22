@@ -289,7 +289,7 @@ export function createRainTrees({
         const tz = z1 + uz * dist + ux * vergeOff * side;
 
         // Keep player spawn (-133, -345) clear
-        if (Math.hypot(tx - (-133), tz - (-345)) < 16) continue;
+        if (Math.hypot(tx - (-133), tz - (-345)) < 34) continue;
 
         // Check building footprints (solidFn) with a small clearance buffer
         if (

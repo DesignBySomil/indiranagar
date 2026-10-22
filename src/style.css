@@ -15,13 +15,14 @@ html,body{height:100%;background:#14181c;color:#f1f4f8;font-family:'Bricolage Gr
 #score b{font:700 30px 'Bricolage Grotesque';color:#38e07b;margin-right:4px}
 #mini{position:absolute;left:20px;bottom:20px;width:150px;height:150px;border-radius:50%;border:1px solid #3a434d;background:#14181cdd}
 #clock{position:absolute;right:20px;bottom:20px;font:13px 'DM Mono',monospace;color:#8b95a1}
-#help{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);font:11px 'DM Mono',monospace;color:#8b95a1;white-space:nowrap}
+#help{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);font:12px 'DM Mono',monospace;color:#f1f5f9;background:rgba(10,14,24,.66);padding:6px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(6px);white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.6)}
 #card{position:fixed;left:50%;top:84px;transform:translate(-50%,-12px);background:#1d2329ee;border:1px solid #38e07b66;border-radius:14px;padding:14px 20px;min-width:260px;max-width:86vw;text-align:center;opacity:0;transition:.4s;z-index:20;pointer-events:none}
 #card.on{opacity:1;transform:translate(-50%,0)}
 #card small{font:10px 'DM Mono',monospace;letter-spacing:.14em;color:#38e07b;text-transform:uppercase}
 #card h2{font-size:24px;margin:4px 0;letter-spacing:-.01em}#card p{font-size:13px;color:#a7b0ba}
 #stick{position:fixed;left:30px;bottom:190px;width:110px;height:110px;border-radius:50%;border:1px solid #ffffff22;z-index:12;display:none}
 #stick i{position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:#ffffff33}
+@media (max-width:900px){#help{display:none}}
 @media (pointer:coarse){#stick{display:block}#help{display:none}}
 #start{position:fixed;inset:0;display:none;place-items:center;z-index:30;background:#0008}
 #start.on{display:grid}

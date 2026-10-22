@@ -1,9 +1,9 @@
 import puppeteer from 'puppeteer-core';
 const [,, out='/tmp/shot.png', hour='17.6', x='', z='', a=''] = process.argv;
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1280,720'] });
-const p = await b.newPage(); await p.setViewport({ width: 1280, height: 720 });
+const p = await b.newPage(); await p.setViewport({ width: +(process.env.W||1280), height: +(process.env.H||720), isMobile: !!process.env.MOB, hasTouch: !!process.env.MOB });
 p.on('console', m => console.log('console:', m.text())); p.on('pageerror', e => console.log('pageerror:', e.message));
-await p.goto('http://localhost:4173/', { waitUntil: 'load' });
+await p.goto((process.env.URL||'http://localhost:4173/'), { waitUntil: 'load' });
 await p.waitForFunction('window.__game', { timeout: 60000 });
 await p.evaluate(([h,x,z,a]) => { const g = window.__game; g.state.hour = +h; g.state.auto = false; if (x) { g.auto.x = +x; g.auto.z = +z; g.auto.a = +a; g.camera.position.set(+x - Math.sin(+a)*12, 7.2, +z - Math.cos(+a)*12);} g.state.snap = true; g.go(); }, [hour,x,z,a]);
 await new Promise(r => setTimeout(r, 4000));

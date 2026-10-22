@@ -13,7 +13,11 @@ export const CAMERA_CSS = `
   color: #f8fafc;
   border: 2px solid #facc15;
   border-radius: 999px;
-  padding: 9px 16px;
+  padding: 9px 16px 9px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
   font-family: "Bricolage Grotesque", system-ui, sans-serif;
   font-size: 13px;
   font-weight: 800;
@@ -29,8 +33,16 @@ export const CAMERA_CSS = `
 #btn-cam span {
   color: #facc15;
 }
+#btn-cam svg { width: 18px; height: 18px; flex: none; color: #facc15; }
+#btn-cam .kbd { opacity: 0.6; font-weight: 600; font-style: normal; }
+#btn-cam b { font-weight: 800; }
+@media (max-width: 520px) {
+  #btn-cam { right: 12px; bottom: 14px; padding: 8px 12px 8px 10px; font-size: 12px; }
+  #btn-cam .kbd { display: none; }
+}
 `;
 
+const CAM_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="14" height="12" rx="2.5"/><path d="M16 10.5l5.5-3v9l-5.5-3z"/></svg>';
 const MODES = ['chase', 'driver', 'passenger'];
 const MODE_LABELS = {
   chase: 'Chase Cam',
@@ -200,7 +212,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   function updateButtonLabel() {
     const modeName = MODES[currentIdx];
     if (camBtn) {
-      camBtn.innerHTML = `🎥 View: <span>${MODE_LABELS[modeName]}</span> (V)`;
+      camBtn.innerHTML = `${CAM_ICON}<b>View:</b> <span>${MODE_LABELS[modeName]}</span> <i class="kbd">(V)</i>`;
     }
   }
 
