@@ -500,7 +500,11 @@ function step(dt, now) {
   // unstick fallback: throttle held but not moving against a collider -> back off, then snap to the road lane
   // Only static geometry triggers the recovery hop. Waiting behind traffic, a cow or a crowd never moves the player: they can wait, reverse or steer around.
   const bk = blocked ? Math.max(hitKind(auto.x + dx, auto.z + dz, auto.a), hitKind(auto.x, auto.z, auto.a)) : 0;
-  const staticBlock = bk === 1;
+  // Only a truly wedged car (blocked in the direction of travel AND the opposite direction is blocked too) counts as stuck.
+  // If the player can simply reverse or drive away, nothing relocates or re-aims them: holding the throttle against a divider or wall just holds the car there.
+  const oppD = thr >= 0 ? -0.9 : 0.9;
+  const wedged = hit(auto.x + Math.sin(auto.a) * oppD, auto.z + Math.cos(auto.a) * oppD);
+  const staticBlock = bk === 1 && wedged;
   if (blocked && bk === 2 && Math.abs(thr) > 0.1) auto.dynT = (auto.dynT || 0) + dt; else auto.dynT = Math.max(0, (auto.dynT || 0) - dt * 3);
   if (staticBlock && Math.abs(thr) > 0.1 && Math.abs(auto.v) < 1.2) auto.stuckT = (auto.stuckT || 0) + dt;
   else auto.stuckT = Math.max(0, (auto.stuckT || 0) - dt * 2);
@@ -834,7 +838,7 @@ try {
     if (camRig) camRig.update(0.016, true); else syncCamera(0.016, true);
     clampCam();
   }
-  window.__step = step; window.__inDivider = inDivider; window.__spawnAt = spawnAt; window.__placeOnRoad = placeOnRoad;
+  window.__renderer = renderer; window.__scene = scene; window.__step = step; window.__inDivider = inDivider; window.__spawnAt = spawnAt; window.__placeOnRoad = placeOnRoad;
   spawnAt(stops[0].p.x, stops[0].p.z, Math.PI);
   auto.v = 0;
   auto.steer = 0;
