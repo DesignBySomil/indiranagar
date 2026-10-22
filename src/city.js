@@ -98,7 +98,17 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
 
     const r = hash(cx, cz);
     const r2 = hash(cz, cx);
-    const floors = 2 + Math.floor(r * 3.5) + (area > 380 ? 1 : 0);
+    const commEarly = nearestCommRoad(cx, cz);
+    let floors;
+    if (commEarly.dist < 26) {
+      // NYC-style commercial corridor: tall wall-to-wall massing with anchor towers
+      floors = 5 + Math.floor(r * 6);
+      if (r > 0.88) floors = 12 + Math.floor(r2 * 4);
+    } else if (commEarly.dist < 45) {
+      floors = 3 + Math.floor(r * 4);
+    } else {
+      floors = 2 + Math.floor(r * 3) + (area > 380 ? 1 : 0);
+    }
     const h = b.h ? Math.max(6.8, b.h) : floors * 3.3;
 
     const shape = new THREE.Shape(pts.map(p => new THREE.Vector2(p[0], -p[1])));
@@ -117,7 +127,7 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     }
     g.rotateX(-Math.PI / 2);
 
-    const baseCol = new THREE.Color(PALETTE[Math.floor(r * PALETTE.length)]).offsetHSL((r2 - 0.5) * 0.02, -0.04, (r - 0.5) * 0.10);
+    const baseCol = new THREE.Color(PALETTE[Math.floor(r * PALETTE.length)]).offsetHSL((r2 - 0.5) * 0.03, 0.01, (r - 0.5) * 0.13 - 0.03);
     const posAttr = g.attributes.position;
     const normAttr = g.attributes.normal;
     const n = posAttr.count;
@@ -143,7 +153,7 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     }
 
     if (area > 32) {
-      const comm = nearestCommRoad(cx, cz);
+      const comm = commEarly;
       if (comm.dist < 30 && comm.dist > 7) {
         shopFronts.push({ x: cx, z: cz, rx: comm.rx, rz: comm.rz, dist: comm.dist, h, yaw: comm.yaw, r });
       }
@@ -168,6 +178,16 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
       `)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         if (abs(vWn.y) < 0.45) {
+          // Weathering: large patchy tone variation
+          float patch = h21(floor(vWp.xz * 0.11) + 17.0);
+          diffuseColor.rgb *= 0.92 + 0.14 * patch;
+          // Vertical rain/grime streaks running down the facade
+          float stSeed = h21(vec2(floor((vWp.x * abs(vWn.z) + vWp.z * abs(vWn.x)) * 2.3), 3.7));
+          float streak = step(0.78, stSeed) * (0.5 + 0.5 * sin(vWp.y * 1.7 + stSeed * 40.0));
+          diffuseColor.rgb *= 1.0 - streak * 0.10;
+          // Dusty dark base band near the ground
+          float baseBand = smoothstep(1.5, 0.15, vWp.y);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.68, 0.62), baseBand * 0.75);
           float horiz = (vWp.x * abs(vWn.z) + vWp.z * abs(vWn.x));
           float floorV = fract(vWp.y / 3.3);
           float bSeed = h21(floor(vWp.xz * 0.04));
