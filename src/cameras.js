@@ -173,6 +173,8 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     const glass = new T.Mesh(new T.CircleGeometry(0.048, 24), new T.MeshStandardMaterial({ color: 0x55677a, roughness: 0.1, metalness: 0.9 })); glass.rotation.y = Math.PI; glass.position.set(sg * 0.60, 1.40, 0.826); driverRig.add(glass);
   }
   box(1.36, 0.04, 0.07, 0, 1.085, 0.89, dashMat);          // rubber seal bottom
+  box(1.24, 0.36, 0.05, 0, 0.93, 0.60, dashMat);           // front interior bulkhead panel
+  box(1.24, 0.05, 0.05, 0, 1.12, 0.60, yelMat);            // thin body-colour strip atop bulkhead
   // wiper: pivot low centre, blade arcing across the glass
   link(-0.05, 1.075, 0.87, -0.42, 1.13, 0.87, 0.013, dashMat);
   link(-0.05, 1.075, 0.87, 0.32, 1.13, 0.87, 0.013, dashMat);

@@ -103,7 +103,7 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     if (commEarly.dist < 26) {
       // NYC-style commercial corridor: tall wall-to-wall massing with anchor towers
       floors = 5 + Math.floor(r * 6);
-      if (r > 0.88) floors = 12 + Math.floor(r2 * 4);
+      if (r > 0.82) floors = 11 + Math.floor(r2 * 4);
     } else if (commEarly.dist < 45) {
       floors = 3 + Math.floor(r * 4);
     } else {

@@ -749,11 +749,11 @@ export function createTraffic({
   const nTempo = Math.max(4, totalCount - (nSedan + nSuv + nScooter + nAuto));
 
   const typeDefs = [
-    { key: 'sedan', set: sedanSet, max: nSedan, halfLen: 2.35, minSpeed: 5.5, maxSpeed: 9.0, palette: [0xd93829, 0x2563eb, 0xe2e8f0, 0x334155, 0x0284c7, 0xd97706, 0x991b1b, 0xf8fafc] },
-    { key: 'suv', set: suvSet, max: nSuv, halfLen: 2.50, minSpeed: 5.2, maxSpeed: 8.6, palette: [0xf8fafc, 0x1e293b, 0x475569, 0x991b1b, 0x1d4ed8, 0x78350f, 0xd4d4d8] },
-    { key: 'scooter', set: scooterSet, max: nScooter, halfLen: 1.05, minSpeed: 4.2, maxSpeed: 7.5, palette: [0x38bdf8, 0xef4444, 0xf8fafc, 0x6366f1, 0x14b8a6, 0xf59e0b, 0xec4899] },
+    { key: 'sedan', set: sedanSet, max: nSedan, halfLen: 2.35, minSpeed: 5.5, maxSpeed: 9.0, palette: [0xb9bdc2, 0xf1f1ee, 0x3a4148, 0x6e1f1f, 0x2c3e50, 0x8a8f94, 0x5c4033, 0x1c1e22] },
+    { key: 'suv', set: suvSet, max: nSuv, halfLen: 2.50, minSpeed: 5.2, maxSpeed: 8.6, palette: [0xe4e4e0, 0x22262b, 0x4a5058, 0x5e1a1a, 0x24344d, 0x6b5b3e, 0xaeb3b8] },
+    { key: 'scooter', set: scooterSet, max: nScooter, halfLen: 1.05, minSpeed: 4.2, maxSpeed: 7.5, palette: [0x4a5568, 0x8a2f2f, 0xd6d3ce, 0x33507a, 0x3f6a63, 0x8a6d2f, 0x5a4a68] },
     { key: 'auto', set: autoSet, max: nAuto, halfLen: 1.55, minSpeed: 3.4, maxSpeed: 6.4, palette: [0x15803d, 0x166534, 0x14532d, 0x1f7a43] },
-    { key: 'tempo', set: tempoSet, max: nTempo, halfLen: 3.00, minSpeed: 3.2, maxSpeed: 6.8, palette: [0xf8fafc, 0xf1f5f9, 0xe2e8f0, 0xfef3c7] }
+    { key: 'tempo', set: tempoSet, max: nTempo, halfLen: 3.00, minSpeed: 3.2, maxSpeed: 6.8, palette: [0xeceae4, 0xe2e0d8, 0xcfd2d4, 0xe8dcc0] }
   ];
 
   // Create 2 InstancedMeshes per vehicle type (Body + Detail) + 1 shared or per-type Brake InstancedMesh

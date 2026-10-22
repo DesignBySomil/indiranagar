@@ -368,9 +368,9 @@ export function createRainTrees({
   trunkInst.receiveShadow = true;
 
   // 2-4. Instanced Umbrella Crowns per species (castShadow = false for soft self-shadow performance, receiveShadow = true)
-  const rainCrownGeo = buildUmbrellaCrownGeometry(T, [0x234f2a, 0x2d6334, 0x3b783e, 0x4b8742, 0x628f3d]);
+  const rainCrownGeo = buildUmbrellaCrownGeometry(T, [0x1f4526, 0x28582e, 0x336b36, 0x3f7438, 0x4f7a34]);
   const gulmoharCrownGeo = buildUmbrellaCrownGeometry(T, [0xd9381e, 0xe85325, 0xf27429, 0x2f5e2e, 0xe68a2e]);
-  const ficusCrownGeo = buildUmbrellaCrownGeometry(T, [0x36692f, 0x4c8236, 0x739c38, 0xb8a432, 0x2b5728]);
+  const ficusCrownGeo = buildUmbrellaCrownGeometry(T, [0x2e5d2c, 0x3a6b31, 0x4f7a33, 0x5c6524, 0x27501f]);
 
   const crownMat = makeWindCrownMaterial();
   const rainInst = new T.InstancedMesh(rainCrownGeo, crownMat, rainSpots.length);
