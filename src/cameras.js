@@ -235,7 +235,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
       const tx = auto.x - sinA * back + cosA * sideSwing;
       const tz = auto.z - cosA * back - sinA * sideSwing;
       const bounceY = snap ? 0 : Math.sin(bobPhase * 1.1) * spd * 0.008;
-      const ty = 7.7 + spd * 0.07 + bounceY;
+      const ty = 7.7 + spd * 0.07 + bounceY + (auto.y || 0);
 
       if (snap) {
         chasePos.set(tx, ty, tz);
@@ -250,7 +250,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
       const sideLook = snap ? 0 : steer * 1.1;
       chaseLook.set(
         auto.x + sinA * lookAhead - cosA * sideLook,
-        0.85,
+        0.85 + (auto.y || 0),
         auto.z + cosA * lookAhead + sinA * sideLook
       );
 
@@ -269,7 +269,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     if (mode === 'driver') {
       // Driver head position just behind handlebar (~1.38m local * scale, looking straight out through windshield)
       const localX = -steer * 0.06;
-      const localY = (1.30 + bob) * scale;
+      const localY = (1.30 + bob) * scale + (auto.y || 0);
       const localZ = 0.22 * scale;
       outPos.set(
         auto.x + cosA * localX + sinA * localZ,
@@ -289,7 +289,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
 
     // 'passenger' back-seat view: seated on rear bench looking slightly over the driver's right shoulder
     const pLocalX = 0.0 * scale + steer * 0.02;
-    const pLocalY = (1.52 + bob * 1.0) * scale;
+    const pLocalY = (1.52 + bob * 1.0) * scale + (auto.y || 0);
     const pLocalZ = -0.56 * scale;
     outPos.set(
       auto.x + cosA * pLocalX + sinA * pLocalZ,

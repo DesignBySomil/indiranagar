@@ -12,6 +12,7 @@ import { createStreetLife } from './life.js';
 import { createNPCs } from './npcs.js';
 import { createRainTrees } from './trees.js';
 import { createCameraRig } from './cameras.js';
+import { createOverpass } from './overpass.js';
 import { createRimLight } from './rim.js';
 import { buildIcons } from './icons.js';
 import { createTraffic } from './vehicles.js';
@@ -73,7 +74,7 @@ const LANDMARKS_DATA = [
 
 // ---------- world & modules ----------
 let world, solid = () => 0;
-let trees = null, camRig = null, destination = null, rimLight = null;
+let domlur = null, trees = null, camRig = null, destination = null, rimLight = null;
 let npcs = null, roadSegs = [], lampHead = null, lampLights = null, stopsGame = null, life = null, icons = null;
 const state = { hour: 17.8, auto: true };
 
@@ -96,7 +97,9 @@ const WANT = [
   ['Starbucks', 'Coffee']
 ];
 
-const MAP = { x0: -650, x1: 830, z0: -805, z1: 775 };
+const MAP = { x0: -650, x1: 830, z0: -805, z1: 2030 }; // z1 extended south to include the Domlur flyover (approx. design bounds)
+const INFILL_Z1 = 775;
+let overpass = null;
 const stops = [];
 
 function nearestRoadInfo(x, z) {
@@ -255,6 +258,7 @@ function syncCamera(dt, snap = false) {
 }
 
 function clampCam() {
+  if (overpass && (auto.y || 0) < 1.2) { const c = overpass.ceilingAt(camera.position.x, camera.position.z); if (camera.position.y > c) camera.position.y = Math.max(1.4, c); }
   if (camRig && camRig.name && !/chase/i.test(camRig.name)) return;
   const bad = (x, z) => solid(x, z) || solid(x + 1.4, z) || solid(x - 1.4, z) || solid(x, z + 1.4) || solid(x, z - 1.4) || (parkedVehicles && parkedVehicles.solid(x, z)) || (traffic && traffic.solid(x, z)) || (crowd && crowd.solid(x, z));
   const q = camera.quaternion.clone();
@@ -448,6 +452,14 @@ function step(dt, now) {
     const s = Math.sin(a), c = Math.cos(a);
     for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
+      if (overpass) {
+        if ((auto.y || 0) > 1.2) { // on the elevated deck: ground objects do not exist up here, the parapet keeps the car on the deck
+          const dk = overpass.deckAt(px, pz, auto.y);
+          if (!dk) return true;
+          continue;
+        }
+        if (overpass.pierSolid(px, pz)) return true;
+      }
       if (inDivider(px, pz) || solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
     }
     return false;
@@ -520,12 +532,20 @@ function step(dt, now) {
   if (auto.unstickAt === undefined) { auto.unstickAt = -99; auto.unstickN = 0; }
   auto.clk = (auto.clk || 0) + dt;
   if (auto._didUnstick) { auto._didUnstick = false; }
+  if (overpass) {
+    const dk = overpass.deckAt(auto.x, auto.z, auto.y || 0);
+    const ty0 = dk ? dk.h : 0;
+    auto.y = (auto.y || 0) + (ty0 - (auto.y || 0)) * Math.min(1, dt * 14);
+    if (Math.abs(ty0 - auto.y) < 0.01) auto.y = ty0;
+    // slope along the heading = deck slope * cos(angle between heading and deck direction); nose up when climbing
+    auto.pitchT = dk ? -Math.atan(dk.slope * (Math.sin(auto.a) * dk.tx + Math.cos(auto.a) * dk.tz)) : 0;
+  } else auto.y = 0;
   auto.x = THREE.MathUtils.clamp(auto.x, MAP.x0 + 28, MAP.x1 - 28);
   auto.z = THREE.MathUtils.clamp(auto.z, MAP.z0 + 28, MAP.z1 - 28);
 
   if (stopsGame) auto.goldAuto = stopsGame.state.goldAuto;
-  car.position.set(auto.x, 0, auto.z);
-  car.rotation.y = auto.a;
+  car.position.set(auto.x, auto.y || 0, auto.z);
+  car.rotation.order = 'YXZ'; car.rotation.y = auto.a; car.rotation.x += ((auto.pitchT || 0) - car.rotation.x) * Math.min(1, dt * 8);
   updateAuto(car, auto, dt);
   if (hazards) { const sh = hazards.update(dt, auto); if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); clampCam(); camera.position.y += sh; }
   else { if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); clampCam(); }
@@ -602,7 +622,17 @@ function loop(now) {
 async function boot() {
   setLoad(8, 'Fetching the map');
   world = await (await fetch(import.meta.env.BASE_URL + 'data/world.json')).json();
-  world.roads.push({ k: 3, n: 'Old Airport Road', p: LEELA_ACCESS_ROAD });
+  // Southern extension: real OpenStreetMap roads and buildings around the Domlur flyover (ODbL, (c) OpenStreetMap contributors)
+  try {
+    domlur = await (await fetch(import.meta.env.BASE_URL + 'data/domlur.json')).json();
+    world.roads.push(...domlur.roads);
+    world.buildings.push(...domlur.buildings);
+    // short connector from The Leela gate to the real HAL Old Airport Road
+    world.roads.push({ k: 3, n: 'Leela Palace Road', p: [[705.1, 1702.3], [709.0, 1760.0], [712.5, 1779.5]] });
+  } catch (e) {
+    console.warn('domlur.json not found, using approximate Old Airport Road spur:', e);
+    world.roads.push({ k: 3, n: 'Old Airport Road', p: LEELA_ACCESS_ROAD });
+  }
   (function infill() {
     const WM = { 5: 14.5, 4: 10.5, 3: 8.2, 2: 7, 1: 5.5 };
     const segs = [];
@@ -655,7 +685,7 @@ async function boot() {
     };
     let seed = 99; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     const add = [];
-    for (let x = MAP.x0; x < MAP.x1; x += 12) for (let z = MAP.z0; z < MAP.z1; z += 14) {
+    for (let x = MAP.x0; x < MAP.x1; x += 12) for (let z = MAP.z0; z < INFILL_Z1; z += 14) {
       const w = 11 * (0.9 + rnd() * 0.2), d = 13 * (0.9 + rnd() * 0.2);
       const x1 = x + w, z1 = z + d;
       if (nearRoad(x, z) || nearRoad(x1, z) || nearRoad(x, z1) || nearRoad(x1, z1) || nearRoad(x + w / 2, z + d / 2)) continue;
@@ -690,6 +720,7 @@ try {
   await new Promise(r => setTimeout(r, 20));
   const street = buildStreet(world, scene, nightUniform, solid, extras);
   streetRef = street;
+  if (domlur && domlur.decks) { overpass = createOverpass({ THREE, scene, decks: domlur.decks }); street.bridgeVolumes.push(...overpass.bridgeVolumes); window.__overpass = overpass; }
   roadSegs = street.roadSegs;
   lampHead = street.lampHead;
   lampLights = createLampLights(scene, street.lampSpots);
@@ -807,7 +838,7 @@ try {
     window.__noCardUntil = performance.now() + 3500;
     { const ce = document.getElementById('stop-card-v2'); if (ce) ce.classList.remove('on'); }
     auto.x = r.x; auto.z = r.z; auto.a = a; auto.v = 0; auto.steer = 0;
-    car.position.set(auto.x, 0, auto.z); car.rotation.set(0, auto.a, 0);
+    auto.y = 0; car.position.set(auto.x, 0, auto.z); car.rotation.set(0, auto.a, 0);
     updateAuto(car, auto, 0.016);
     if (camRig) camRig.update(0.016, true); else syncCamera(0.016, true);
     clampCam();
