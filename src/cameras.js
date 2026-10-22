@@ -230,12 +230,12 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     const cosA = Math.cos(auto.a || 0);
 
     if (mode === 'chase') {
-      const back = 12.8 + spd * 0.25;
+      const back = 9.2 + spd * 0.22;
       const sideSwing = snap ? 0 : steer * ((auto.v || 0) / 17) * 1.4;
       const tx = auto.x - sinA * back + cosA * sideSwing;
       const tz = auto.z - cosA * back - sinA * sideSwing;
       const bounceY = snap ? 0 : Math.sin(bobPhase * 1.1) * spd * 0.008;
-      const ty = 7.7 + spd * 0.07 + bounceY;
+      const ty = 4.2 + spd * 0.05 + bounceY;
 
       if (snap) {
         chasePos.set(tx, ty, tz);
@@ -246,11 +246,11 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
         chasePos.y += (ty - chasePos.y) * Math.min(1, dt * 3.8);
       }
 
-      const lookAhead = 6.8;
+      const lookAhead = 9.0;
       const sideLook = snap ? 0 : steer * 1.1;
       chaseLook.set(
         auto.x + sinA * lookAhead - cosA * sideLook,
-        0.85,
+        1.2,
         auto.z + cosA * lookAhead + sinA * sideLook
       );
 
