@@ -27,23 +27,110 @@ function createNoiseCanvas(w, h, baseHex, variance, specks = false) {
 }
 
 export function createAsphaltMaterial() {
-  const map = createNoiseCanvas(256, 256, 0xd4d4d4, 0.08, true);
-  map.repeat.set(60, 60);
-  const bump = createNoiseCanvas(256, 256, 0x808080, 0.18, true);
-  bump.repeat.set(60, 60);
+  // One 512px tile maps across full road width (u 0..1) and 5 m along (v = len*0.2)
+  const W = 512, H = 512;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  // base asphalt with per-pixel noise
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const u = x / W;
+      const n = (Math.random() - 0.5) * 26;
+      const sp = Math.random() < 0.03 ? (Math.random() - 0.35) * 60 : 0;
+      // wheel tracks: darker bands where tyres run
+      const tr = Math.exp(-Math.pow((u - 0.28) / 0.10, 2)) + Math.exp(-Math.pow((u - 0.72) / 0.10, 2));
+      // dusty lighter edges near kerbs
+      const edge = Math.exp(-Math.pow(u / 0.08, 2)) + Math.exp(-Math.pow((1 - u) / 0.08, 2));
+      let v = 178 + n + sp - tr * 26 + edge * 14;
+      v = Math.min(255, Math.max(0, v));
+      d[i] = v; d[i + 1] = v; d[i + 2] = v + 2; d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // cracks: dark random walks along the road direction
+  ctx.strokeStyle = 'rgba(30,31,34,0.55)';
+  for (let k = 0; k < 14; k++) {
+    ctx.lineWidth = 1 + Math.random() * 1.6;
+    ctx.beginPath();
+    let x = Math.random() * W, y = Math.random() * H;
+    ctx.moveTo(x, y);
+    const steps = 8 + (Math.random() * 14 | 0);
+    for (let s2 = 0; s2 < steps; s2++) {
+      x += (Math.random() - 0.5) * 26;
+      y += 14 + Math.random() * 30;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // tar snakes (repaired cracks): slightly glossy dark squiggles
+  ctx.strokeStyle = 'rgba(22,23,26,0.75)';
+  for (let k = 0; k < 6; k++) {
+    ctx.lineWidth = 3 + Math.random() * 3;
+    ctx.beginPath();
+    let x = Math.random() * W, y = Math.random() * H;
+    ctx.moveTo(x, y);
+    for (let s2 = 0; s2 < 6; s2++) {
+      x += (Math.random() - 0.5) * 40;
+      y += 20 + Math.random() * 36;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // repair patches: rectangles of slightly different tone
+  for (let k = 0; k < 5; k++) {
+    const pw = 40 + Math.random() * 90, ph = 60 + Math.random() * 140;
+    const px = Math.random() * (W - pw), py = Math.random() * (H - ph);
+    const tone = 150 + Math.random() * 60;
+    ctx.fillStyle = `rgba(${tone},${tone},${tone + 4},0.5)`;
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = 'rgba(25,26,29,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px, py, pw, ph);
+  }
+
+  // oil stains in wheel tracks
+  for (let k = 0; k < 10; k++) {
+    const u = Math.random() < 0.5 ? 0.28 : 0.72;
+    const ox = (u + (Math.random() - 0.5) * 0.12) * W;
+    const oy = Math.random() * H;
+    const r = 8 + Math.random() * 26;
+    const g = ctx.createRadialGradient(ox, oy, 1, ox, oy, r);
+    g.addColorStop(0, 'rgba(18,19,22,0.5)');
+    g.addColorStop(1, 'rgba(18,19,22,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(ox, oy, r, 0, 7); ctx.fill();
+  }
+
+  const map = new THREE.CanvasTexture(c);
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(1, 1);
+  map.anisotropy = 8;
+  map.colorSpace = THREE.SRGBColorSpace;
+
+  // bump from a downscaled noise pass
+  const bump = createNoiseCanvas(256, 256, 0x808080, 0.30, true);
+  bump.repeat.set(1, 1);
 
   const mat = new THREE.MeshStandardMaterial({
     map,
     bumpMap: bump,
-    bumpScale: 0.025,
+    bumpScale: 0.05,
     vertexColors: true,
-    roughness: 0.84,
-    metalness: 0.04,
+    roughness: 0.88,
+    metalness: 0.03,
     side: THREE.DoubleSide
   });
 
   mat.color.setScalar(0.62);
-  return mat; // wet-road shader patch disabled (too much water-like reflection)
+  return mat;
 }
 
 export function createPavementMaterial() {

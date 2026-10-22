@@ -6,6 +6,54 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
+
+const ColorGradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uNight: { value: 0.0 },
+    uContrast: { value: 1.07 },
+    uSaturation: { value: 1.14 },
+    uLift: { value: 0.015 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uNight;
+    uniform float uContrast;
+    uniform float uSaturation;
+    uniform float uLift;
+    varying vec2 vUv;
+
+    void main() {
+      vec4 texel = texture2D(tDiffuse, vUv);
+      vec3 col = texel.rgb;
+      float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+
+      // warm highlights / teal shadows split tone
+      vec3 warm = vec3(1.055, 1.0, 0.93);
+      vec3 cool = vec3(0.93, 1.0, 1.09);
+      vec3 tint = mix(cool, warm, smoothstep(0.12, 0.78, luma));
+      col *= tint;
+
+      // gentle S-curve contrast + slight shadow lift (fades blacks to charcoal)
+      col = (col - 0.5) * uContrast + 0.5;
+      col += uLift * (1.0 - luma);
+
+      // saturation
+      float g = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(vec3(g), col, uSaturation + uNight * 0.04);
+
+      gl_FragColor = vec4(clamp(col, 0.0, 1.0), texel.a);
+    }
+  `
+};
+
 const VignetteGrainShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -69,6 +117,9 @@ export function createPost(renderer, scene, camera) {
   );
   composer.addPass(bloomPass);
 
+  const gradePass = new ShaderPass(ColorGradeShader);
+  composer.addPass(gradePass);
+
   const grainPass = new ShaderPass(VignetteGrainShader);
   composer.addPass(grainPass);
 
@@ -86,7 +137,8 @@ export function createPost(renderer, scene, camera) {
     },
     setNight(n) {
       nightVal = THREE.MathUtils.clamp(n, 0, 1);
-      bloomPass.strength = 0.12 + nightVal * 0.2;
+      bloomPass.strength = 0.16 + nightVal * 0.24;
+      gradePass.uniforms.uNight.value = nightVal;
       bloomPass.threshold = 0.9 - nightVal * 0.05;
       grainPass.uniforms.uNight.value = nightVal;
     },
