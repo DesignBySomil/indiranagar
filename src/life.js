@@ -5,34 +5,34 @@ import { buildAuto, updateAuto } from './auto.js';
 import { attachHeadlightsToNearest, makeHeadlightRig } from './lamps.js';
 
 const FIGHT_LINES = [
-  'Meter haaku guru!',
-  'Ola illa, nanna auto!',
-  'Yenappa idu, kannu kanalva?',
-  'Eh, horn yaake maadtya!',
-  'Return fare double sir!',
-  'Sir, 100 Feet Road ge extra!',
-  'Arre bhai, signal dekh ke chalo!',
-  'Swalpa adjust maadi!',
-  'Namma Bengaluru, namma rules!',
-  'Keep left guru, one-lane road idu!'
+  'Turn on the meter, friend!',
+  'No Ola here, this is my auto!',
+  'Hey, are you blind?',
+  'Why are you honking at me?',
+  'Return fare is double, sir!',
+  'Sir, 100 Feet Road costs extra!',
+  'Hey, watch the signal!',
+  'Please adjust a little!',
+  'Our Bengaluru, our rules!',
+  'Keep left, friend, this is a one-lane road!'
 ];
 
 const FARE_SCENARIOS = [
   {
-    pass: 'Passenger: "Anna, Indiranagar Metro ge 60 rupees? Meter chalega?"',
-    driver: 'You: "Madam meter repair! Traffic jaasti, 150 kodri!" (Tip: Honk SPACE to bargain!)',
+    pass: 'Passenger: "Driver, Indiranagar Metro for 60 rupees? Will you go by meter?"',
+    driver: 'You: "Madam, the meter is broken! Traffic is heavy, pay 150!" (Tip: Honk SPACE to bargain!)',
     detour: false,
     base: 150
   },
   {
-    pass: 'Passenger: "Bhaiya 12th Main hogbeku, urgent!"',
-    driver: 'You: "12th Main speed breaker jaasti sir! Taking shortcut — return fare double!"',
+    pass: 'Passenger: "Please take me to 12th Main, it is urgent!"',
+    driver: 'You: "12th Main has too many speed breakers, sir! Taking a shortcut, return fare is double!"',
     detour: true,
     base: 220
   },
   {
-    pass: 'Passenger: "Sir 100 Feet Road Toit stop, app shows 85 rupees!"',
-    driver: 'You: "Aa app ella beda guru! One-and-half plus 50 extra!" (Tip: Honk SPACE to bargain!)',
+    pass: 'Passenger: "Sir, Toit on 100 Feet Road, the app shows 85 rupees!"',
+    driver: 'You: "Forget the app, friend! One and a half fare plus 50 extra!" (Tip: Honk SPACE to bargain!)',
     detour: true,
     base: 190
   }
@@ -288,7 +288,7 @@ export function createStreetLife({
   // ---------- Comic Speech Bubbles ----------
   const bubblePool = [];
   for (let i = 0; i < 8; i++) {
-    const bData = makeBubbleTexture('Meter haaku guru!');
+    const bData = makeBubbleTexture('Turn on the meter, friend!');
     const mat = new T.SpriteMaterial({ map: bData.tex, transparent: true, depthWrite: false, fog: false });
     const sp = new T.Sprite(mat);
     sp.scale.set(9.2, 2.9, 1);

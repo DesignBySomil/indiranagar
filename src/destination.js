@@ -139,11 +139,11 @@ export const DESTINATION_CSS = `
 `;
 
 const DRIVER_RIDE_LINES = [
-  'Namma Bengaluru traffic sir, swalpa adjust maadi!',
-  'Taking left side smooth lane, meter running pakka!',
-  '100 Feet Road signal daatidre two minutes alli reach aagtivi!',
-  'Watch out for this speed breaker anna, holding handlebar tight!',
-  'Auto autopilot engage guru — sit back and enjoy filter kaapi breeze!'
+  'Bengaluru traffic, sir, please bear with me!',
+  'Taking the smooth left lane, meter is running!',
+  'Once we cross the 100 Feet Road signal, we reach in two minutes!',
+  'Watch out for this speed breaker, holding the handlebar tight!',
+  'Autopilot engaged, friend - sit back and enjoy the breeze!'
 ];
 
 export function createDestinationMode({
@@ -506,18 +506,18 @@ export function createDestinationMode({
   // 50/50 Haggle button
   document.getElementById('dp-haggle').addEventListener('click', () => {
     if (haggledForDest) {
-      speechEl.textContent = '"Guru, already rate fix aagide! Hogli banni!"';
+      speechEl.textContent = '"Friend, the rate is already fixed! Let us go!"';
       return;
     }
     haggledForDest = true;
     if (Math.random() < 0.5) {
       currentFare = Math.max(30, Math.round(currentFare * 0.8));
       fareEl.textContent = `₹${currentFare} (Bargained!)`;
-      speechEl.textContent = `"Sari bidi sir, nimage ₹${currentFare} ge barthini, hattiri!"`;
+      speechEl.textContent = `"Okay sir, I will take you for ₹${currentFare}, hop in!"`;
     } else {
       currentFare = Math.round(currentFare * 1.25);
       fareEl.textContent = `₹${currentFare} (One-and-Half!)`;
-      speechEl.textContent = `"Illapa, 100 Feet Road traffic ide, ₹${currentFare} final!"`;
+      speechEl.textContent = `"No way, there is traffic on 100 Feet Road, ₹${currentFare} is final!"`;
     }
     auto.liveFare = currentFare;
   });
@@ -540,7 +540,7 @@ export function createDestinationMode({
     speechEl.textContent = `"Autopilot ON → ${selectedTo.name}. Press WASD anytime to take over!"`;
   }
 
-  function cancel(reasonText = '"Manual control restored — drive your way guru!"') {
+  function cancel(reasonText = '"Manual control restored — drive your way, friend!"') {
     if (!isActive && !ribbonMesh) return;
     isActive = false;
     goBtn.style.display = 'block';

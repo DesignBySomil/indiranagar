@@ -10,7 +10,7 @@ const NPC_CAST = [
   { name: 'Manju (Auto Union)', role: 'autodriver', shirt: 0xb89d64, pant: 0x27272a, acc: 'chai', lines: ['Hello boss! The Indiranagar stand is packed today!', 'If a passenger calls for Koramangala, ask for one and a half fare!', 'Take this shortcut tip - +30 XP!'] },
   { name: 'Ibrahim Bhai', role: 'autodriver', shirt: 0xb89d64, pant: 0x1e293b, acc: 'none', lines: ['Hello friend! I cleaned the spark plug, this auto flies like a rocket!', 'Go easy over the concrete patch on 100 Feet Road!', 'Come, let us share a chai!'] },
   { name: 'Meghana (Student)', role: 'student', shirt: 0x8b5cf6, pant: 0x1e3a8a, acc: 'bag', lines: ['Bro, Nike queue is already down the staircase!', 'Fest rehearsal at Indiranagar club, full tired!', 'Cool auto bro, love the yellow canopy!'] },
-  { name: 'Arjun (Student)', role: 'student', shirt: 0x06b6d4, pant: 0x0f172a, acc: 'bag', lines: ['Just hopped off Purple Line at Indiranagar Metro!', 'Third Wave cold brew is keeping my semester alive.', 'Honk that horn one more time anna!'] },
+  { name: 'Arjun (Student)', role: 'student', shirt: 0x06b6d4, pant: 0x0f172a, acc: 'bag', lines: ['Just hopped off Purple Line at Indiranagar Metro!', 'Third Wave cold brew is keeping my semester alive.', 'Honk that horn one more time, friend!'] },
   { name: 'Priya & Bruno', role: 'dogwalker', shirt: 0x10b981, pant: 0x1f2937, acc: 'dog', lines: ['Bruno loves chasing autos on Defence Colony lanes!', 'Shh Bruno, good boy, stay on the footpath!', 'Indiranagar tree canopy is the best walk in Bengaluru.'] },
   { name: 'Madesha (Elaneer)', role: 'coconut', shirt: 0x16a34a, pant: 0x4b5563, acc: 'coconut', lines: ['Maddur tender coconut, friend, sweet water!', 'Drink tender coconut, cool down your engine - +₹20!', 'In this heat, tender coconut is the best medicine!'] },
   { name: 'Venkatesh (Paper)', role: 'paper', shirt: 0x3b82f6, pant: 0x334155, acc: 'paper', lines: ['Deccan Herald, Prajavani, Vijayavani - fresh headlines!', 'Read the Indiranagar flyover news, friend!', 'Finished the 6 AM round, now time for a chai!'] },
@@ -19,7 +19,7 @@ const NPC_CAST = [
   { name: 'Subramanya Uncle', role: 'elder', shirt: 0xf8fafc, pant: 0xd6d3d1, acc: 'umbrella', lines: ['In 1978 Indiranagar was full of orchards and bungalows!', 'MTR masala dosa tastes the same even today!', 'Drive gently, there is a speed breaker ahead!'] },
   { name: 'Chef Naveen', role: 'vendor', shirt: 0xffffff, pant: 0x18181b, acc: 'chai', lines: ['Fresh filter decoction brewing at Sri Udupi Park!', 'Ghee roast smell goes two cross roads away!', 'Auto drivers get priority token here!'] },
   { name: 'Divya (Designer)', role: 'techie', shirt: 0xec4899, pant: 0x1e293b, acc: 'bag', lines: ['Sketching the red-brick facade outside Toit!', '12th Main boutiques have the nicest pastel walls.', 'Love how the street lamps glow at dusk!'] },
-  { name: 'Suresh (Courier)', role: 'delivery', shirt: 0xeab308, pant: 0x1f2937, acc: 'helmet', lines: ['CMH Road cross numbers confuse even Google Maps guru!', 'Drop this urgent parcel at Adidas 12th Main!', 'Bonus tip if you reach before the signal turns!'] },
+  { name: 'Suresh (Courier)', role: 'delivery', shirt: 0xeab308, pant: 0x1f2937, acc: 'helmet', lines: ['CMH Road cross numbers confuse even Google Maps, friend!', 'Drop this urgent parcel at Adidas 12th Main!', 'Bonus tip if you reach before the signal turns!'] },
   { name: 'Ananya (Musician)', role: 'student', shirt: 0xa855f7, pant: 0x0f172a, acc: 'bag', lines: ['Acoustic gig tonight near 80 Feet Road!', 'Bengaluru breeze + filter coffee = best songwriting mood.', 'See you at Indiranagar Social later!'] },
   // 6 Kerbside Hailing Passengers ('!' marker, board back seat, pay distance fare + smooth tip)
   { name: 'Kavitha Madam', role: 'passenger', dest: 'MTR 1924', shirt: 0xd946ef, pant: 0x701a75, acc: 'bag', lines: ['Auto! I need to go to MTR 1924, and I will add +30 on the meter!', 'Please go a little faster, my family is waiting for dosa!'] },
@@ -416,7 +416,7 @@ export function createNPCs({
         notify(
           `Drop Complete · +₹${totalRs} & +${xpEarned} XP`,
           `${activePassenger.name} → ${rideTargetStop.p.n}`,
-          `Meter Fare ₹${baseFare} + Smooth Tip ₹${smoothTip}! "romba thanks anna, super driving!"`
+          `Meter Fare ₹${baseFare} + Smooth Tip ₹${smoothTip}! "thank you, great driving!"`
         );
 
         if (activePassenger.boarded) {

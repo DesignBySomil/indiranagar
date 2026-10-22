@@ -139,97 +139,97 @@ const STOP_COPY = {
   'Toit': {
     order: 'Tintin Toit Witbier & wood-fired Margherita pizza.',
     fact: 'Landmark red-brick craft microbrewery at the 100 Feet Road & CMH junction.',
-    driver: 'Guru, Friday evening illi drop maadidre 100 Feet Road full jam guaranteed!'
+    driver: 'Friday evening drop-offs here mean a guaranteed jam on 100 Feet Road!'
   },
   'Truffles': {
     order: 'All-American Cheese Burger & Ferrero Rocher shake.',
     fact: 'One of Bengaluru’s busiest casual burger spots on 100 Feet Road.',
-    driver: 'College hudugaru queue nillodu nodi, burger ge ishtu craze aa?!'
+    driver: 'Look at the college crowd in the queue, why is the burger so popular?!'
   },
   'MTR 1924': {
     order: 'Crispy red-chutney Masala Dosa, Rava Idli & filter coffee in a silver tumbler.',
     fact: 'Mavalli Tiffin Rooms heritage South Indian dining tradition dating back to 1924.',
-    driver: 'First-u bilisi filter kaapi kudidre ne auto gear smooth aagi bidodu!'
+    driver: 'A first sip of hot filter coffee makes the auto ride feel smooth!'
   },
   'Indiranagar station': {
     order: 'Tap your Namma Metro card for the Purple Line towards MG Road & Majestic.',
     fact: 'Elevated Namma Metro Purple Line station linking east and west Bengaluru.',
-    driver: 'Metro bandmele last-mile drop ge nam auto ne king, meter matra kelbedi!'
+    driver: 'Metro riders need a last-mile drop, and our auto is the king of that!'
   },
   'Swami Vivekananda Road station': {
     order: 'Quick Purple Line hop or grab roadside elaneer outside the concourse.',
     fact: 'Major Purple Line terminal hub at the Old Madras Road edge of Indiranagar.',
-    driver: 'SV Road signal daatodu andre Everest hattidange sir!'
+    driver: 'Crossing the SV Road signal feels like climbing Everest, sir!'
   },
   'Burma Burma Restaurant & Tea Room': {
     order: 'Oh No Khow Suey, Samosa Soup & Mandalay Laphet Thoke tea-leaf salad.',
     fact: 'All-vegetarian Burmese kitchen and artisanal tea room on 12th Main Road.',
-    driver: 'Chai andre nam roadside cutting chai, ivaradu imported tea leaf salad ante!'
+    driver: 'Our roadside cutting chai versus their imported tea-leaf salad!'
   },
   'Indiranagar Social': {
     order: 'Long Island Iced Tea & Gunpowder Baby Potatoes.',
     fact: 'Industrial co-working cafe by day and high-energy neighbourhood bar by night.',
-    driver: 'Laptop hidkondu hogtare, raatri aadmele dance aadtare — double fare fix!'
+    driver: 'They come with laptops and dance all night, so double fare is fixed!'
   },
   'Arena Brewhouse': {
     order: 'House craft wheat ale under the glass pyramid roof.',
     fact: 'Recognisable for its striking geometric pyramid architecture near 100 Feet Road.',
-    driver: 'Egypt pyramid nodakke flight yaake sir, nam Indiranagar alle ide nodi!'
+    driver: 'Why fly to see an Egyptian pyramid when we have one right here in Indiranagar?'
   },
   'Meghana Biryani': {
     order: 'Spicy Meghana Special Boneless Biryani on banana leaf.',
     fact: 'Iconic Andhra-style biryani destination near CMH Road with green delivery bags.',
-    driver: 'Aa biryani vasanege hasivu start aaythu, ondu parcel namಗೂ ಹೇಳಿ ಸಾರ್!'
+    driver: 'That biryani smell makes me hungry, please bring me a parcel too, sir!'
   },
   "Pizza 4P's": {
     order: 'House-made Burrata & Quattro Formaggi wood-fired pizza.',
     fact: 'Farm-to-table Japanese-Italian pizzeria on Indiranagar Double Road.',
-    driver: 'Cheese melinda cheese haaktare, booking sigoke vaara munche try maadbeku!'
+    driver: 'They pile on the cheese, so try booking a week ahead!'
   },
   'Jamie Oliver Kitchen': {
     order: 'Gennaro’s Tagliatelle Bolognese & artisan garlic bread.',
     fact: 'All-day Italian dining with a breezy terrace along 12th Main Road.',
-    driver: '12th Main alli verity verity restaurant-galu, parking matra devare gati!'
+    driver: 'So many different restaurants on 12th Main, and parking is the only real problem!'
   },
   'Third Wave': {
     order: 'Sea Salt Mocha or classic Chikkamagaluru pour-over.',
     fact: 'Homegrown Bengaluru specialty coffee roaster born right in Indiranagar.',
-    driver: 'Laptop open maadi mooru gante ondu coffee kuditare, adakke Third Wave!'
+    driver: 'They sit with one coffee and a laptop for three hours, that is the Third Wave way!'
   },
   'The Fatty Bao': {
     order: 'Char Siu Bao & smoky ramen bowls on the rooftop.',
     fact: 'Vibrant Asian gastrobar perched above 12th Main Road.',
-    driver: 'Idli tara kಾಣುತ್ತೆ aadre bao ante, swalpa spicy haakri!'
+    driver: 'A bao looks like an idli, so ask for some spicy chutney with it!'
   },
   'Sri Udupi Park': {
     order: 'Ghee Roast Dosa, Goli Baje & steaming By-Two Filter Coffee.',
     fact: 'Classic pure-veg darshini serving quick tiffins on 100 Feet Road.',
-    driver: 'Auto driver-galige official pit-stop idu, by-two kaapi ಹೇಳಿ guru!'
+    driver: 'This is the official pit-stop for auto drivers, ask for a by-two coffee, friend!'
   },
   'Chin Lung Brewery': {
     order: 'Chilli Chicken & chilled draught pitcher on the terrace.',
     fact: 'Long-running casual Bengaluru restobar and brewery hangout.',
-    driver: 'Old Bangalore styleadda, pocket-friendly matte full lively!'
+    driver: 'An old Bangalore-style hangout, pocket-friendly and full of life!'
   },
   'Starbucks': {
     order: 'Java Chip Frappuccino & warm cinnamon roll.',
     fact: 'Corner cafe landmark on the bustling 12th Main promenade.',
-    driver: 'Cup mele hesaru தಪ್ಪಾಗಿ baritare, aadru photo tegeyokke full rush!'
+    driver: 'They misspell your name on the cup, but people still rush for the photo!'
   },
   'The Glass House': {
     order: 'Artisanal small plates & botanical cocktails.',
     fact: 'Sunlit conservatory-style dining space in the heart of Indiranagar.',
-    driver: 'Full glass building sir, kallu esedre kashta, mellage drive maadona!'
+    driver: 'A full glass building, hard on the eyes, so let us drive gently!'
   },
   'Smoke House Deli': {
     order: 'Truffle Mac & Cheese and smoked burgers.',
     fact: 'Whimsical hand-illustrated white-walled European deli on 100 Feet Road.',
-    driver: 'Gode mele ella drawing maadidare, ಒಳಗೆ ಹೋದ್ರೆ ಪ್ಯಾರಿಸ್ ಫೀಲ್!'
+    driver: 'Everything is drawn by hand on the walls, and inside it feels like Paris!'
   },
   'Chai Point': {
     order: 'Ginger Masala Chai flask & warm Bun Maska.',
     fact: 'Bengaluru-founded neighbourhood chai cafe for quick rainy-evening breaks.',
-    driver: 'Malegaladalli ಬಿಸಿ ಬಿಸಿ ಶುಂಠಿ ಚಾ ಸಿಕ್ಕಿದ್ರೆ ಸ್ವರ್ಗ ನೇ ಗುರು!'
+    driver: 'Finding hot ginger chai in the rain is pure heaven, friend!'
   }
 };
 for (const it of STOP_LIST) STOP_COPY[it.name] = { order: it.order, fact: it.fact, driver: it.driver };
@@ -370,13 +370,13 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
       <span style="font-size:12px;font-weight:800;color:#4ade80" id="sc-reward">+100 XP · +₹50</span>
     </div>
     <div class="sc-title" id="sc-title">Toit</div>
-    <div class="sc-line"><strong>Yeh try karo:</strong> <span id="sc-order"></span></div>
+    <div class="sc-line"><strong>Try this:</strong> <span id="sc-order"></span></div>
     <div class="sc-line"><strong>Jaano:</strong> <span id="sc-fact"></span></div>
     <div class="sc-driver" id="sc-driver"></div>
     <div class="sc-actions">
       <button id="btn-fav">★ Pin Favourite (+50% ₹)</button>
       <button id="btn-photo">Photo Moment (F)</button>
-      <button id="btn-sc-close">Aage Chalo</button>
+      <button id="btn-sc-close">Keep driving</button>
     </div>
   `;
   document.body.appendChild(cardEl);
@@ -388,7 +388,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
       <div class="pp-top">
         <div>
           <div style="font-size:12px;font-weight:800;color:#b45309;letter-spacing:0.08em">OFFICIAL BENGALURU AUTO UNION</div>
-          <div style="font-size:24px;font-weight:900">Indiranagar Stamp Passport (Stamp jama karo!)</div>
+          <div style="font-size:24px;font-weight:900">Indiranagar Stamp Passport (Collect stamps!)</div>
         </div>
         <button class="shud-btn" id="btn-pp-close">Close (P)</button>
       </div>
@@ -641,7 +641,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
     const copy = STOP_COPY[stop.p.n] || {
       order: 'House special filter coffee & local snacks.',
       fact: `A beloved Indiranagar neighbourhood spot along ${stop.road || 'the main strip'}.`,
-      driver: 'Namma Indiranagar alli idu super spot sir, meter mele 20 extra kodri!'
+      driver: 'This is a super spot in Indiranagar, sir, pay 20 extra on the meter!'
     };
 
     const chip = document.getElementById('sc-chip');
@@ -667,7 +667,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
     if (!grid) return;
     grid.innerHTML = '';
     const visitedCount = stops.filter(s => s.got).length;
-    document.getElementById('pp-progress').textContent = `Stamps mile: ${visitedCount} / ${stops.length}`;
+    document.getElementById('pp-progress').textContent = `Stamps collected: ${visitedCount} / ${stops.length}`;
     document.getElementById('pp-best').textContent = `Best Combo Streak: x${state.bestStreak}`;
     document.getElementById('pp-fav').textContent = `Favourite Order: ${state.favouriteStop}`;
 

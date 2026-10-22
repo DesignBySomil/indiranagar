@@ -312,7 +312,7 @@ export function buildIcons(world, scene, nightU = nightUniform, solid = () => 0)
       rcbGroup.add(p);
     }
 
-    const rcbTex = makeSign('RCB: EE SALA CUP NAMDE!', '#111111', '#ef4444', '900 42px sans-serif', 512, 160, 'PLAY BOLD · BENGALURU ROYAL CHALLENGERS', '#facc15');
+    const rcbTex = makeSign('RCB: THIS YEAR THE CUP IS OURS!', '#111111', '#ef4444', '900 42px sans-serif', 512, 160, 'PLAY BOLD · BENGALURU ROYAL CHALLENGERS', '#facc15');
     const board = new THREE.Mesh(new THREE.BoxGeometry(11.5, 3.8, 0.45), makeEmissiveSignMaterial(rcbTex, 1.9));
     board.position.set(0, 9.2, 0);
     rcbGroup.add(board);
@@ -341,11 +341,11 @@ export function buildIcons(world, scene, nightU = nightUniform, solid = () => 0)
   try {
     const hoardings = [
       { x: -108, z: -430, title: 'NAMMA BENGALURU', sub: 'WEATHER 10/10 · TRAFFIC 0/10', bg: '#7c2d12', fg: '#fef08a' },
-      { x: -162, z: -245, title: 'TRAFFIC POLICE: SLOW DOWN', sub: 'CAMERA AHEAD · WEAR HELMET GURU', bg: '#1e3a8a', fg: '#ffffff' },
+      { x: -162, z: -245, title: 'TRAFFIC POLICE: SLOW DOWN', sub: 'CAMERA AHEAD · WEAR A HELMET', bg: '#1e3a8a', fg: '#ffffff' },
       { x: -108, z: -120, title: 'BIRYANI BOSS INDIRANAGAR', sub: 'EXTRA ALOO? NOT IN BENGALURU!', bg: '#881337', fg: '#fde047' },
       { x: -162, z: 45,   title: 'FILTER COFFEE NATION', sub: 'BY-TWO COFFEE · FROTHY & STRONG', bg: '#451a03', fg: '#fed7aa' },
       { x: -108, z: 185,  title: 'CAUTION: CRATER POTHOLE', sub: 'FREE BACK MASSAGE NEXT 200M', bg: '#b45309', fg: '#111111' },
-      { x: -162, z: -475, title: 'AUTO STAND · INDIRANAGAR', sub: 'METER HAAKU GURU · NO OLA/UBER', bg: '#facc15', fg: '#111111' },
+      { x: -162, z: -475, title: 'AUTO STAND · INDIRANAGAR', sub: 'USE THE METER · NO OLA/UBER', bg: '#facc15', fg: '#111111' },
       { x: 265,  z: 580,  title: 'AUTO STAND · 12TH MAIN', sub: 'ONE-AND-HALF AFTER 10 PM ONLY', bg: '#15803d', fg: '#fef08a' }
     ];
 
