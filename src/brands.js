@@ -69,7 +69,7 @@ function makeBrandSignTexture(T, name) {
     ctx.fillText('NIKE', 590, 108);
     ctx.fillStyle = '#ff6a1a';
     ctx.font = '700 40px sans-serif';
-    ctx.fillText('ನೈಕ್ · 100 FEET ROAD', 590, 184);
+    ctx.fillText('100 FEET ROAD', 590, 184);
   } else if (name === 'Adidas') {
     ctx.fillStyle = '#0a0b0d';
     ctx.fillRect(0, 0, 1024, 256);
@@ -99,7 +99,7 @@ function makeBrandSignTexture(T, name) {
     ctx.fillText('adidas', 395, 106);
     ctx.fillStyle = '#cbd5e1';
     ctx.font = '700 38px sans-serif';
-    ctx.fillText('ಅಡಿಡಾಸ್ · ORIGINALS & PERFORMANCE', 395, 184);
+    ctx.fillText('ORIGINALS & PERFORMANCE', 395, 184);
   } else if (name === 'The Souled Store') {
     ctx.fillStyle = '#141416';
     ctx.fillRect(0, 0, 1024, 256);
@@ -123,7 +123,7 @@ function makeBrandSignTexture(T, name) {
     ctx.fillText('THE SOULED STORE', 275, 104);
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 38px sans-serif';
-    ctx.fillText('ಸೋಲ್ಡ್ ಸ್ಟೋರ್ · POP CULTURE MERCH', 275, 182);
+    ctx.fillText('POP CULTURE MERCH', 275, 182);
   } else if (name === "Levi's") {
     ctx.fillStyle = '#121316';
     ctx.fillRect(0, 0, 1024, 256);
@@ -147,7 +147,7 @@ function makeBrandSignTexture(T, name) {
 
     ctx.fillStyle = '#f8fafc';
     ctx.font = '700 36px sans-serif';
-    ctx.fillText('ಲೆವಿಸ್ · ORIGINAL DENIM · 100 FEET ROAD', 512, 224);
+    ctx.fillText('ORIGINAL DENIM · 100 FEET ROAD', 512, 224);
   } else if (name === 'Hush Puppies') {
     ctx.fillStyle = '#0f3c78';
     ctx.fillRect(0, 0, 1024, 256);
@@ -163,7 +163,7 @@ function makeBrandSignTexture(T, name) {
 
     ctx.fillStyle = '#fde68a';
     ctx.font = '700 38px sans-serif';
-    ctx.fillText('ಹಶ್ ಪಪ್ಪೀಸ್ · COMFORT FOOTWEAR', 512, 184);
+    ctx.fillText('COMFORT FOOTWEAR', 512, 184);
   } else if (name === 'Equilibrium Climbing') {
     ctx.fillStyle = '#181b20';
     ctx.fillRect(0, 0, 1024, 256);
@@ -180,7 +180,7 @@ function makeBrandSignTexture(T, name) {
 
     ctx.fillStyle = '#2dd4bf';
     ctx.font = '700 36px sans-serif';
-    ctx.fillText('ಈಕ್ವಿಲಿಬ್ರಿಯಂ ಕ್ಲೈಂಬಿಂಗ್ · CLIMBING STATION', 512, 182);
+    ctx.fillText('CLIMBING STATION', 512, 182);
   } else if (name === 'CRED') {
     ctx.fillStyle = '#050507';
     ctx.fillRect(0, 0, 1024, 256);
@@ -208,7 +208,7 @@ function makeBrandSignTexture(T, name) {
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = '600 36px sans-serif';
-    ctx.fillText('ಕ್ರೆಡ್ · INDIRANAGAR', 365, 182);
+    ctx.fillText('INDIRANAGAR', 365, 182);
   } else if (name === 'The Leela Palace') {
     ctx.fillStyle = '#4c0d19';
     ctx.fillRect(0, 0, 1024, 256);
@@ -224,7 +224,7 @@ function makeBrandSignTexture(T, name) {
 
     ctx.fillStyle = '#fde68a';
     ctx.font = '700 38px sans-serif';
-    ctx.fillText('ದಿ ಲೀಲಾ ಪ್ಯಾಲೇಸ್ · BENGALURU', 512, 182);
+    ctx.fillText('BENGALURU', 512, 182);
   }
 
   const tex = new T.CanvasTexture(c);

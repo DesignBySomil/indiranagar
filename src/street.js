@@ -632,13 +632,13 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     }
 
     const stSignTex = makeSign(
-      'INDIRANAGAR · ಇಂದಿರಾನಗರ',
+      'INDIRANAGAR',
       '#581c87',
       '#ffffff',
       '800 38px sans-serif',
       512,
       128,
-      'ನಮ್ಮ ಮೆಟ್ರೋ · NAMMA METRO PURPLE LINE',
+      'NAMMA METRO PURPLE LINE',
       '#facc15'
     );
     const stSignMat = makeEmissiveSignMaterial(stSignTex, 1.9);

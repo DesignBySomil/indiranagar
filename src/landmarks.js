@@ -157,7 +157,7 @@ function buildMetroStation(name) {
 
   // Namma Metro glowing signboards on front (+Z) and sides
   const label = name.includes('Swami') ? 'SWAMI VIVEKANANDA RD' : 'INDIRANAGAR METRO';
-  const sTex = makeSign(label, '#5a1e7a', '#ffffff', '800 42px sans-serif', 512, 128, 'ನಮ್ಮ ಮೆಟ್ರೋ · PURPLE LINE', '#f5c518');
+  const sTex = makeSign(label, '#5a1e7a', '#ffffff', '800 42px sans-serif', 512, 128, 'NAMMA METRO · PURPLE LINE', '#f5c518');
   const sMat = makeEmissiveSignMaterial(sTex, 1.7);
   for (const zSide of [-1, 1]) {
     const sb = new THREE.Mesh(new THREE.BoxGeometry(11, 2.2, 0.3), sMat);

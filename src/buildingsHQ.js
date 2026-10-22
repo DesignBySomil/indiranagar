@@ -8,14 +8,14 @@ const hash = (x, z) => {
 };
 
 const SHOP_BILINGUAL_TITLES = [
-  { kannada: 'ಶ್ರೀ ಲಕ್ಷ್ಮಿ ಸ್ಟೋರ್ಸ್', eng: 'Sri Lakshmi Stores', sub: 'PROVISIONS & GENERAL' },
-  { kannada: 'ಅಮೃತ್ ಮೆಡಿಕಲ್ಸ್', eng: 'Amrut Medicals', sub: '24/7 CHEMIST & PHARMA' },
-  { kannada: 'ರಘು ಟೈಲರ್', eng: 'Raghu Tailor', sub: 'ALTERATIONS & DRESSMAKING' },
-  { kannada: 'ಮೈಸೂರು ಬೇಕರಿ', eng: 'Mysore Bakery', sub: 'FRESH BUNS & DILKHUSH' },
-  { smart: 'ಸ್ವಸ್ತಿಕ್ ಸೆಲೂನ್', eng: 'Swastik Salon', sub: 'HAIR CUTTING & SHAVE' },
-  { kannada: 'ಶ್ರೀನಿವಾಸ ಮೊಬೈಲ್ಸ್', eng: 'Srinivasa Mobiles', sub: 'REPAIRS & RECHARGE' },
-  { kannada: 'ಮಲ್ಲಿಗೆ ಫ್ಲವರ್ಸ್', eng: 'Mallige Flowers', sub: 'FRESH JASMINE GARLANDS' },
-  { kannada: 'ನಾಗರಾಜ ಸ್ಟೇಷನರಿ', eng: 'Nagaraja Stationery', sub: 'NOTEBOOKS & XEROX' }
+  { kannada: '', eng: 'Sri Lakshmi Stores', sub: 'PROVISIONS & GENERAL' },
+  { kannada: '', eng: 'Amrut Medicals', sub: '24/7 CHEMIST & PHARMA' },
+  { kannada: '', eng: 'Raghu Tailor', sub: 'ALTERATIONS & DRESSMAKING' },
+  { kannada: '', eng: 'Mysore Bakery', sub: 'FRESH BUNS & DILKHUSH' },
+  { smart: '', eng: 'Swastik Salon', sub: 'HAIR CUTTING & SHAVE' },
+  { kannada: '', eng: 'Srinivasa Mobiles', sub: 'REPAIRS & RECHARGE' },
+  { kannada: '', eng: 'Mallige Flowers', sub: 'FRESH JASMINE GARLANDS' },
+  { kannada: '', eng: 'Nagaraja Stationery', sub: 'NOTEBOOKS & XEROX' }
 ];
 
 function makeShopSignCanvas(kannada, eng, sub) {

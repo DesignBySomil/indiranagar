@@ -41,6 +41,10 @@ function makeNpcBubbleCanvas() {
 const NPC_CARD_CSS = `
 #npc-card{position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:30;width:min(420px,calc(100vw - 32px));box-sizing:border-box;padding:12px 16px 13px;border-radius:18px;background:rgba(12,16,28,.92);border:2px solid #facc15;color:#f8fafc;font:600 15px/1.35 system-ui,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.5);backdrop-filter:blur(8px);cursor:pointer;display:none;text-align:left;-webkit-tap-highlight-color:transparent}
 #npc-card.on{display:block}
+#npc-card.compact{width:auto;max-width:min(320px,calc(100vw - 32px));padding:6px 12px;border-radius:999px;border-width:1px}
+#npc-card.compact .tx{display:none}
+#npc-card.compact .hd{margin-bottom:0}
+#npc-card.compact .nm{font-size:13px}
 #npc-card .hd{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px}
 #npc-card .nm{color:#facc15;font:800 15px "Bricolage Grotesque",system-ui,sans-serif}
 #npc-card .pr{color:#0c101c;background:#38bdf8;border-radius:999px;padding:4px 11px;font:800 12px system-ui,sans-serif;white-space:nowrap}
@@ -59,13 +63,15 @@ function ensureNpcCard() {
   npcCard.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
   return npcCard;
 }
-function showNpcCard(name, line, prompt) {
+let npcFullUntil = 0;
+function showNpcCard(name, line, prompt, full) {
   const c = ensureNpcCard(); if (!c) return;
   const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer:coarse)').matches;
   const pr = coarse ? prompt.replace('[E] ', 'Tap · ') : prompt;
   c.querySelector('.nm').textContent = name;
   c.querySelector('.pr').textContent = pr;
   c.querySelector('.tx').textContent = line;
+  c.classList.toggle('compact', !full);
   c.classList.add('on');
 }
 function hideNpcCard() { if (npcCard) npcCard.classList.remove('on'); }
@@ -386,7 +392,8 @@ export function createNPCs({
       notify('Indiranagar Voices · +10 XP', npc.name, line);
     }
 
-    showNpcCard(npc.name, npc.lines[npc.lineIdx % npc.lines.length], npc.role === 'passenger' && !npc.boarded ? '[E] Pick Up' : '[E] Next');
+    npcFullUntil = performance.now() + 6000;
+    showNpcCard(npc.name, npc.lines[npc.lineIdx % npc.lines.length], npc.role === 'passenger' && !npc.boarded ? '[E] Pick Up' : '[E] Next', true);
     return true;
   }
 
@@ -504,7 +511,7 @@ export function createNPCs({
       const prompt = closestNpc.role === 'passenger'
         ? `[E] Pick Up → ${closestNpc.dest}`
         : '[E] Talk';
-      showNpcCard(closestNpc.name, closestNpc.lines[closestNpc.lineIdx % closestNpc.lines.length], prompt);
+      showNpcCard(closestNpc.name, closestNpc.lines[closestNpc.lineIdx % closestNpc.lines.length], prompt, performance.now() < npcFullUntil);
     } else {
       hideNpcCard();
     }
