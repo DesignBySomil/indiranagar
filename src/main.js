@@ -9,6 +9,7 @@ import { buildCity } from './city.js';
 import { buildStreet } from './street.js';
 import { createStopsGame } from './stops.js';
 import { createStreetLife } from './life.js';
+import { createMapEdge } from './edge.js';
 import { createNPCs } from './npcs.js';
 import { createRainTrees } from './trees.js';
 import { createCameraRig } from './cameras.js';
@@ -692,6 +693,7 @@ try {
   await new Promise(r => setTimeout(r, 20));
   const street = buildStreet(world, scene, nightUniform, solid, extras);
   window.__piers = street.metroPiers; window.__gantry = street.gantry;
+  window.__edge = createMapEdge({ THREE, scene, MAP });
   streetRef = street;
   roadSegs = street.roadSegs;
   lampHead = street.lampHead;
