@@ -347,7 +347,7 @@ export function createRainTrees({
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uWindTime = windUniform;
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform float uWindTime;')
+        .replace('#include <common>', '#include <common>\nuniform float uWindTime;\nvarying vec3 vTreeW;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           vec4 wPos = instanceMatrix * vec4(transformed, 1.0);
           float hFactor = clamp((transformed.y - 5.2) / 5.5, 0.0, 1.0);
@@ -355,6 +355,19 @@ export function createRainTrees({
                      + 0.45 * cos(uWindTime * 2.9 + wPos.x * 0.27 - transformed.z * 0.4);
           transformed.x += gust * 0.22 * hFactor;
           transformed.z += gust * 0.16 * hFactor;
+          vTreeW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+        `);
+      // Camera-occlusion fade: foliage close to the camera dissolves with a screen-space dither
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vTreeW;')
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+          {
+            float dCam = distance(vTreeW, cameraPosition);
+            float keep = smoothstep(4.5, 15.0, dCam);
+            vec2 q = floor(mod(gl_FragCoord.xy, 4.0));
+            float bayer = mod(q.x * 4.0 + q.y * 9.0 + floor(q.y * 0.5) * 3.0, 16.0) / 16.0 + 0.03;
+            if (keep < bayer) discard;
+          }
         `);
     };
     return mat;
