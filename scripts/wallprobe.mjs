@@ -7,17 +7,20 @@ const out = await p.evaluate(() => {
   const g = window.__game, B = window.__edge.bounds, K = window.__keys, res = [];
   g.state.hour = 12.5; g.state.auto = false; g.go(); window.__noRender = true; window.__paused = true;
   const FP = [[0.85,1.95],[-0.85,1.95],[0.85,-1.3],[-0.85,-1.3],[0,1.95]];
-  const face = { N: B.z0 - 2.0, S: B.z1 + 2.0, W: B.x0 - 2.0, E: B.x1 + 2.0 };
+  const face = { N: B.z0 - 2.25, S: B.z1 + 2.25, W: B.x0 - 2.25, E: B.x1 + 2.25 };
   const pen = (a) => { let m = -1e9; const s = Math.sin(a), c = Math.cos(a);
     for (const [lx, lz] of FP) { const px = g.auto.x + c * lx + s * lz, pz = g.auto.z - s * lx + c * lz;
       m = Math.max(m, face.N - pz, pz - face.S, face.W - px, px - face.E); } return m; };
   const cases = [
-    ['E wall road z242', 730, 242, Math.PI/2],
-    ['E wall road z352', 730, 352, Math.PI/2],
-    ['E wall road z-614', 730, -614, Math.PI/2],
-    ['N wall road x401', 401, -705, Math.PI],
-    ['N wall road x-450', -450, -705, Math.PI],
-    ['NE corner-ish x401 NE', 401, -705, Math.PI*0.9],
+    ['N 100Feet', -155, -705, Math.PI],
+    ['N x401', 401, -705, Math.PI],
+    ['S', -76, 675, 0],
+    ['W', -550, -252, -Math.PI/2],
+    ['E z-614', 730, -614, Math.PI/2],
+    ['NW-ish', -570, -716, -Math.PI*0.75],
+    ['NE-ish', 401, -705, Math.PI*0.9],
+    ['SE-ish', 794, 680, Math.PI*0.25],
+    ['SW-ish', -570, 675, -Math.PI*0.25],
   ];
   for (const [name, x, z, a] of cases) {
     g.auto.x = x; g.auto.z = z; g.auto.a = a; g.auto.v = 0; g.auto.y = 0; g.state.snap = true;
