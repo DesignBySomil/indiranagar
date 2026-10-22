@@ -430,6 +430,8 @@ function inDivider(px, pz) {
     return false;
   }
 
+function pierHit(x, z) { const P = window.__piers; if (!P) return false; for (let i = 0; i < P.length; i++) { const dx = x - P[i][0], dz = z - P[i][1]; if (dx * dx + dz * dz < 1.32) return true; } return false; }
+
 function step(dt, now) {
   let thr = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   let str = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
@@ -448,7 +450,7 @@ function step(dt, now) {
     const s = Math.sin(a), c = Math.cos(a);
     for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
-      if (inDivider(px, pz) || solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
+      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
     }
     return false;
   };
@@ -689,6 +691,7 @@ try {
   setLoad(55, 'Laying 100 Feet Road, metro & trees');
   await new Promise(r => setTimeout(r, 20));
   const street = buildStreet(world, scene, nightUniform, solid, extras);
+  window.__piers = street.metroPiers;
   streetRef = street;
   roadSegs = street.roadSegs;
   lampHead = street.lampHead;

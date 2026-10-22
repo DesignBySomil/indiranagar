@@ -83,7 +83,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const patchPos = [], patchCol = [], patchIdx = [];
   const potholeSpots = [];
   const utilityPoles = [];
-  const metroPiers = [];
+  const metroPiers = [], cmhSegs = [], cmhCands = [];
 
   let v = 0, fpV = 0, kbV = 0, dv = 0, divV = 0, patV = 0;
 
@@ -170,10 +170,12 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     scene.add(gantry);
   }
 
+  let ri = -1;
   for (const r of world.roads) {
+    ri++;
     const is100Ft = Boolean(r.n && r.n.includes('100 Feet'));
     const isCMH = Boolean(r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras')));
-    const w = is100Ft ? W100 : (widthMap[r.k] || 7.0);
+    const w = is100Ft ? W100 : (isCMH ? 7.6 : (widthMap[r.k] || 7.0)); // CMH: two carriageways with a 2.4 m median that holds the metro piers
     // 100 Feet Road is pale white-topped concrete slabs with patches; other roads are worn mid-grey asphalt
     const baseCol = is100Ft
       ? [0.40, 0.40, 0.39]
@@ -363,9 +365,8 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       }
 
       if (isCMH && L > 12) {
-        for (let s = 6; s < L; s += 26) {
-          metroPiers.push([x1 + ux * s, z1 + uz * s, Math.atan2(ux, uz)]);
-        }
+        cmhSegs.push([x1, z1, x2, z2, ri]);
+        for (let s = 6; s < L; s += 26) cmhCands.push([x1 + ux * s, z1 + uz * s, Math.atan2(ux, uz), ri]);
       }
     }
   }
@@ -550,6 +551,23 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       wGeo.setAttribute('position', new THREE.Float32BufferAttribute(wirePts, 3));
       scene.add(new THREE.LineSegments(wGeo, new THREE.LineBasicMaterial({ color: 0x1c1917 })));
     }
+  }
+
+  // Metro piers stand in the median between the two carriageways (each carriageway is its own OSM way),
+  // never on a carriageway centreline. Each candidate is moved to the midpoint with the nearest opposite way.
+  for (const [cx, cz, yaw, rj] of cmhCands) {
+    let bd = 1e9, bx = 0, bz = 0;
+    for (const [x1, z1, x2, z2, rk] of cmhSegs) {
+      if (rk === rj) continue;
+      const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((cx - x1) * dx + (cz - z1) * dz) / L2));
+      const px = x1 + dx * t, pz = z1 + dz * t, d = Math.hypot(cx - px, cz - pz);
+      if (d < bd) { bd = d; bx = px; bz = pz; }
+    }
+    if (bd < 4 || bd > 22) continue; // no opposite carriageway nearby: no viaduct here
+    const mx = (cx + bx) / 2, mz = (cz + bz) / 2;
+    if (metroPiers.some(p => Math.hypot(p[0] - mx, p[1] - mz) < 20)) continue;
+    metroPiers.push([mx, mz, yaw]);
   }
 
   // Namma Metro Purple Line Viaduct & Real Indiranagar Station from extras.station.pts
@@ -929,6 +947,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     vendorSpots,
     parkedSpots,
     bridgeVolumes,
-    speedBreakers
+    speedBreakers,
+    metroPiers
   };
                }
