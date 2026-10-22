@@ -5,7 +5,7 @@ await p.goto(process.env.URL, { waitUntil: 'load' });
 await p.waitForFunction('window.__game && window.__step', { timeout: 180000 });
 await p.evaluate(() => { const g = window.__game; g.state.hour = 17.5; g.state.auto = false; g.go(); window.__noRender = true; window.__paused = true; });
 await new Promise(r => setTimeout(r, 3000));
-const out = await p.evaluate((mode, S, C) => {
+const out = await p.evaluate((mode, S, C, ROAD) => {
   const g = window.__game, keys = window.__keys, res = { stalls: [], runs: 0, hz: 0 };
   const probe = (x, z) => ({ div: !!window.__inDivider(x, z), solid: !!g.solid(x, z), life: !!(g.life && g.life.solid && g.life.solid(x, z)), parked: !!(g.parked && g.parked.solid(x, z)), traffic: !!(g.traffic && g.traffic.solid(x, z)), crowd: !!(g.crowd && g.crowd.solid(x, z)) });
   const run = (x, z, a, tag) => {
@@ -38,12 +38,12 @@ const out = await p.evaluate((mode, S, C) => {
     }
   }
   if (mode === 'lane') {
-    const name = process.env.ROAD || '100 Feet';
+    const name = ROAD;
     const list = [];
     for (const s of segs) { if (!(s.name || '').includes(name)) continue; const L = Math.hypot(s.x2 - s.x1, s.z2 - s.z1); const ux = (s.x2 - s.x1) / L, uz = (s.z2 - s.z1) / L; for (let d = 2; d < L - 14; d += 30) for (const off of [-3.5, 0, 3.5]) { const sx = s.x1 + ux * d - uz * off, sz = s.z1 + uz * d + ux * off; list.push([sx, sz, Math.atan2(ux, uz)]); } }
     res.total = list.length;
     for (const [sx, sz, a] of list.slice(S, S + C)) { if (g.solid(sx, sz)) { res.skippedSolid = (res.skippedSolid || 0) + 1; continue; } run(sx, sz, a, name); }
   }
   return res;
-}, process.env.MODE || 'hz', +(process.env.S || 0), +(process.env.C || 20));
+}, process.env.MODE || 'hz', +(process.env.S || 0), +(process.env.C || 20), process.env.ROAD || '100 Feet');
 console.log(JSON.stringify(out, null, 0)); await b.close();
