@@ -1,0 +1,22 @@
+import puppeteer from 'puppeteer-core';
+const [,, X='-70.3', Z='1955.1', A='2.98'] = process.argv;
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 120000, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=640,360'] });
+const p = await b.newPage(); await p.setViewport({ width: 640, height: 360 });
+await p.goto('http://localhost:4173/?ao=0', { waitUntil: 'load' });
+await p.waitForFunction('window.__game && window.__overpass', { timeout: 120000 });
+await p.evaluate(() => { const g = window.__game; g.state.auto = false; g.go(); window.__noRender = true; window.__paused = true; });
+await new Promise(r => setTimeout(r, 2500));
+const out = await p.evaluate(([x, z, a]) => {
+  const g = window.__game; const res = {}; const s = Math.sin(a), c = Math.cos(a);
+  const pts = [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]].map(([lx, lz]) => [x + c * lx + s * lz, z - s * lx + c * lz]);
+  res.pts = pts.map(q => q.map(v => +v.toFixed(1)));
+  res.inDiv = pts.map(q => !!window.__inDivider(q[0], q[1]));
+  res.solid = pts.map(q => !!g.solid(q[0], q[1]));
+  res.life = pts.map(q => g.life && !!g.life.solid(q[0], q[1]));
+  res.parked = pts.map(q => g.parked && !!g.parked.solid(q[0], q[1]));
+  res.traffic = pts.map(q => g.traffic && !!g.traffic.solid(q[0], q[1]));
+  res.crowd = pts.map(q => g.crowd && !!g.crowd.solid(q[0], q[1]));
+  res.pier = pts.map(q => window.__overpass.pierSolid(q[0], q[1]));
+  return res;
+}, [+X, +Z, +A]);
+console.log(JSON.stringify(out)); await b.close();

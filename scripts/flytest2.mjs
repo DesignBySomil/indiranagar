@@ -28,7 +28,7 @@ async function run(name, poly, steps, shot, midShot) {
       if ((g.auto.unstickAt || 0) !== u0) { unst++; u0 = g.auto.unstickAt; }
       const c = g.camera.position; if (g.solid(c.x, c.z) && (g.auto.y || 0) < 1) camIn++;
       if (k % 100 === 0) trace.push([Math.round(g.auto.x), Math.round(g.auto.z), +(g.auto.y || 0).toFixed(2), +g.auto.v.toFixed(1)]);
-      if (g.auto.v < 1 && k > 40 && stall.length < 4) stall.push([k, Math.round(g.auto.x*10)/10, Math.round(g.auto.z*10)/10, +(g.auto.y||0).toFixed(2), g.solid(g.auto.x, g.auto.z), op.pierSolid(g.auto.x, g.auto.z), !!op.probe(g.auto.x, g.auto.z)]);
+      if (g.auto.v < 1 && k > 40 && stall.length < 4) stall.push([k, Math.round(g.auto.x*10)/10, Math.round(g.auto.z*10)/10, +(g.auto.y||0).toFixed(2), g.solid(g.auto.x, g.auto.z), op.pierSolid(g.auto.x, g.auto.z), !!op.probe(g.auto.x, g.auto.z), (() => { const sn = Math.sin(g.auto.a), cs = Math.cos(g.auto.a); const o = []; for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0, 1.95], [0, 0.3], [0, -1.3]]) { const px = g.auto.x + cs * lx + sn * lz, pz = g.auto.z - sn * lx + cs * lz; o.push((g.traffic && g.traffic.solid(px, pz) ? 'T' : '') + (g.crowd && g.crowd.solid(px, pz) ? 'C' : '') + (g.parked && g.parked.solid(px, pz) ? 'P' : '') + (g.life && g.life.solid(px, pz) ? 'L' : '') + (window.__inDivider(px, pz) ? 'D' : '')); } return o.join('|'); })()]);
       if (Math.hypot(end[0] - g.auto.x, end[1] - g.auto.z) < 14) { done = k; break; }
     }
     window.__paused = false; window.__noRender = false;
@@ -39,6 +39,5 @@ async function run(name, poly, steps, shot, midShot) {
   if (shot) await p.screenshot({ path: shot });
   console.log('FLY', name, JSON.stringify(res));
 }
-await run('SB follow', 0, 1600, '/tmp/fly2-sb-end.png');
 await run('NB follow', 1, 1600, '/tmp/fly2-nb-end.png');
 await b.close();
