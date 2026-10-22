@@ -271,7 +271,7 @@ function clampCam() {
 const keys = {}; window.__keys = keys;
 addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'Space') { honk(); if (life) life.onHorn(); }
+  if (e.code === 'Space') { if (!e.repeat) { honk(); if (life) life.onHorn(); } }
   if (e.code === 'KeyN') state.hour = (state.hour + 3) % 24;
   if (e.code === 'KeyT') state.auto = !state.auto;
 });
@@ -337,24 +337,22 @@ function startAudio() {
   setInterval(() => { if (Math.random() < 0.7) bird(); }, 2200);
   setInterval(() => { if (Math.random() < 0.5) pom(); }, 9000);
 }
-let lastHonk = 0;
-function honk() {
-  if (!AC) return;
-  const now = performance.now(); if (now - lastHonk < 600) return; lastHonk = now;
-  // rubber bulb reed horn: two short nasal squeezes ("pom-pom"), reed-like saw through a nasal bandpass
-  const squeeze = (t0, f0, len) => {
-    const t = AC.currentTime + t0;
-    const o = AC.createOscillator(), o2 = AC.createOscillator(), bp = AC.createBiquadFilter(), g = AC.createGain();
-    o.type = 'sawtooth'; o2.type = 'square';
-    o.frequency.setValueAtTime(f0 * 0.82, t); o.frequency.exponentialRampToValueAtTime(f0, t + 0.04); o.frequency.exponentialRampToValueAtTime(f0 * 0.9, t + len);
-    o2.frequency.setValueAtTime(f0 * 1.5 * 0.82, t); o2.frequency.exponentialRampToValueAtTime(f0 * 1.5, t + 0.04); o2.frequency.exponentialRampToValueAtTime(f0 * 1.35, t + len);
-    bp.type = 'bandpass'; bp.frequency.value = 1150; bp.Q.value = 2.2;
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.015);
-    g.gain.setValueAtTime(0.16, t + len * 0.55); g.gain.exponentialRampToValueAtTime(0.001, t + len + 0.06);
-    o.connect(bp); o2.connect(bp); bp.connect(g); g.connect(AC.destination);
-    o.start(t); o2.start(t); o.stop(t + len + 0.08); o2.stop(t + len + 0.08);
-  };
-  squeeze(0, 395, 0.13); squeeze(0.2, 440, 0.17);
+let lastHonk = 0, honkBuf = null, honkLoading = false, honkSrc = null, honkGain = null;
+// Real auto-rickshaw horn recording (CC0, SoundEnsemble, Freesound 508975, Jaipur). See CREDITS.md.
+function loadHonk() {
+  if (honkBuf || honkLoading || !AC) return; honkLoading = true;
+  fetch(import.meta.env.BASE_URL + 'audio/auto-horn.mp3').then(r => r.arrayBuffer()).then(b => AC.decodeAudioData(b)).then(buf => { honkBuf = buf; }).catch(e => { honkLoading = false; console.warn('horn load failed', e); });
+}
+function honk(rep) {
+  if (!AC) return; loadHonk();
+  if (!honkBuf) return;
+  const now = performance.now(); if (now - lastHonk < 380) return; lastHonk = now;
+  const t = AC.currentTime;
+  if (honkSrc) { try { honkGain.gain.cancelScheduledValues(t); honkGain.gain.setValueAtTime(honkGain.gain.value, t); honkGain.gain.linearRampToValueAtTime(0, t + 0.04); honkSrc.stop(t + 0.05); } catch (e) {} }
+  const src = AC.createBufferSource(), g = AC.createGain();
+  src.buffer = honkBuf; src.playbackRate.value = 1 + (Math.random() - 0.5) * 0.04;
+  g.gain.value = 0.9; src.connect(g); g.connect(AC.destination); src.start(t);
+  honkSrc = src; honkGain = g; src.onended = () => { if (honkSrc === src) honkSrc = null; };
 }
 
 // ---------- minimap ----------
