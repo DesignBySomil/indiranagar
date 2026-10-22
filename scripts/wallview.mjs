@@ -4,7 +4,7 @@ const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', hea
 const p = await b.newPage(); await p.setViewport({ width: 960, height: 540 });
 await p.goto('http://localhost:4175/?ao=0',{waitUntil:'load'});
 await p.waitForFunction('window.__game && window.__step',{timeout:180000});
-await p.evaluate(()=>{const g=window.__game;g.state.hour=19;g.state.auto=false;g.go();window.__noRender=true;window.__paused=true;});await new Promise(r=>setTimeout(r,2500));
+await p.evaluate((HR)=>{const g=window.__game;g.state.hour=HR;g.state.auto=false;g.go();window.__noRender=true;window.__paused=true;},+(process.env.HOUR||19));await new Promise(r=>setTimeout(r,2500));
 const r=await p.evaluate((mode)=>{const g=window.__game,K=window.__keys;
  g.auto.x=-66;g.auto.z=690;g.auto.a=0;g.auto.v=0;K.KeyW=true;for(let i=0;i<140;i++)window.__step(0.05,performance.now());K.KeyW=false;
  for(let i=0;i<mode;i++)window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyV',key:'v'}));

@@ -6,14 +6,14 @@ export function createMapEdge({ THREE, scene, MAP, margin = 28 }) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 256;
   const x = c.getContext('2d');
   x.fillStyle = '#12002a'; x.fillRect(0, 0, 256, 256);
-  const grd = x.createLinearGradient(0, 0, 0, 256); grd.addColorStop(0, '#ff2bd6'); grd.addColorStop(0.5, '#7a2bff'); grd.addColorStop(1, '#00e5ff');
+  const grd = x.createLinearGradient(0, 0, 0, 256); grd.addColorStop(0, '#7a2bff'); grd.addColorStop(0.55, '#ff2bd6'); grd.addColorStop(1, '#ff2bd6');
   x.fillStyle = grd; x.fillRect(0, 0, 256, 256);
   x.fillStyle = '#12002a';
   for (let i = 0; i < 256; i += 64) x.fillRect(i, 0, 6, 256);
   for (let j = 0; j < 256; j += 64) x.fillRect(0, j, 256, 6);
-  x.fillStyle = '#ffffff'; x.fillRect(0, 0, 256, 12); x.fillRect(0, 244, 256, 12);
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, 256, 16); x.fillStyle = '#00e5ff'; x.fillRect(0, 232, 256, 24);
   const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace;
-  const mk = (len) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(len / 8, 1); return new THREE.MeshBasicMaterial({ map: t, toneMapped: false, fog: false }); };
+  const mk = (len) => { const t = tex.clone(); t.needsUpdate = true; t.repeat.set(len / 8, H / 4); return new THREE.MeshBasicMaterial({ map: t, toneMapped: false, fog: false }); };
   const seg = (cx, cz, lx, lz) => {
     const len = Math.max(lx, lz);
     const m = new THREE.Mesh(new THREE.BoxGeometry(lx, H, lz), mk(len));
