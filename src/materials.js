@@ -46,7 +46,7 @@ export function createAsphaltMaterial() {
       const tr = Math.exp(-Math.pow((u - 0.28) / 0.10, 2)) + Math.exp(-Math.pow((u - 0.72) / 0.10, 2));
       // dusty lighter edges near kerbs
       const edge = Math.exp(-Math.pow(u / 0.08, 2)) + Math.exp(-Math.pow((1 - u) / 0.08, 2));
-      let v = 186 + n + sp - tr * 20 + edge * 12;
+      let v = 172 + n + sp - tr * 18 + edge * 12;
       v = Math.min(255, Math.max(0, v));
       d[i] = v; d[i + 1] = v; d[i + 2] = v + 2; d[i + 3] = 255;
     }
@@ -101,9 +101,9 @@ export function createAsphaltMaterial() {
     const u = Math.random() < 0.5 ? 0.28 : 0.72;
     const ox = (u + (Math.random() - 0.5) * 0.12) * W;
     const oy = Math.random() * H;
-    const r = 6 + Math.random() * 14;
+    const r = 5 + Math.random() * 9;
     const g = ctx.createRadialGradient(ox, oy, 1, ox, oy, r);
-    g.addColorStop(0, 'rgba(18,19,22,0.28)');
+    g.addColorStop(0, 'rgba(18,19,22,0.16)');
     g.addColorStop(1, 'rgba(18,19,22,0)');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(ox, oy, r, 0, 7); ctx.fill();
