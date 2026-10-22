@@ -357,9 +357,28 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
       world.streetOutlines++;
       cx2d.save();
       cx2d.strokeStyle = '#fff'; cx2d.lineWidth = 1.4; cx2d.lineJoin = 'round';
-      cx2d.beginPath();
-      b.p.forEach((p, idx) => { const X = (p[0] + 1000) / OCC.s, Y = (p[1] + 1000) / OCC.s; idx ? cx2d.lineTo(X, Y) : cx2d.moveTo(X, Y); });
-      cx2d.closePath(); cx2d.stroke(); cx2d.restore();
+      // stroke edge by edge; an edge that crosses a road centreline is an artefact of the outline, not a wall
+      const crossesRoad = (a, c) => {
+        for (const r of world.roads) {
+          const p = r.p;
+          for (let j = 0; j < p.length - 1; j++) {
+            const ex = c[0] - a[0], ez = c[1] - a[1], fx = p[j + 1][0] - p[j][0], fz = p[j + 1][1] - p[j][1];
+            const den = ex * fz - ez * fx; if (Math.abs(den) < 1e-9) continue;
+            const t = ((p[j][0] - a[0]) * fz - (p[j][1] - a[1]) * fx) / den, u = ((p[j][0] - a[0]) * ez - (p[j][1] - a[1]) * ex) / den;
+            if (t >= -0.02 && t <= 1.02 && u >= 0 && u <= 1) return true;
+          }
+        }
+        return false;
+      };
+      for (let i = 0; i < b.p.length; i++) {
+        const a = b.p[i], c = b.p[(i + 1) % b.p.length];
+        if (crossesRoad(a, c)) continue;
+        cx2d.beginPath();
+        cx2d.moveTo((a[0] + 1000) / OCC.s, (a[1] + 1000) / OCC.s);
+        cx2d.lineTo((c[0] + 1000) / OCC.s, (c[1] + 1000) / OCC.s);
+        cx2d.stroke();
+      }
+      cx2d.restore();
       continue;
     }
     cx2d.beginPath();
