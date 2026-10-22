@@ -235,7 +235,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
       const tx = auto.x - sinA * back + cosA * sideSwing;
       const tz = auto.z - cosA * back - sinA * sideSwing;
       const bounceY = snap ? 0 : Math.sin(bobPhase * 1.1) * spd * 0.008;
-      const ty = 4.2 + spd * 0.05 + bounceY;
+      const ty = 3.8 + spd * 0.02 + bounceY;
 
       if (snap) {
         chasePos.set(tx, ty, tz);
