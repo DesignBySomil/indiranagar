@@ -112,14 +112,14 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   idol.position.set(0.30, 1.03, 0.90); /* idol removed */
 
   // ---- Driver seen from behind (passenger view): human proportions ----
-  const shirtMat = new T.MeshStandardMaterial({ color: 0xb4aed0, roughness: 0.85 });
+  const shirtMat = new T.MeshStandardMaterial({ color: 0x8b93a4, roughness: 0.9 });
   const driverAvatar2 = new T.Group();
   const torso = new T.Mesh(new T.CylinderGeometry(0.17, 0.2, 0.5, 14), shirtMat); torso.position.set(0, 1.02, 0.26); torso.scale.z = 0.7;
   const shoulders = new T.Mesh(new T.CapsuleGeometry(0.075, 0.30, 4, 10), shirtMat); shoulders.rotation.z = Math.PI / 2; shoulders.position.set(0, 1.25, 0.26);
-  const neck = new T.Mesh(new T.CylinderGeometry(0.045, 0.05, 0.08, 10), skinMat); neck.position.set(0, 1.32, 0.26);
-  const head = new T.Mesh(new T.SphereGeometry(0.1, 16, 12), skinMat); head.scale.set(0.92, 1.12, 1.0); head.position.set(0, 1.43, 0.26);
-  const hair = new T.Mesh(new T.SphereGeometry(0.104, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), blkMat); hair.scale.set(0.95, 1.12, 1.05); hair.position.set(0, 1.45, 0.255);
-  const ears = [-1, 1].map(sg => { const e = new T.Mesh(new T.SphereGeometry(0.022, 8, 6), skinMat); e.position.set(sg * 0.095, 1.43, 0.26); return e; });
+  const neck = new T.Mesh(new T.CylinderGeometry(0.042, 0.047, 0.08, 10), skinMat); neck.position.set(0, 1.325, 0.26);
+  const head = new T.Mesh(new T.SphereGeometry(0.088, 16, 12), skinMat); head.scale.set(0.92, 1.12, 1.0); head.position.set(0, 1.415, 0.26);
+  const hair = new T.Mesh(new T.SphereGeometry(0.091, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), blkMat); hair.scale.set(0.95, 1.12, 1.05); hair.position.set(0, 1.435, 0.255);
+  const ears = [-1, 1].map(sg => { const e = new T.Mesh(new T.SphereGeometry(0.019, 8, 6), skinMat); e.position.set(sg * 0.083, 1.415, 0.26); return e; });
   driverAvatar2.add(torso, shoulders, neck, head, hair, ...ears);
   for (const sg of [-1, 1]) {
     const up = new T.Mesh(new T.CapsuleGeometry(0.04, 0.2, 4, 8), shirtMat);
@@ -146,7 +146,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   const extTop = new T.Mesh(new T.CylinderGeometry(0.03, 0.05, 0.07, 10), rubberMat); extTop.position.set(-0.40, 1.37, -0.12);
   driverAvatar.add(ext, extTop);
 
-  const cabinLight = new T.PointLight(0xffe0a8, 1.6, 5, 1.5); cabinLight.position.set(0, 1.75, -0.2); driverAvatar.add(cabinLight);
+  const cabinLight = new T.PointLight(0xffe0a8, 2.6, 6, 1.4); cabinLight.position.set(0, 1.72, -0.2); driverAvatar.add(cabinLight);
   for (const sg of [-1, 1]) {
     const st = new T.Mesh(new T.CylinderGeometry(0.012, 0.012, 0.3, 6), steelMat); st.rotation.z = sg * 1.2; st.position.set(sg * 0.7, 1.42, 0.9);
     const mr = new T.Mesh(new T.CylinderGeometry(0.09, 0.09, 0.025, 20), rubberMat); mr.rotation.x = Math.PI / 2; mr.position.set(sg * 0.86, 1.52, 0.9);
@@ -158,21 +158,21 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   const yelMat = new T.MeshStandardMaterial({ color: 0xf2b705, roughness: 0.45 });
   const dashMat = new T.MeshStandardMaterial({ color: 0x14161a, roughness: 0.8 });
   const box = (w, h, d, x, y, z, m) => { const o = new T.Mesh(new T.BoxGeometry(w, h, d), m); o.position.set(x, y, z); driverRig.add(o); return o; };
-  box(1.9, 0.14, 0.05, 0, 1.86, 0.90, yelMat);           // header
-  box(1.9, 0.02, 0.06, 0, 1.78, 0.89, dashMat);         // rubber seal top
-  box(1.9, 0.05, 0.10, 0, 1.00, 0.90, yelMat);           // lower frame
-  box(1.9, 0.14, 0.12, 0, 0.94, 0.90, yelMat);           // yellow dash cowl
-  box(1.9, 0.10, 0.12, 0, 0.85, 0.89, dashMat);
-  box(1.1, 0.10, 0.30, 0, 0.84, 0.80, dashMat);           // dark dash
+  box(1.36, 0.085, 0.05, 0, 1.82, 0.90, yelMat);          // header
+  box(1.36, 0.02, 0.06, 0, 1.775, 0.89, dashMat);        // rubber seal top
+  box(1.36, 0.045, 0.10, 0, 1.06, 0.90, yelMat);          // lower frame
+  box(1.36, 0.10, 0.12, 0, 1.005, 0.90, yelMat);          // yellow dash cowl
+  box(1.36, 0.10, 0.12, 0, 0.90, 0.89, dashMat);
+  box(1.16, 0.09, 0.30, 0, 0.845, 0.80, dashMat);          // dark dash
   const link = (x1, y1, z1, x2, y2, z2, r, m) => { const v = new T.Vector3(x2 - x1, y2 - y1, z2 - z1); const o = new T.Mesh(new T.CylinderGeometry(r, r, v.length(), 8), m); o.position.set((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2); o.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), v.normalize()); driverRig.add(o); return o; };
   for (const sg of [-1, 1]) {
-    box(0.07, 0.9, 0.06, sg * 0.93, 1.40, 0.90, yelMat);  // pillars
-    box(0.03, 0.80, 0.07, sg * 0.885, 1.40, 0.89, dashMat); // rubber seal side
+    box(0.05, 0.72, 0.05, sg * 0.655, 1.43, 0.90, yelMat);  // pillars
+    box(0.025, 0.70, 0.06, sg * 0.62, 1.43, 0.89, dashMat); // rubber seal side
     link(sg * 0.60, 1.38, 0.84, sg * 0.89, 1.24, 0.88, 0.009, steelMat); // mirror stalk
     const rim = new T.Mesh(new T.CylinderGeometry(0.058, 0.058, 0.025, 24), dashMat); rim.rotation.x = Math.PI / 2; rim.position.set(sg * 0.60, 1.40, 0.84); driverRig.add(rim);
     const glass = new T.Mesh(new T.CircleGeometry(0.048, 24), new T.MeshStandardMaterial({ color: 0x55677a, roughness: 0.1, metalness: 0.9 })); glass.rotation.y = Math.PI; glass.position.set(sg * 0.60, 1.40, 0.826); driverRig.add(glass);
   }
-  box(1.9, 0.05, 0.07, 0, 1.03, 0.89, dashMat);            // rubber seal bottom
+  box(1.36, 0.04, 0.07, 0, 1.085, 0.89, dashMat);          // rubber seal bottom
   // wiper: pivot low centre, blade arcing across the glass
   link(-0.05, 1.075, 0.87, -0.42, 1.13, 0.87, 0.013, dashMat);
   link(-0.05, 1.075, 0.87, 0.32, 1.13, 0.87, 0.013, dashMat);
