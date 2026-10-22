@@ -3,31 +3,31 @@ import * as THREE from 'three';
 import { nightUniform } from './materials.js';
 
 const NPC_CAST = [
-  { name: 'Raju Anna', role: 'tea', shirt: 0xd97706, pant: 0x334155, acc: 'chai', lines: ['Bisi bisi ginger chai ready guru!', 'Take this cutting chai on the house — +₹25 energy tip!', 'Morning 5 AM inda stove uriyutte sir!'] },
-  { name: 'Constable Gowda', role: 'cop', shirt: 0xc2a36b, pant: 0x9a7b4f, acc: 'cophat', lines: ['Oye auto! Left lane alli hogi, no overtaking on 12th Main!', 'Documents ella sariyaagideya? Drive smooth, +25 XP!', 'CMH junction alli signal jump maadbedi guru!'] },
-  { name: 'Lakshmi Akka', role: 'flower', shirt: 0xe11d48, pant: 0xbe123c, acc: 'garland', lines: ['Fresh Mysuru mallige hoo tagoli sir!', 'Tie this jasmine garland on your auto meter — +50% Luck Buff active!', 'Devara aashirvada irli, boni chennagagli!'] },
-  { name: 'Karthik (Delivery)', role: 'delivery', shirt: 0xf97316, pant: 0x1e293b, acc: 'helmet', lines: ['Anna my scooter punctured! Drop this hot biryani parcel at Meghana Biryani fast!', '10-minute timer ticking guru, rush to the stop!', 'Five-star rating kodtini, swalpa bega hogi!'] },
-  { name: 'Manju (Auto Union)', role: 'autodriver', shirt: 0xb89d64, pant: 0x27272a, acc: 'chai', lines: ['Namaskara boss! Indiranagar stand alli ivattu full giraki!', 'Koramangala kade karedre one-and-half kelbeku!', 'Take this shortcut tip — +30 XP!'] },
-  { name: 'Ibrahim Bhai', role: 'autodriver', shirt: 0xb89d64, pant: 0x1e293b, acc: 'none', lines: ['Salaam guru! Spark plug clean maadide, auto रॉकेट tara hogutte!', '100 Feet Road concrete patch mele mellage hogi!', 'By-two chai kudiyona banni!'] },
+  { name: 'Raju Anna', role: 'tea', shirt: 0xd97706, pant: 0x334155, acc: 'chai', lines: ['Hot ginger chai is ready, friend!', 'Take this cutting chai on the house - +₹25 energy tip!', 'The stove has been going since 5 AM, sir!'] },
+  { name: 'Constable Gowda', role: 'cop', shirt: 0xc2a36b, pant: 0x9a7b4f, acc: 'cophat', lines: ['Hey, auto! Keep to the left lane, no overtaking on 12th Main!', 'Are your documents in order? Drive smooth, +25 XP!', 'Do not jump the signal at the CMH junction!'] },
+  { name: 'Lakshmi Akka', role: 'flower', shirt: 0xe11d48, pant: 0xbe123c, acc: 'garland', lines: ['Fresh Mysuru jasmine, sir, take some!', 'Tie this jasmine garland on your auto meter - +50% Luck Buff active!', 'God bless you, may your day go well!'] },
+  { name: 'Karthik (Delivery)', role: 'delivery', shirt: 0xf97316, pant: 0x1e293b, acc: 'helmet', lines: ['My scooter is punctured! Please drop this hot biryani parcel at Meghana Biryani fast!', 'The 10-minute timer is ticking, rush to the stop!', 'Five-star rating if you make it in time!'] },
+  { name: 'Manju (Auto Union)', role: 'autodriver', shirt: 0xb89d64, pant: 0x27272a, acc: 'chai', lines: ['Hello boss! The Indiranagar stand is packed today!', 'If a passenger calls for Koramangala, ask for one and a half fare!', 'Take this shortcut tip - +30 XP!'] },
+  { name: 'Ibrahim Bhai', role: 'autodriver', shirt: 0xb89d64, pant: 0x1e293b, acc: 'none', lines: ['Hello friend! I cleaned the spark plug, this auto flies like a rocket!', 'Go easy over the concrete patch on 100 Feet Road!', 'Come, let us share a chai!'] },
   { name: 'Meghana (Student)', role: 'student', shirt: 0x8b5cf6, pant: 0x1e3a8a, acc: 'bag', lines: ['Bro, Nike queue is already down the staircase!', 'Fest rehearsal at Indiranagar club, full tired!', 'Cool auto bro, love the yellow canopy!'] },
   { name: 'Arjun (Student)', role: 'student', shirt: 0x06b6d4, pant: 0x0f172a, acc: 'bag', lines: ['Just hopped off Purple Line at Indiranagar Metro!', 'Third Wave cold brew is keeping my semester alive.', 'Honk that horn one more time anna!'] },
   { name: 'Priya & Bruno', role: 'dogwalker', shirt: 0x10b981, pant: 0x1f2937, acc: 'dog', lines: ['Bruno loves chasing autos on Defence Colony lanes!', 'Shh Bruno, good boy, stay on the footpath!', 'Indiranagar tree canopy is the best walk in Bengaluru.'] },
-  { name: 'Madesha (Elaneer)', role: 'coconut', shirt: 0x16a34a, pant: 0x4b5563, acc: 'coconut', lines: ['Maddur tender coconut guru, sweet water!', 'Drink elaneer, cool down your engine — +₹20!', 'Bisi bisiveyalli elaneer ne medicine!'] },
-  { name: 'Venkatesh (Paper)', role: 'paper', shirt: 0x3b82f6, pant: 0x334155, acc: 'paper', lines: ['Deccan Herald, Prajavani, Vijayavani fresh headlines!', 'Indiranagar flyover news odu guru!', '6 AM round ಮುಗಿಸಿ ಈಗ ಚಾ ಕುಡಿಯೋ ಟೈಮ್!'] },
-  { name: 'Bahadur (Security)', role: 'guard', shirt: 0x1d4ed8, pant: 0x172554, acc: 'cophat', lines: ['Salaam saab! No parking in front of building gate!', 'Madam car barovaregu side alli nilsi!', 'Raatri duty full alert irbeku sir!'] },
+  { name: 'Madesha (Elaneer)', role: 'coconut', shirt: 0x16a34a, pant: 0x4b5563, acc: 'coconut', lines: ['Maddur tender coconut, friend, sweet water!', 'Drink tender coconut, cool down your engine - +₹20!', 'In this heat, tender coconut is the best medicine!'] },
+  { name: 'Venkatesh (Paper)', role: 'paper', shirt: 0x3b82f6, pant: 0x334155, acc: 'paper', lines: ['Deccan Herald, Prajavani, Vijayavani - fresh headlines!', 'Read the Indiranagar flyover news, friend!', 'Finished the 6 AM round, now time for a chai!'] },
+  { name: 'Bahadur (Security)', role: 'guard', shirt: 0x1d4ed8, pant: 0x172554, acc: 'cophat', lines: ['Hello sir! No parking in front of the building gate!', 'Madam, please park the car to the side!', 'Night duty means staying fully alert, sir!'] },
   { name: 'Rohan (Techie)', role: 'techie', shirt: 0x0284c7, pant: 0x1e293b, acc: 'bag', lines: ['Standup call on Zoom while walking to Third Wave Coffee!', 'Production deploy broke right at golden hour bro.', 'Can your auto beat 100 Feet Road traffic?'] },
-  { name: 'Subramanya Uncle', role: 'elder', shirt: 0xf8fafc, pant: 0xd6d3d1, acc: 'umbrella', lines: ['1978 alli Indiranagar full orchard mattu bangale ittu!', 'MTR masala dosa taste ivattigu hange ide!', 'Mellage drive maadi pa, speed breaker ide!'] },
+  { name: 'Subramanya Uncle', role: 'elder', shirt: 0xf8fafc, pant: 0xd6d3d1, acc: 'umbrella', lines: ['In 1978 Indiranagar was full of orchards and bungalows!', 'MTR masala dosa tastes the same even today!', 'Drive gently, there is a speed breaker ahead!'] },
   { name: 'Chef Naveen', role: 'vendor', shirt: 0xffffff, pant: 0x18181b, acc: 'chai', lines: ['Fresh filter decoction brewing at Sri Udupi Park!', 'Ghee roast smell goes two cross roads away!', 'Auto drivers get priority token here!'] },
   { name: 'Divya (Designer)', role: 'techie', shirt: 0xec4899, pant: 0x1e293b, acc: 'bag', lines: ['Sketching the red-brick facade outside Toit!', '12th Main boutiques have the nicest pastel walls.', 'Love how the street lamps glow at dusk!'] },
   { name: 'Suresh (Courier)', role: 'delivery', shirt: 0xeab308, pant: 0x1f2937, acc: 'helmet', lines: ['CMH Road cross numbers confuse even Google Maps guru!', 'Drop this urgent parcel at Adidas 12th Main!', 'Bonus tip if you reach before the signal turns!'] },
   { name: 'Ananya (Musician)', role: 'student', shirt: 0xa855f7, pant: 0x0f172a, acc: 'bag', lines: ['Acoustic gig tonight near 80 Feet Road!', 'Bengaluru breeze + filter coffee = best songwriting mood.', 'See you at Indiranagar Social later!'] },
   // 6 Kerbside Hailing Passengers ('!' marker, board back seat, pay distance fare + smooth tip)
-  { name: 'Kavitha Madam', role: 'passenger', dest: 'MTR 1924', shirt: 0xd946ef, pant: 0x701a75, acc: 'bag', lines: ['Auto! MTR 1924 hogbeku, meter mele +30 kodtini!', 'Swalpa bega hogi anna, family waiting for dosa!'] },
-  { name: 'Vikram (Founder)', role: 'passenger', dest: 'Toit', shirt: 0x2563eb, pant: 0x0f172a, acc: 'bag', lines: ['Boss, Toit ge drop maadi! Investor pitch over craft beer!', 'No potholes please, laptop open ide!'] },
-  { name: 'Nandini', role: 'passenger', dest: 'Indiranagar station', shirt: 0x14b8a6, pant: 0x115e59, acc: 'bag', lines: ['Anna, Indiranagar Metro Station! Train in 4 minutes!', 'Full speed hogi, extra tip kodtini!'] },
-  { name: 'Zoya', role: 'passenger', dest: 'Burma Burma Restaurant & Tea Room', shirt: 0xf43f5e, pant: 0x881337, acc: 'bag', lines: ['12th Main Burma Burma hogona? Won-and-half ok!', 'Left ತಗೊಳ್ಳಿ ಅಣ್ಣ, ಅಲ್ಲಿ ಟ್ರಾಫಿಕ್ ಕಮ್ಮಿ!'] },
-  { name: 'Harish Uncle', role: 'passenger', dest: 'Sri Udupi Park', shirt: 0xfef08a, pant: 0x713f12, acc: 'umbrella', lines: ['Sri Udupi Park ge karkondu hogappa, kaapi time!', 'Smooth drive maadidre double tip!'] },
-  { name: 'Deepak', role: 'passenger', dest: 'Nike', shirt: 0x22c55e, pant: 0x14532d, acc: 'none', lines: ['Guru, Nike 100 Feet Road! Friends waiting!', 'Horn haakkondu side thagoli!'] }
+  { name: 'Kavitha Madam', role: 'passenger', dest: 'MTR 1924', shirt: 0xd946ef, pant: 0x701a75, acc: 'bag', lines: ['Auto! I need to go to MTR 1924, and I will add +30 on the meter!', 'Please go a little faster, my family is waiting for dosa!'] },
+  { name: 'Vikram (Founder)', role: 'passenger', dest: 'Toit', shirt: 0x2563eb, pant: 0x0f172a, acc: 'bag', lines: ['Boss, please drop me at Toit! Investor pitch over craft beer!', 'No potholes please, my laptop is open!'] },
+  { name: 'Nandini', role: 'passenger', dest: 'Indiranagar station', shirt: 0x14b8a6, pant: 0x115e59, acc: 'bag', lines: ['Please take me to Indiranagar Metro Station! My train is in 4 minutes!', 'Go full speed and I will tip extra!'] },
+  { name: 'Zoya', role: 'passenger', dest: 'Burma Burma Restaurant & Tea Room', shirt: 0xf43f5e, pant: 0x881337, acc: 'bag', lines: ['Shall we go to Burma Burma on 12th Main? One and a half fare is fine!', 'Take the left turn here, the traffic is lighter that way!'] },
+  { name: 'Harish Uncle', role: 'passenger', dest: 'Sri Udupi Park', shirt: 0xfef08a, pant: 0x713f12, acc: 'umbrella', lines: ['Please take me to Sri Udupi Park, it is coffee time!', 'Drive smoothly and I will double the tip!'] },
+  { name: 'Deepak', role: 'passenger', dest: 'Nike', shirt: 0x22c55e, pant: 0x14532d, acc: 'none', lines: ['Hey, take me to Nike on 100 Feet Road! My friends are waiting!', 'Honk the horn and pull over to the side!'] }
 ];
 
 function makeNpcBubbleCanvas() {
@@ -39,14 +39,13 @@ function makeNpcBubbleCanvas() {
 }
 
 const NPC_CARD_CSS = `
-#npc-card{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:30;width:min(420px,calc(100vw - 32px));box-sizing:border-box;padding:12px 16px 13px;border-radius:18px;background:rgba(12,16,28,.92);border:2px solid #facc15;color:#f8fafc;font:600 15px/1.35 system-ui,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.5);backdrop-filter:blur(8px);cursor:pointer;display:none;text-align:left;-webkit-tap-highlight-color:transparent}
+#npc-card{position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:30;width:min(420px,calc(100vw - 32px));box-sizing:border-box;padding:12px 16px 13px;border-radius:18px;background:rgba(12,16,28,.92);border:2px solid #facc15;color:#f8fafc;font:600 15px/1.35 system-ui,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.5);backdrop-filter:blur(8px);cursor:pointer;display:none;text-align:left;-webkit-tap-highlight-color:transparent}
 #npc-card.on{display:block}
 #npc-card .hd{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px}
 #npc-card .nm{color:#facc15;font:800 15px "Bricolage Grotesque",system-ui,sans-serif}
 #npc-card .pr{color:#0c101c;background:#38bdf8;border-radius:999px;padding:4px 11px;font:800 12px system-ui,sans-serif;white-space:nowrap}
 #npc-card .tx{font-size:14px;color:#e8eef6}
-@media (pointer:coarse){#npc-card{bottom:322px}}
-@media (pointer:coarse) and (min-width:700px){#npc-card{bottom:92px}}
+@media (max-width:720px){#npc-card{top:104px}}
 `;
 let npcCard = null, npcCardActions = null;
 function ensureNpcCard() {
