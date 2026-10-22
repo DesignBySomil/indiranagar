@@ -33,9 +33,9 @@ async function run(name, x, z, a, steps, shot) {
   console.log('FLY', name, JSON.stringify(res));
 }
 // southbound over the deck (heading +z, a = 0): from ground on 100 Feet Road north of the ramp
-await run('SB-up-over-down', -33.9, 1455.6, 0.037, 1400, '/tmp/fly-sb-end.png');
+await run('SB-up-over-down', -33.9, 1455.6, 0.037, 1000, '/tmp/fly-sb-end.png');
 // northbound (heading -z, a = PI) from south of the deck
-await run('NB-up-over-down', -69.0, 1980.8, 2.984, 1400, '/tmp/fly-nb-end.png');
+await run('NB-up-over-down', -69.0, 1980.8, 2.984, 1000, '/tmp/fly-nb-end.png');
 // ground underpass: drive east along HAL Old Airport Road beneath the deck
 await run('ground-under', -200, 1672, Math.atan2(1, 0.12), 500, '/tmp/fly-under-end.png');
 await b.close();
