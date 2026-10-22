@@ -13,7 +13,7 @@ const ColorGradeShader = {
     uNight: { value: 0.0 },
     uContrast: { value: 1.07 },
     uSaturation: { value: 1.14 },
-    uLift: { value: 0.015 }
+    uLift: { value: 0.026 }
   },
   vertexShader: `
     varying vec2 vUv;
