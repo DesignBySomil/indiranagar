@@ -324,7 +324,44 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
   const cx2d = cv.getContext('2d');
   cx2d.fillStyle = '#fff';
   cx2d.imageSmoothingEnabled = false;
+  // Some OSM footprints are outlines that enclose a whole street (the walls are real, the interior is road).
+  // Detect them by road centreline samples falling inside the polygon, and collide only along their edges.
+  const inPoly = (pts, x, z) => {
+    let c = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+    }
+    return c;
+  };
+  const coversRoad = (b) => {
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (const q of b.p) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); }
+    let inside = 0;
+    for (const r of world.roads) {
+      const p = r.p;
+      for (let j = 0; j < p.length - 1; j++) {
+        const ax = p[j][0], az = p[j][1], bx = p[j + 1][0], bz = p[j + 1][1];
+        if (Math.max(ax, bx) < x0 || Math.min(ax, bx) > x1 || Math.max(az, bz) < z0 || Math.min(az, bz) > z1) continue;
+        const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / 2));
+        let hit = 0;
+        for (let k = 0; k <= n; k++) if (inPoly(b.p, ax + (bx - ax) * k / n, az + (bz - az) * k / n)) hit++;
+        if (L >= 16 && hit / (n + 1) > 0.7) inside += L;
+      }
+    }
+    return inside >= 30;
+  };
+  world.streetOutlines = 0;
   for (const b of world.buildings) {
+    if (coversRoad(b)) {
+      world.streetOutlines++;
+      cx2d.save();
+      cx2d.strokeStyle = '#fff'; cx2d.lineWidth = 1.4; cx2d.lineJoin = 'round';
+      cx2d.beginPath();
+      b.p.forEach((p, idx) => { const X = (p[0] + 1000) / OCC.s, Y = (p[1] + 1000) / OCC.s; idx ? cx2d.lineTo(X, Y) : cx2d.moveTo(X, Y); });
+      cx2d.closePath(); cx2d.stroke(); cx2d.restore();
+      continue;
+    }
     cx2d.beginPath();
     b.p.forEach((p, idx) => {
       const X = (p[0] + 1000) / OCC.s, Y = (p[1] + 1000) / OCC.s;
@@ -336,27 +373,6 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
   const imgData = cx2d.getImageData(0, 0, OCC.n, OCC.n).data;
   const occ = new Uint8Array(OCC.n * OCC.n);
   for (let i = 0; i < occ.length; i++) occ[i] = imgData[i * 4 + 3] > 140 ? 1 : 0;
-
-  // Footprints that cover a road (OSM compound outlines, 2 m raster) must never block the road itself:
-  // clear a 4 m corridor along every road centreline.
-  const CARVE = 2.0;
-  for (const r of world.roads) {
-    const p = r.p;
-    for (let j = 0; j < p.length - 1; j++) {
-      const ax = p[j][0], az = p[j][1], bx = p[j + 1][0], bz = p[j + 1][1];
-      const L = Math.hypot(bx - ax, bz - az), steps = Math.max(1, Math.ceil(L / 0.75));
-      for (let k = 0; k <= steps; k++) {
-        const cx = ax + (bx - ax) * k / steps, cz = az + (bz - az) * k / steps;
-        const i0 = Math.floor((cx - CARVE + 1000) / OCC.s), i1 = Math.floor((cx + CARVE + 1000) / OCC.s);
-        const j0 = Math.floor((cz - CARVE + 1000) / OCC.s), j1 = Math.floor((cz + CARVE + 1000) / OCC.s);
-        for (let jj = j0; jj <= j1; jj++) for (let ii = i0; ii <= i1; ii++) {
-          if (ii < 0 || jj < 0 || ii >= OCC.n || jj >= OCC.n) continue;
-          const mx = (ii + 0.5) * OCC.s - 1000, mz = (jj + 0.5) * OCC.s - 1000;
-          if (Math.hypot(mx - cx, mz - cz) <= CARVE + 0.5) occ[jj * OCC.n + ii] = 0;
-        }
-      }
-    }
-  }
 
   const solid = (x, z) => {
     const i = Math.floor((x + 1000) / OCC.s), j = Math.floor((z + 1000) / OCC.s);
