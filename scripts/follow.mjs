@@ -26,6 +26,11 @@ const out = await p.evaluate((NAME, DIR, LANE0, MAXSTEPS) => {
   let prog = 4, slow = 0, stalls = [], maxd = 4, last = [g.auto.x, g.auto.z], teleports = 0, minV = 99;
   for (let i = 0; i < MAXSTEPS; i++) {
     const d = proj(g.auto.x, g.auto.z); prog = d; maxd = Math.max(maxd, d);
+    { // look-ahead overtaking: if the lane is blocked 3-9 m ahead, take the side offset that is free; return to centre when clear
+      const pt = (off, ahead) => { const q = at(d + ahead); return [q.x + (-q.uz) * 0 + 0, q.z]; };
+      const blockedAt = (off) => { for (const ah of [4, 6, 8, 10]) { const q = at(d + ah); const o = off - LANE0; const nx = q.x + q.uz * o * -1 * -1, nz = q.z - q.ux * o * -1 * -1; if (preds(nx, nz).length) return true; } return false; };
+      const cur = LANE; if (blockedAt(cur)) { for (const off of [LANE0 + 2.2, LANE0 - 2.2]) if (!blockedAt(off)) { LANE = off; toggleAt = d; toggles++; break; } } else if (LANE !== LANE0 && d - toggleAt > 15 && !blockedAt(LANE0)) LANE = LANE0;
+    }
     const tq = at(d + 10 + g.auto.v * 0.5), ta = Math.atan2(tq.x - g.auto.x, tq.z - g.auto.z);
     const err = Math.atan2(Math.sin(ta - g.auto.a), Math.cos(ta - g.auto.a));
     K.KeyA = err > 0.04; K.KeyD = err < -0.04; K.KeyW = g.auto.v < 9;
@@ -34,7 +39,7 @@ const out = await p.evaluate((NAME, DIR, LANE0, MAXSTEPS) => {
     window.__step(0.05, performance.now());
     const mv = Math.hypot(g.auto.x - px, g.auto.z - pz);
     if (mv > 1.5) { teleports++; hops.push({ i, from: [+px.toFixed(1), +pz.toFixed(1)], to: [+g.auto.x.toFixed(1), +g.auto.z.toFixed(1)], v: +pv.toFixed(1), W: JSON.stringify(W), lane: LANE }); }
-    slowC = g.auto.v < 4 ? slowC + 1 : 0; if (slowC >= 25 && d - toggleAt > 15) { LANE = LANE >= 0 ? -2.2 : 2.2; toggleAt = d; toggles++; slowC = 0; } if (LANE !== LANE0 && d - toggleAt > 40) LANE = LANE0;
+    slowC = g.auto.v < 4 ? slowC + 1 : 0; if (false) { LANE = LANE >= 0 ? -2.2 : 2.2; toggleAt = d; toggles++; slowC = 0; } 
     { const want = Math.abs(pv) * 0.05; if (i >= 600 && want > 0.08 && mv < want * 0.5 && (window.__bl = window.__bl || []).length < 8) { const s0 = Math.sin(pa), c0 = Math.cos(pa), h = []; [[0.85,1.8],[-0.85,1.8],[0.85,-1.3],[-0.85,-1.3],[0,1.95],[0,0.3],[0,-1.3]].forEach(([lx, lz], k) => { const qx = px + c0*lx + s0*lz, qz = pz - s0*lx + c0*lz; const r = preds(qx, qz); if (r.length) h.push(k + ':' + r.join('+') + '@' + qx.toFixed(1) + ',' + qz.toFixed(1)); }); window.__bl.push({ W: JSON.stringify(W), i, v: +pv.toFixed(1), want: +want.toFixed(2), mv: +mv.toFixed(3), h }); } }
     if (g.auto.v < 1.0) slow++; else slow = Math.max(0, slow - 2);
     if (slow === 60) { const s = Math.sin(g.auto.a), c = Math.cos(g.auto.a); stalls.push({ step: i, at: [+g.auto.x.toFixed(1), +g.auto.z.toFixed(1)], alongM: Math.round(d), ahead: [2.2, 3.5].map(f => preds(g.auto.x + s*f, g.auto.z + c*f).join('+') || '-'), here: preds(g.auto.x, g.auto.z).join('+') || '-' }); }

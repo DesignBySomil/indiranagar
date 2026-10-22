@@ -502,8 +502,7 @@ function step(dt, now) {
   if (staticBlock && Math.abs(thr) > 0.1 && Math.abs(auto.v) < 1.2) auto.stuckT = (auto.stuckT || 0) + dt;
   else auto.stuckT = Math.max(0, (auto.stuckT || 0) - dt * 2);
   if (staticBlock && Math.abs(thr) > 0.1) auto.blockT = (auto.blockT || 0) + dt; else auto.blockT = Math.max(0, (auto.blockT || 0) - dt * 3);
-  // last resort: boxed in by moving obstructions for a long time (30 s of continuous pushing) with no way out
-  if (auto.dynT > 30) { auto.dynT = 0; auto.blockT = 1; }
+  // no relocation for moving obstructions at all: the player can wait, reverse or steer; they clear on their own
   if (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow) {
     auto.stuckT = 0; auto.blockT = 0; auto.unstickNow = false;
     auto.clk = auto.clk || 0;
