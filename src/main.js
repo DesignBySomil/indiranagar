@@ -611,8 +611,22 @@ function step(dt, now) {
   if ($('clock')) $('clock').textContent = String(Math.floor(state.hour)).padStart(2, '0') + ':' + String(Math.floor((state.hour % 1) * 60)).padStart(2, '0');
 }
 
+// Adaptive quality: ambient occlusion (GTAO) is a full extra scene pass and dominated frame cost in
+// measurements. Keep it where frames are fast; drop it automatically where they are slow. ?ao=1 forces on, ?ao=0 forces off.
+const AO_PARAM = new URLSearchParams(location.search).get('ao');
+let aoN = 0, aoSum = 0;
+function aoGovern(raw) {
+  if (!ao || !ao.pass || AO_PARAM === '1') return;
+  if (AO_PARAM === '0') { ao.pass.enabled = false; return; }
+  if (!ao.pass.enabled || !started) return;
+  aoN++;
+  if (aoN > 6 && aoN <= 10) aoSum += raw;
+  if (aoN === 10 && aoSum / 4 > 120) { ao.pass.enabled = false; window.__aoAuto = 'off'; }
+}
+
 function loop(now) {
   const dt = Math.min(window.__dtCap || 0.05, (now - last) / 1000);
+  aoGovern(now - last);
   last = now;
   try { if (started && !window.__paused) step(dt, now); } catch (e) { if (!window.__stepErr) { window.__stepErr = String(e && e.stack || e); console.error(e); } }
   try { if (!window.__noRender) post.render(dt); } catch (e) { if (!window.__renderErr) { window.__renderErr = String(e); console.error(e); } }
@@ -893,6 +907,6 @@ try {
   chg.style.cssText = 'position:fixed;left:20px;top:64px;z-index:60;font:600 13px Bricolage Grotesque,sans-serif;padding:8px 14px;border-radius:20px;border:1px solid #ffffff55;background:#10151cdd;color:#fff;cursor:pointer';
   chg.addEventListener('click', () => { const sp = $('startpick'); $('start').classList.add('on'); if (sp) sp.focus(); });
   document.body.appendChild(chg);
-  window.__game = { renderer, get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
+  window.__game = { renderer, post, get ao() { return ao; }, get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();

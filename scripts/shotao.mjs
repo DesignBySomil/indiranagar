@@ -1,0 +1,12 @@
+import puppeteer from 'puppeteer-core';
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 600000, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=960,540'] });
+const p = await b.newPage(); await p.setViewport({ width: 960, height: 540 });
+await p.goto(process.env.URL, { waitUntil: 'load' });
+await p.waitForFunction('window.__game', { timeout: 120000 });
+await p.evaluate(() => { const g = window.__game; g.state.hour = 17.5; g.state.auto = false; g.state.snap = true; g.go(); });
+await new Promise(r => setTimeout(r, 40000));
+await p.screenshot({ path: '/tmp/ao-on.png' });
+await p.evaluate(() => { window.__game.ao.pass.enabled = false; });
+await new Promise(r => setTimeout(r, 12000));
+await p.screenshot({ path: '/tmp/ao-off.png' });
+await b.close();
