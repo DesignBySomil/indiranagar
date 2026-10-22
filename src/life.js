@@ -557,13 +557,13 @@ export function createStreetLife({
       activeQuest.bargained = true;
       stats.fare += 45;
       playCashBell();
-      safeUI.say('Passenger: "Sari sari bedi anna! Take +45 rupees extra, just drive!"', 3500);
+      safeUI.say('Passenger: "No more arguing, brother! Take 45 rupees extra, just drive!"', 3500);
       safeUI.fare(`Bargain Won! Total Fare: Rs.${stats.fare}`);
     }
 
     for (const na of npcAutos) {
       if (Math.hypot(na.x - auto.x, na.z - auto.z) < 15 && na.cooldown <= 0) {
-        triggerArgument(na, 'Eh, horn yaake maadtya?! Left lane alli hogappa!');
+        triggerArgument(na, 'Hey, why are you honking?! Stay in the left lane!');
         break;
       }
     }
@@ -584,7 +584,7 @@ export function createStreetLife({
         if (c.cooldown <= 0) {
           c.cooldown = 5;
           playMoo();
-          spawnBubble(c.mesh, 'MOOO! Side hogappa!', 2.8, 2.5, false);
+          spawnBubble(c.mesh, 'MOOO! Go around me!', 2.8, 2.5, false);
         }
         return true;
       }
@@ -592,7 +592,7 @@ export function createStreetLife({
     for (let i = 0; i < npcAutos.length; i++) {
       const na = npcAutos[i];
       if (Math.hypot(x - na.x, z - na.z) < 1.35) {
-        if (na.cooldown <= 0) triggerArgument(na, 'Yenappa idu, kannu kanalva?! Bumper hoythu!');
+        if (na.cooldown <= 0) triggerArgument(na, 'What is this, are you blind?! You hit my bumper!');
         return true;
       }
     }
@@ -781,7 +781,7 @@ export function createStreetLife({
           detourGroup.visible = false;
           activeQuest = null;
         } else if (activeQuest.timer <= 0) {
-          safeUI.say('Passenger: "Idu yelli karkondu hogtidya?! Naan ilidbidtini!"', 4200);
+          safeUI.say('Passenger: "Where are you taking me?! Let me out here!"', 4200);
           detourGroup.visible = false;
           activeQuest = null;
         }
