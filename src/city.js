@@ -318,7 +318,7 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
   scene.add(signGroup);
 
   // Build 2D occupancy collision grid
-  const OCC = { s: 2, n: Math.ceil(2000 / 2) };
+  const OCC = { s: 2, n: Math.ceil(3200 / 2) }; // covers -1000..2200 (z) so the Domlur area is not out-of-bounds (= solid)
   const cv = document.createElement('canvas');
   cv.width = cv.height = OCC.n;
   const cx2d = cv.getContext('2d');
