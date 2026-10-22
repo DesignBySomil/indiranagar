@@ -122,6 +122,54 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     }
   }
 
+  // Overhead signal gantries across 100 Feet Road carriageways (depth cue, Bangalore-style)
+  {
+    const gantry = new THREE.Group();
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x3a3f45, roughness: 0.6, metalness: 0.4 });
+    const headMat = new THREE.MeshStandardMaterial({ color: 0x14171b, roughness: 0.5 });
+    const lampG = new THREE.MeshBasicMaterial({ color: 0x35e05a });
+    const lampR = new THREE.MeshBasicMaterial({ color: 0x5a2222 });
+    const lampA = new THREE.MeshBasicMaterial({ color: 0x54400f });
+    const poleGeo = new THREE.BoxGeometry(0.26, 5.6, 0.26);
+    const headGeo = new THREE.BoxGeometry(0.34, 0.95, 0.22);
+    const lampGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.03, 10);
+    const lastPlaced = new Map();
+    for (const sg of hundredSegs) {
+      if (sg.L < 25) continue;
+      const mx = (sg.x1 + sg.x2) / 2, mz = (sg.z1 + sg.z2) / 2;
+      const last = lastPlaced.get(sg.ri);
+      if (last && Math.hypot(mx - last.x, mz - last.z) < 170) continue;
+      lastPlaced.set(sg.ri, { x: mx, z: mz });
+      const nx2 = -sg.uz, nz2 = sg.ux;
+      const half = W100 / 2 + 0.7;
+      for (const sgn of [1, -1]) {
+        const pole = new THREE.Mesh(poleGeo, poleMat);
+        pole.position.set(mx + nx2 * half * sgn, 2.8, mz + nz2 * half * sgn);
+        pole.castShadow = true;
+        gantry.add(pole);
+      }
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.34, half * 2), poleMat);
+      bar.position.set(mx, 5.5, mz);
+      bar.rotation.y = Math.atan2(nx2, nz2);
+      gantry.add(bar);
+      const fx = -sg.ux, fz = -sg.uz; // face oncoming traffic
+      const yawF = Math.atan2(fx, fz);
+      for (const off of [-2.2, 2.2]) {
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.set(mx + nx2 * off, 4.9, mz + nz2 * off);
+        head.rotation.y = yawF;
+        gantry.add(head);
+        for (let li = 0; li < 3; li++) {
+          const lamp = new THREE.Mesh(lampGeo, li === 0 ? lampR : (li === 1 ? lampA : lampG));
+          lamp.position.set(head.position.x + fx * 0.13, 4.9 + (0.28 - li * 0.28), head.position.z + fz * 0.13);
+          lamp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(fx, 0, fz));
+          gantry.add(lamp);
+        }
+      }
+    }
+    scene.add(gantry);
+  }
+
   for (const r of world.roads) {
     const is100Ft = Boolean(r.n && r.n.includes('100 Feet'));
     const isCMH = Boolean(r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras')));
@@ -174,7 +222,24 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         divIdx.push(divV, divV + 1, divV + 2, divV + 1, divV + 3, divV + 2);
         divV += 4;
 
-            } else if (r.k >= 2 && !is100Ft) {
+      }
+      if (is100Ft) {
+        // 100 Feet Road: clear dashed white lane separator between the 2 lanes of each one-way carriageway
+        for (let s = 2; s + 3.2 < L; s += 9) {
+          const a = s / L, b = (s + 3) / L;
+          const dnx2 = -uz * 0.12, dnz2 = ux * 0.12, dy2 = y + 0.012;
+          dp.push(
+            x1 + dx * a + dnx2, dy2, z1 + dz * a + dnz2,
+            x1 + dx * a - dnx2, dy2, z1 + dz * a - dnz2,
+            x1 + dx * b + dnx2, dy2, z1 + dz * b + dnz2,
+            x1 + dx * b - dnx2, dy2, z1 + dz * b - dnz2
+          );
+          const fade2 = 0.7 + hash(s, z1) * 0.2;
+          for (let k = 0; k < 4; k++) dCol.push(0.84 * fade2, 0.84 * fade2, 0.82 * fade2);
+          di.push(dv, dv + 1, dv + 2, dv + 1, dv + 3, dv + 2);
+          dv += 4;
+        }
+      } else if (r.k >= 2 && !is100Ft) {
         // Hand-painted faded broken centre line (two-way single lane each way)
         for (let s = 1.5; s + 2.5 < L; s += 7.5) {
           if (hash(x1 + s, z1) < 0.18) continue; // Occasional worn-out missing dash
@@ -424,7 +489,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       scBody.setMatrixAt(i, m4);
       m4.compose(v3.set(p.x, 0.80, p.z - 0.1), q4, s3);
       scSeat.setMatrixAt(i, m4);
-      colC.setHex(scPalette[i % scPalette.length]);
+      colC.setHex(scPalette[i % scPalette.length]).multiplyScalar(0.8);
       scBody.setColorAt(i, colC);
     });
     scBody.castShadow = true;
@@ -442,7 +507,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       pcHull.setMatrixAt(i, m4);
       m4.compose(v3.set(p.x, 1.08, p.z - 0.1), q4, s3);
       pcCab.setMatrixAt(i, m4);
-      colC.setHex(carPalette[i % carPalette.length]);
+      colC.setHex(carPalette[i % carPalette.length]).multiplyScalar(0.74);
       pcHull.setColorAt(i, colC);
     });
     pcHull.castShadow = true;

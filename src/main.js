@@ -797,6 +797,9 @@ try {
     const r = placeOnRoad(x, z);
     let a = r.a;
     if (aPref !== undefined) { const d = Math.abs(Math.atan2(Math.sin(a - aPref), Math.cos(a - aPref))); if (d > Math.PI / 2) a += Math.PI; }
+    // Never spawn facing a wall: if the lane ahead is blocked within 5m but clear behind, face the other way
+    { const fx0 = Math.sin(a), fz0 = Math.cos(a);
+      if (hitAt(r.x + fx0 * 5, r.z + fz0 * 5) && !hitAt(r.x - fx0 * 5, r.z - fz0 * 5)) a += Math.PI; }
     window.__noCardUntil = performance.now() + 3500;
     { const ce = document.getElementById('stop-card-v2'); if (ce) ce.classList.remove('on'); }
     auto.x = r.x; auto.z = r.z; auto.a = a; auto.v = 0; auto.steer = 0;

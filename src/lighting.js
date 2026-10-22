@@ -226,7 +226,7 @@ export function setupLighting(scene, renderer) {
     nightUniform.value = THREE.MathUtils.clamp(1.0 - (sun.intensity - 0.22) / 1.45, 0, 1);
     moon.intensity = nightUniform.value * 0.48;
     fill.intensity = (1.0 - nightUniform.value * 0.75) * 0.28;
-    scene.fog.density = 0.0008 + nightUniform.value * 0.0002;
+    scene.fog.density = 0.00115 + nightUniform.value * 0.0002;
     skyUniforms.uTime.value += dt;
 
     if (focusPos) {

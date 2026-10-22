@@ -133,7 +133,7 @@ function setupLandmarks() {
 
     const beam = new THREE.Mesh(
       new THREE.CylinderGeometry(1.1, 1.1, 90, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0x38e07b, transparent: true, opacity: 0.26, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false })
+      new THREE.MeshBasicMaterial({ color: 0x38e07b, transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false })
     );
     beam.position.set(p.x, 45, p.z);
 
@@ -413,7 +413,7 @@ function step(dt) {
 
   for (const s of stops) {
     s.ring.scale.setScalar(1 + Math.sin(performance.now() / 400) * 0.06);
-    s.beam.material.opacity = s.got ? 0.05 : 0.22 + Math.sin(performance.now() / 600) * 0.06;
+    s.beam.material.opacity = s.got ? 0.04 : 0.13 + Math.sin(performance.now() / 600) * 0.04;
     if (!s.got && Math.hypot(s.p.x - auto.x, s.p.z - auto.z) < 13.5) {
       s.got = true;
       s.ring.material.color.setHex(0x55606a);

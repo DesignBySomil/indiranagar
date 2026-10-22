@@ -742,9 +742,9 @@ export function createTraffic({
   });
 
   // Allocate counts across the 5 vehicle types
-  const nSedan = Math.round(totalCount * 0.32);
+  const nSedan = Math.round(totalCount * 0.36);
   const nSuv = Math.round(totalCount * 0.20);
-  const nScooter = Math.round(totalCount * 0.22);
+  const nScooter = Math.round(totalCount * 0.14);
   const nAuto = Math.round(totalCount * 0.16);
   const nTempo = Math.max(4, totalCount - (nSedan + nSuv + nScooter + nAuto));
 

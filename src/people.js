@@ -368,10 +368,10 @@ export function createCrowd({
   solidFn = () => 0,
   getAuto,
   nightUniform,
-  count = 120
+  count = 78
 }) {
   // Strictly enforce performance budget: cap pedestrian count at 120
-  const maxPeds = Math.min(120, Math.max(40, count || 120));
+  const maxPeds = Math.min(84, Math.max(36, count || 78));
   const group = new T.Group();
   scene.add(group);
 
