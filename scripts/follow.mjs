@@ -47,6 +47,6 @@ const out = await p.evaluate((NAME, DIR, LANE0, MAXSTEPS) => {
     if (d > total - 12) break;
   }
   K.KeyW = K.KeyA = K.KeyD = false;
-  return { hops, toggles, bl: window.__bl, tl: window.__tl, name: NAME, dir: DIR, lane: LANE, roadLenM: Math.round(total), reachedM: Math.round(maxd), finished: maxd > total - 14, stalls, teleportsOver6m: teleports };
+  return { ahead: [0.5,1,2,3,4].map(d=>d+':'+preds(g.auto.x+Math.sin(g.auto.a)*d,g.auto.z+Math.cos(g.auto.a)*d).join('+')).join(' '), tr: g.traffic.units.filter(u=>Math.hypot(u.x-g.auto.x,u.z-g.auto.z)<14).map(u=>[u.x.toFixed(1),u.z.toFixed(1),u.speed.toFixed(1),u.halfLen].join(',')), autoState: JSON.stringify(g.auto), nearP: (window.__piers||[]).filter(P=>Math.hypot(P[0]-g.auto.x,P[1]-g.auto.z)<12).map(P=>P.join(',')), puddle: (g.hazards.puddles||[]).filter(q=>Math.hypot(q.x-g.auto.x,q.z-g.auto.z)<6).map(q=>[q.x.toFixed(1),q.z.toFixed(1),q.r.toFixed(1)].join(',')), pot: (g.hazards.potholes||[]).filter(q=>Math.hypot(q.x-g.auto.x,q.z-g.auto.z)<6).map(q=>[q.x.toFixed(1),q.z.toFixed(1)].join(',')), hops, toggles, bl: window.__bl, tl: window.__tl, name: NAME, dir: DIR, lane: LANE, roadLenM: Math.round(total), reachedM: Math.round(maxd), finished: maxd > total - 14, stalls, teleportsOver6m: teleports };
 }, process.env.ROAD, +(process.env.DIR || 1), +(process.env.LANE || 2), +(process.env.STEPS || 2400));
 console.log(JSON.stringify(out)); await b.close();
