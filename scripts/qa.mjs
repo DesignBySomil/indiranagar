@@ -10,7 +10,7 @@ await p.goto('http://localhost:4173/', { waitUntil: 'load' });
 await p.waitForFunction('window.__game', { timeout: 120000 });
 const R = { stops: [], views: {}, buttons: {}, misc: {}, errors };
 
-await p.evaluate(() => { const g = window.__game; g.state.hour = 12.5; g.state.snap = true; g.go(); });
+await p.evaluate(() => { const g = window.__game; g.state.hour = 12.5; g.state.auto = false; g.state.snap = true; g.go(); });
 await new Promise(r => setTimeout(r, 1500));
 
 // 1. Every stop: spawn, drive 12 sim-seconds, sample violations

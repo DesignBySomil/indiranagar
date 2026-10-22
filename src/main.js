@@ -519,8 +519,8 @@ function step(dt, now) {
   if (auto.unstickAt === undefined) { auto.unstickAt = -99; auto.unstickN = 0; }
   auto.clk = (auto.clk || 0) + dt;
   if (auto._didUnstick) { auto._didUnstick = false; }
-  auto.x = THREE.MathUtils.clamp(auto.x, MAP.x0 + 10, MAP.x1 - 10);
-  auto.z = THREE.MathUtils.clamp(auto.z, MAP.z0 + 10, MAP.z1 - 10);
+  auto.x = THREE.MathUtils.clamp(auto.x, MAP.x0 + 28, MAP.x1 - 28);
+  auto.z = THREE.MathUtils.clamp(auto.z, MAP.z0 + 28, MAP.z1 - 28);
 
   if (stopsGame) auto.goldAuto = stopsGame.state.goldAuto;
   car.position.set(auto.x, 0, auto.z);
