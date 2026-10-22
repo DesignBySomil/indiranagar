@@ -46,7 +46,7 @@ export function createAsphaltMaterial() {
       const tr = Math.exp(-Math.pow((u - 0.28) / 0.10, 2)) + Math.exp(-Math.pow((u - 0.72) / 0.10, 2));
       // dusty lighter edges near kerbs
       const edge = Math.exp(-Math.pow(u / 0.08, 2)) + Math.exp(-Math.pow((1 - u) / 0.08, 2));
-      let v = 178 + n + sp - tr * 26 + edge * 14;
+      let v = 186 + n + sp - tr * 20 + edge * 12;
       v = Math.min(255, Math.max(0, v));
       d[i] = v; d[i + 1] = v; d[i + 2] = v + 2; d[i + 3] = 255;
     }
@@ -54,9 +54,9 @@ export function createAsphaltMaterial() {
   ctx.putImageData(img, 0, 0);
 
   // cracks: dark random walks along the road direction
-  ctx.strokeStyle = 'rgba(30,31,34,0.55)';
-  for (let k = 0; k < 14; k++) {
-    ctx.lineWidth = 1 + Math.random() * 1.6;
+  ctx.strokeStyle = 'rgba(30,31,34,0.20)';
+  for (let k = 0; k < 5; k++) {
+    ctx.lineWidth = 0.8 + Math.random() * 1.0;
     ctx.beginPath();
     let x = Math.random() * W, y = Math.random() * H;
     ctx.moveTo(x, y);
@@ -70,9 +70,9 @@ export function createAsphaltMaterial() {
   }
 
   // tar snakes (repaired cracks): slightly glossy dark squiggles
-  ctx.strokeStyle = 'rgba(22,23,26,0.75)';
-  for (let k = 0; k < 6; k++) {
-    ctx.lineWidth = 3 + Math.random() * 3;
+  ctx.strokeStyle = 'rgba(22,23,26,0.30)';
+  for (let k = 0; k < 3; k++) {
+    ctx.lineWidth = 2.5 + Math.random() * 2;
     ctx.beginPath();
     let x = Math.random() * W, y = Math.random() * H;
     ctx.moveTo(x, y);
@@ -85,25 +85,25 @@ export function createAsphaltMaterial() {
   }
 
   // repair patches: rectangles of slightly different tone
-  for (let k = 0; k < 5; k++) {
+  for (let k = 0; k < 2; k++) {
     const pw = 40 + Math.random() * 90, ph = 60 + Math.random() * 140;
     const px = Math.random() * (W - pw), py = Math.random() * (H - ph);
     const tone = 150 + Math.random() * 60;
-    ctx.fillStyle = `rgba(${tone},${tone},${tone + 4},0.5)`;
+    ctx.fillStyle = `rgba(${tone},${tone},${tone + 4},0.30)`;
     ctx.fillRect(px, py, pw, ph);
-    ctx.strokeStyle = 'rgba(25,26,29,0.5)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(25,26,29,0.20)';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(px, py, pw, ph);
   }
 
   // oil stains in wheel tracks
-  for (let k = 0; k < 10; k++) {
+  for (let k = 0; k < 6; k++) {
     const u = Math.random() < 0.5 ? 0.28 : 0.72;
     const ox = (u + (Math.random() - 0.5) * 0.12) * W;
     const oy = Math.random() * H;
-    const r = 8 + Math.random() * 26;
+    const r = 6 + Math.random() * 14;
     const g = ctx.createRadialGradient(ox, oy, 1, ox, oy, r);
-    g.addColorStop(0, 'rgba(18,19,22,0.5)');
+    g.addColorStop(0, 'rgba(18,19,22,0.28)');
     g.addColorStop(1, 'rgba(18,19,22,0)');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(ox, oy, r, 0, 7); ctx.fill();
@@ -116,13 +116,13 @@ export function createAsphaltMaterial() {
   map.colorSpace = THREE.SRGBColorSpace;
 
   // bump from a downscaled noise pass
-  const bump = createNoiseCanvas(256, 256, 0x808080, 0.30, true);
+  const bump = createNoiseCanvas(256, 256, 0x808080, 0.22, true);
   bump.repeat.set(1, 1);
 
   const mat = new THREE.MeshStandardMaterial({
     map,
     bumpMap: bump,
-    bumpScale: 0.05,
+    bumpScale: 0.035,
     vertexColors: true,
     roughness: 0.88,
     metalness: 0.03,
