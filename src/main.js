@@ -378,6 +378,9 @@ function buildMini() {
       c.stroke();
     }
   }
+  // neon boundary wall, drawn where the car is stopped (same limits as the clamp + createMapEdge)
+  c.strokeStyle = '#ff2bd6'; c.lineWidth = 6; c.lineJoin = 'miter';
+  c.strokeRect(MAP.x0 + 28, MAP.z0 + 28, MAP.x1 - MAP.x0 - 56, MAP.z1 - MAP.z0 - 56);
 }
 function drawMini() {
   const S = 360, R = 170;
