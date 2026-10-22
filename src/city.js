@@ -179,8 +179,8 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         if (abs(vWn.y) < 0.45) {
           // Weathering: large patchy tone variation
-          float patch = h21(floor(vWp.xz * 0.11) + 17.0);
-          diffuseColor.rgb *= 0.92 + 0.14 * patch;
+          float ptch = h21(floor(vWp.xz * 0.11) + 17.0);
+          diffuseColor.rgb *= 0.92 + 0.14 * ptch;
           // Vertical rain/grime streaks running down the facade
           float stSeed = h21(vec2(floor((vWp.x * abs(vWn.z) + vWp.z * abs(vWn.x)) * 2.3), 3.7));
           float streak = step(0.78, stSeed) * (0.5 + 0.5 * sin(vWp.y * 1.7 + stSeed * 40.0));
