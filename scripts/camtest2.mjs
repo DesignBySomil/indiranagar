@@ -6,7 +6,7 @@ await p.goto(process.env.URL || 'http://localhost:4173/', { waitUntil: 'load' })
 await p.waitForFunction('window.__game', { timeout: 120000 });
 await p.evaluate(() => { const g = window.__game; g.state.hour = 12.5; g.state.auto = false; g.state.snap = false; g.go(); });
 await new Promise(r => setTimeout(r, 1500));
-for (let v = 0; v < 3; v++) {
+for (let v = 0; v < 3; v++) if (v === 0) { await p.keyboard.press('KeyV'); await new Promise(r=>setTimeout(r,500)); } else {
   for (const [x, z, name] of pts) {
     await p.keyboard.down('KeyW');
     await p.evaluate(([x, z]) => { window.__paused = true; window.__spawnAt(x, z); window.__ci = 0; window.__cn = 0; }, [x, z]);
