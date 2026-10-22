@@ -501,6 +501,7 @@ function step(dt, now) {
         if (!hit(nx, nz) && !hit(nx + fx * 2, nz + fz * 2)) { auto.x = nx; auto.z = nz; auto.v = 0; hopped = true; break; }
       }
       if (hopped) { auto.unstickN = 0; skipSnap = true; }
+      else if (auto.unstickN >= 4) { auto.a += Math.PI; auto.v = 0; auto.unstickN = 0; skipSnap = true; } // dead end: turn around
     }
     let freed = false;
     const sgn = thr >= 0 ? -1 : 1;
@@ -794,6 +795,7 @@ try {
     return !!(solid(px, pz) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)));
   }
   function spawnAt(x, z, aPref) {
+    x = THREE.MathUtils.clamp(x, MAP.x0 + 30, MAP.x1 - 30); z = THREE.MathUtils.clamp(z, MAP.z0 + 30, MAP.z1 - 30);
     const r = placeOnRoad(x, z);
     let a = r.a;
     if (aPref !== undefined) { const d = Math.abs(Math.atan2(Math.sin(a - aPref), Math.cos(a - aPref))); if (d > Math.PI / 2) a += Math.PI; }
