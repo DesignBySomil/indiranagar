@@ -112,7 +112,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   idol.position.set(0.30, 1.03, 0.90); /* idol removed */
 
   // ---- Driver seen from behind (passenger view): human proportions ----
-  const shirtMat = new T.MeshStandardMaterial({ color: 0x8b93a4, roughness: 0.9 });
+  const shirtMat = new T.MeshStandardMaterial({ color: 0x5b6b82, roughness: 0.9 });
   const driverAvatar2 = new T.Group();
   const torso = new T.Mesh(new T.CylinderGeometry(0.17, 0.2, 0.5, 14), shirtMat); torso.position.set(0, 1.02, 0.26); torso.scale.z = 0.7;
   const shoulders = new T.Mesh(new T.CapsuleGeometry(0.075, 0.30, 4, 10), shirtMat); shoulders.rotation.z = Math.PI / 2; shoulders.position.set(0, 1.25, 0.26);
