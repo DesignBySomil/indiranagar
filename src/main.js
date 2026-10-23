@@ -491,7 +491,7 @@ function inDivider(px, pz) {
     return false;
   }
 
-function pierHit(x, z) { const P = window.__piers; if (!P) return false; for (let i = 0; i < P.length; i++) { const dx = x - P[i][0], dz = z - P[i][1]; if (dx * dx + dz * dz < 1.32) return true; } return false; }
+function pierHit(x, z) { const P = window.__piers; if (!P) return false; for (let i = 0; i < P.length; i++) { const dx = x - P[i][0], dz = z - P[i][1]; if (dx * dx + dz * dz < 1.0) return true; } return false; }
 
 function step(dt, now) {
   let thr = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);

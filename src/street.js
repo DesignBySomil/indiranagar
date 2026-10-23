@@ -595,18 +595,14 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     let px = bx - cx, pz = bz - cz; const pl = Math.hypot(px, pz) || 1; px /= pl; pz /= pl;
     const HWC = 3.8; // carriageway half-width for the CMH/100 Ft class roads
     const medianGap = bd - 2 * HWC; // physical clear strip between the carriageway edges
-    if (medianGap >= 3.4) {
-      // genuine median: single central column - unless a third drivable way passes too close
+    if (medianGap >= 2.4) {
+      // genuine median: single slim central column wholly inside the median strip (>=0.3m clear of both carriageway edges)
+      // - unless a third drivable way passes too close
       if (distToRoads(mx, mz, [cx, cz], [bx, bz]) >= 4.95) metroPiers.push([mx, mz, yaw]);
       else metroDecks.pop();
     } else {
-      // no real median: portal frame - columns OUTSIDE both carriageways, never in a lane
-      const off = bd / 2 + HWC + 2.0; // past the far carriageway's outer edge: column radius 1.1 + 0.6m clearance
-      const ax1 = mx + px * off, az1 = mz + pz * off, ax2 = mx - px * off, az2 = mz - pz * off;
-      // but never into a crossing street at a junction: drop the span's columns if either lands on another drivable way
-      if (distToRoads(ax1, az1, [cx, cz], [bx, bz]) < 4.9 || distToRoads(ax2, az2, [cx, cz], [bx, bz]) < 4.9) { metroDecks.pop(); continue; }
-      metroPiers.push([ax1, az1, yaw]);
-      metroPiers.push([ax2, az2, yaw]);
+      // no real median: long-span the viaduct - no ground piers at all beside the lanes.
+      // (portal columns hugging the carriageway edges were rejected as lane-side obstacles)
     }
   }
 
@@ -615,7 +611,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const purpMat = makeNeonMaterial(0x7c3aed, 1.35);
 
   if (metroPiers.length) {
-    const pierInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.95, 1.1, 8.8, 12), concMat, metroPiers.length);
+    const pierInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.8, 0.9, 8.8, 12), concMat, metroPiers.length);
     const deckInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.6, 1.35, 27), concMat, metroDecks.length);
     const bandInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.8, 0.32, 27), purpMat, metroDecks.length);
     metroPiers.forEach(([x, z, yaw], i) => {
