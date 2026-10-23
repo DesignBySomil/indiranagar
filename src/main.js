@@ -257,6 +257,9 @@ function syncCamera(dt, snap = false) {
   camera.updateProjectionMatrix();
 }
 
+let camBridgeVols = [];
+let camLiftY = 2.7;
+const _clM = new THREE.Matrix4(), _clQ0 = new THREE.Quaternion(), _clQ1 = new THREE.Quaternion(), _clF = new THREE.Vector3(), _clT = new THREE.Vector3();
 function clampCam() {
   if (camRig && camRig.name && !/chase/i.test(camRig.name)) return;
   const m = 0.8; const los = (x, z) => { if (solid(auto.x, auto.z)) return false; for (let t = 0.15; t < 0.9; t += 0.15) if (solid(x + (auto.x - x) * t, z + (auto.z - z) * t)) return true; return false; };
@@ -268,6 +271,30 @@ function clampCam() {
     camera.position.z += (auto.z - camera.position.z) * 0.2;
   }
   camera.quaternion.copy(q);
+  // Narrow-lane usability: when the pull-in above had to crush the camera onto the car, the roof
+  // fills the frame and the road ahead is unreadable. Rise (smoothed) so the view clears the roof,
+  // re-aiming at the same view-axis point so heading/drag-look and roll are preserved. The x/z spot
+  // is unchanged from the pull-in result, so the camera still never enters a building footprint;
+  // height is capped below any overhead deck's clearance.
+  const dCam = Math.hypot(camera.position.x - auto.x, camera.position.z - auto.z);
+  let yT = camera.position.y;
+  if (dCam < 4.2) {
+    let cap = 8.0;
+    for (let i = 0; i < camBridgeVols.length; i++) {
+      const b = camBridgeVols[i];
+      if (Math.hypot(camera.position.x - b.x, camera.position.z - b.z) < (b.r || 18)) cap = Math.min(cap, (b.clearanceY || 7) - 0.4);
+    }
+    yT = Math.min(cap, camera.position.y + (4.2 - dCam) * 1.8);
+  }
+  camLiftY += (yT - camLiftY) * 0.12;
+  if (camLiftY > camera.position.y + 0.02) {
+    _clF.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    _clT.copy(camera.position).addScaledVector(_clF, 10);
+    _clM.lookAt(camera.position, _clT, camera.up); _clQ0.setFromRotationMatrix(_clM);
+    camera.position.y = camLiftY;
+    _clM.lookAt(camera.position, _clT, camera.up); _clQ1.setFromRotationMatrix(_clM);
+    camera.quaternion.premultiply(_clQ1.multiply(_clQ0.invert()));
+  }
 }
 
 // ---------- input ----------
@@ -718,6 +745,7 @@ try {
   setLoad(55, 'Laying 100 Feet Road, metro & trees');
   await new Promise(r => setTimeout(r, 20));
   const street = buildStreet(world, scene, nightUniform, solid, extras);
+  camBridgeVols = street.bridgeVolumes || [];
   window.__piers = street.metroPiers; window.__gantry = street.gantry;
   window.__edge = createMapEdge({ THREE, scene, MAP });
   streetRef = street;
