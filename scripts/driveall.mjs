@@ -60,7 +60,7 @@ await p.exposeFunction('reportRoute',(idx,rec,covN)=>{
 });
 const TIME_BUDGET_MS=0; // computed after boot
 p.on('console',m=>{const t=m.text(); if(t.startsWith('TR ')||t.startsWith('JAM')) console.log(t);});
-const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
+await p.evaluate((slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
   const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
   let t0=90000; window.__noRender=true;
   const step=()=>{t0+=33;window.__step(0.033,t0);};
@@ -81,16 +81,12 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
       for(const q of a){const m=segMid[q];const dd=ptSeg(x,z,m);if(dd<best){best=dd;bi=q;}}}
     return [best,bi];};
   const cov=new Set(); const tStart=performance.now();
-  let ri=-1;
-  for(const road of slice){
-    ri++;
-    if(ri>0&&performance.now()-tStart>TIME_BUDGET_MS) break; // stop between routes, never mid-route
-    const pts=road.p;
+
+  let ri=-1, R=null, allDone=false;
+  const beginRoute=(road)=>{    const pts=road.p;
     const yaw0=Math.atan2(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]);
     window.__spawnAt(pts[0][0],pts[0][1],yaw0);
     for(let k=0;k<15;k++) step();
-    let wi=1, stuckT=0, offT=0, dist=0, lx=A.x, lz=A.z, lastD=1e9, unstick=0, unstickTries=0; const progBuf=[];
-    const segsHit=new Set(); const trav=new Map(); const segDetail=[];
     // route arc-length coverage: 1m bins along the route's own polyline
     const rpts=pts; const rcum=[0]; for(let i=1;i<rpts.length;i++) rcum.push(rcum[i-1]+Math.hypot(rpts[i][0]-rpts[i-1][0],rpts[i][1]-rpts[i-1][1]));
     const rLen=rcum[rcum.length-1]; const bins=new Set();
@@ -106,7 +102,39 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
       return [bd,bs];};
     const rec={name:road.n,kind:road.k,points:pts.length,done:false,stuck:false,offRoadMax:0,maxSegW:0,offEdgeMaxM:0,offEdgeT:0};
     const budget=Math.min(MAXB,pts.length*520+350);
-    for(let k=0;k<budget&&wi<pts.length;k++){
+    return {pts,wi:1,stuckT:0,offT:0,dist:0,lx:A.x,lz:A.z,lastD:1e9,unstick:0,unstickTries:0,k:0,progBuf:[],segsHit:new Set(),trav:new Map(),segDetail:[],bins,rLen,corridorTol,arcPos,rec,budget};
+  };
+  const finalize=async()=>{
+    const {pts,wi,dist,bins,rLen,segDetail,segsHit,trav,rec,unstickTries}=R;
+
+    K.KeyW=K.KeyA=K.KeyD=K.KeyS=false;
+    rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0);
+    rec.routeLen=+rLen.toFixed(0); rec.arcCoveredM=bins.size; rec.arcFrac=+(bins.size/Math.max(1,Math.floor(rLen))).toFixed(2);
+    rec.fullRoute=rec.arcFrac>=0.95; // whole corridor traversed, small endpoint tolerance
+    rec.segDetail=segDetail; rec.offRoadMax=+rec.offRoadMax.toFixed(1);
+    rec.maxSegW=+rec.maxSegW.toFixed(1);
+    rec.offEdgeMaxM=+rec.offEdgeMaxM.toFixed(1); rec.offEdgeT=+rec.offEdgeT.toFixed(1);
+    rec.waypointsReached=wi-1; rec.waypointsTotal=pts.length-1;
+    for(const [bi,tr] of trav){ const m=segMid[bi]; const len=Math.hypot(m[5]-m[3],m[6]-m[4]);
+      segDetail.push({seg:bi,lo:+tr.lo.toFixed(2),hi:+tr.hi.toFixed(2),len:+len.toFixed(1),cov:+(tr.hi-tr.lo).toFixed(2)});
+      if(tr.hi-tr.lo>=0.5){ segsHit.add(bi); cov.add(bi); } }
+    rec.segsTraversed=segsHit.size; rec.segsList=[...segsHit];
+    rec.unstickTries=unstickTries;
+    rec.start=[+pts[0][0].toFixed(0),+pts[0][1].toFixed(0)]; rec.end=[+A.x.toFixed(0),+A.z.toFixed(0)];
+    return rec;
+  };
+  window.__driveChunk=async(CHUNK)=>{
+    if(allDone) return {type:'alldone',log};
+    let steps=0;
+    while(steps<CHUNK){
+      if(!R){
+        ri++;
+        if(ri>=slice.length||(ri>0&&performance.now()-tStart>TIME_BUDGET_MS)){ allDone=true; window.__coverage=[...cov]; window.__noRender=false; return {type:'alldone',log,totalSegsDriven:cov.size}; }
+        R=beginRoute(slice[ri]);
+      }
+      let {wi,stuckT,offT,dist,lx,lz,lastD,unstick,unstickTries,k}=R;
+      const {pts,progBuf,segsHit,trav,segDetail,bins,corridorTol,arcPos,rec,budget}=R;
+      for(;k<budget&&wi<pts.length&&steps<CHUNK;k++,steps++){
       const ty=Math.atan2(pts[wi][0]-A.x,pts[wi][1]-A.z);
       const err=norm(ty-A.a);
       // CORRECT input model: str=+1 is KeyA and INCREASES auto.a; err>0 needs a to increase -> KeyA
@@ -165,29 +193,29 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
           console.log('CRAWL',JSON.stringify(rec.crawl));
         }
       }
+      }
+      Object.assign(R,{wi,stuckT,offT,dist,lx,lz,lastD,unstick,unstickTries,k});
+      if(wi>=pts.length||k>=budget||rec.stuck){
+        const recOut=await finalize();
+        log.push(recOut);
+        await window.reportRoute(ri,recOut,cov.size);
+        R=null;
+        return {type:'route',rec:recOut,ri};
+      }
     }
-    K.KeyW=K.KeyA=K.KeyD=K.KeyS=false;
-    rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0);
-    rec.routeLen=+rLen.toFixed(0); rec.arcCoveredM=bins.size; rec.arcFrac=+(bins.size/Math.max(1,Math.floor(rLen))).toFixed(2);
-    rec.fullRoute=rec.arcFrac>=0.95; // whole corridor traversed, small endpoint tolerance
-    rec.segDetail=segDetail; rec.offRoadMax=+rec.offRoadMax.toFixed(1);
-    rec.maxSegW=+rec.maxSegW.toFixed(1);
-    rec.offEdgeMaxM=+rec.offEdgeMaxM.toFixed(1); rec.offEdgeT=+rec.offEdgeT.toFixed(1);
-    rec.waypointsReached=wi-1; rec.waypointsTotal=pts.length-1;
-    for(const [bi,tr] of trav){ const m=segMid[bi]; const len=Math.hypot(m[5]-m[3],m[6]-m[4]);
-      segDetail.push({seg:bi,lo:+tr.lo.toFixed(2),hi:+tr.hi.toFixed(2),len:+len.toFixed(1),cov:+(tr.hi-tr.lo).toFixed(2)});
-      if(tr.hi-tr.lo>=0.5){ segsHit.add(bi); cov.add(bi); } }
-    rec.segsTraversed=segsHit.size; rec.segsList=[...segsHit];
-    rec.unstickTries=unstickTries;
-    rec.start=[+pts[0][0].toFixed(0),+pts[0][1].toFixed(0)]; rec.end=[+A.x.toFixed(0),+A.z.toFixed(0)];
-    log.push(rec);
-    await window.reportRoute(ri,rec,cov.size);
-  }
-  window.__coverage=[...cov];
-  window.__noRender=false;
-  return {log,totalSegsDriven:(window.__coverage||[]).length};
+    return {type:'chunk',ri,wi:R.wi,k:R.k,budget:R.budget,dist:+R.dist.toFixed(0),pos:[+A.x.toFixed(1),+A.z.toFixed(1)]};
+  };
 },slice,DRIVE_BUDGET_MS,TRACE,parseInt(process.env.MAXBUDGET||'3400'));
-const recs=(res&&res.log)||[];
+const CHUNK=parseInt(process.env.CHUNK||'400');
+const recs=[];
+for(;;){
+  const r=await p.evaluate((n)=>window.__driveChunk(n),CHUNK);
+  if(!r){ console.log('NULLCHUNK'); break; }
+  if(r.type==='chunk'){ prog.live=r; writeFileSync(PROG,JSON.stringify(prog)); continue; }
+  if(r.type==='route'){ recs.push(r.rec); continue; }
+  if(r.type==='alldone'){ if(r.log&&r.log.length>recs.length){ recs.length=0; recs.push(...r.log); } break; }
+}
+
 import { writeFileSync as _w } from 'fs';
 for(const r of recs){ for(let si=0;si<3;si++){ const key='_crawlShot'+si; if(r[key]){ const fn='/tmp/crawl-'+r.name.replace(/[^A-Za-z0-9]+/g,'_')+'-'+si+'.jpg'; _w(fn,Buffer.from(r[key].split(',')[1],'base64')); delete r[key]; console.log('CRAWLSHOT',fn); } } }
 console.log(JSON.stringify({processed:recs.length,total:prog.done,of:roads.length,segsDriven:prog.totalSegsDriven,incidents:prog.incidents.length}));
