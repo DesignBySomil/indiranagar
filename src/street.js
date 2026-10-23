@@ -598,7 +598,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     if (medianGap >= 2.4) {
       // genuine median: single slim central column wholly inside the median strip (>=0.3m clear of both carriageway edges)
       // - unless a third drivable way passes too close
-      if (distToRoads(mx, mz, [cx, cz], [bx, bz]) >= 4.95) metroPiers.push([mx, mz, yaw]);
+      if (distToRoads(mx, mz, [cx, cz], [bx, bz]) >= 4.95) metroPiers.push([mx, mz, yaw, medianGap]);
       else metroDecks.pop();
     } else {
       // no real median: long-span the viaduct - no ground piers at all beside the lanes.
@@ -614,9 +614,20 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     const pierInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.5, 0.6, 8.8, 12), concMat, metroPiers.length);
     const deckInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.6, 1.35, 27), concMat, metroDecks.length);
     const bandInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.8, 0.32, 27), purpMat, metroDecks.length);
-    metroPiers.forEach(([x, z, yaw], i) => {
+    // Green median strip under the piers: concrete curb + grass top, kept >=0.3m clear of both
+    // carriageway edges so both driving lanes stay visually and physically clear (user request:
+    // pillars must sit inside a visible green strip, not read as 'in the middle of the road').
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.9 });
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x3e7d32, roughness: 0.95 });
+    const curbInst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), curbMat, metroPiers.length);
+    const grassInst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), grassMat, metroPiers.length);
+    const sc = new THREE.Vector3();
+    metroPiers.forEach(([x, z, yaw, gap], i) => {
       q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
       m4.compose(v3.set(x, 4.4, z), q4, s3); pierInst.setMatrixAt(i, m4);
+      const w = Math.max(1.6, Math.min(gap - 0.6, 2.2)); // strip width: inside the clear median, capped
+      m4.compose(v3.set(x, 0.08, z), q4, sc.set(w + 0.24, 0.16, 25.9)); curbInst.setMatrixAt(i, m4);
+      m4.compose(v3.set(x, 0.15, z), q4, sc.set(w, 0.14, 25.9)); grassInst.setMatrixAt(i, m4);
     });
     metroDecks.forEach(([x, z, yaw], i) => {
       q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
@@ -624,7 +635,8 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       m4.compose(v3.set(x, 9.25, z), q4, s3); bandInst.setMatrixAt(i, m4);
     });
     pierInst.castShadow = deckInst.castShadow = true;
-    scene.add(pierInst, deckInst, bandInst);
+    grassInst.receiveShadow = curbInst.receiveShadow = true;
+    scene.add(pierInst, deckInst, bandInst, curbInst, grassInst);
   }
 
   // Build Indiranagar Metro Station from extras.station.pts (elevated on pillars so autos drive underneath)
