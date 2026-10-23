@@ -28,7 +28,7 @@ const r=await p.evaluate(async()=>{
       const units=(window.__traffic?window.__traffic().units:[])||[];
       units.forEach((u,i)=>{
         const pr=prevT.get(i);
-        if(pr&&Math.hypot(u.x-pr.x,u.z-pr.z)>40){const c=cls(u.x,u.z); const dx=u.x-g.auto.x,dz=u.z-g.auto.z; g.camera.getWorldDirection(V); const dd=Math.hypot(dx,dz)||1; ev.push({kind:'veh',b:c||'out',i,d:+dd.toFixed(0),dot:+((dx*V.x+dz*V.z)/dd).toFixed(2),from:[+pr.x.toFixed(0),+pr.z.toFixed(0)],to:[+u.x.toFixed(0),+u.z.toFixed(0)],seg:u.seg&&u.seg.name||'',segPr:pr.seg});}
+        if(pr&&Math.hypot(u.x-pr.x,u.z-pr.z)>40){const c=cls(u.x,u.z); e_k=k; const dx=u.x-g.auto.x,dz=u.z-g.auto.z; g.camera.getWorldDirection(V); const dd=Math.hypot(dx,dz)||1; ev.push({kind:'veh',b:c||'out',i,k,d:+dd.toFixed(0),dot:+((dx*V.x+dz*V.z)/dd).toFixed(2),from:[+pr.x.toFixed(0),+pr.z.toFixed(0)],to:[+u.x.toFixed(0),+u.z.toFixed(0)],seg:u.seg&&u.seg.name||'',segPr:pr.seg});}
         prevT.set(i,{x:u.x,z:u.z,seg:u.seg&&u.seg.name||''});
       });
     }
@@ -36,7 +36,7 @@ const r=await p.evaluate(async()=>{
   }
   const tally=ev=>{const t={lt80:0,'80_150':0,'150_300':0,gt300:0};ev.forEach(e=>t[e.b]++);return{events:ev.length,inFrustum:t,ped:ev.filter(e=>e.kind==='ped').length,veh:ev.filter(e=>e.kind==='veh').length,vehDetail:ev.filter(e=>e.kind==='veh').slice(0,10),jumpers:[...new Set(ev.filter(e=>e.kind==='veh').map(e=>e.i))].length};};
   const out={};
-  out.chase=tally(run(350,null));
+  run(120,null); out.chase=tally(run(350,null)); // 120-step settle so chase cam reaches final heading before collection
   const rig=g.camRig;
   if(rig&&rig.set){rig.set('driver'); out.driverMode=rig.name; out.driver=tally(run(300,null)); rig.set('passenger'); out.passengerMode=rig.name; out.passenger=tally(run(300,null)); rig.set('chase');}
   // drag-look ~74deg right via synthetic pointer path on canvas
