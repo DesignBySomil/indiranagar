@@ -60,7 +60,7 @@ await p.exposeFunction('reportRoute',(idx,rec,covN)=>{
 });
 const TIME_BUDGET_MS=0; // computed after boot
 p.on('console',m=>{const t=m.text(); if(t.startsWith('TR ')||t.startsWith('JAM')) console.log(t);});
-const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
+const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
   const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
   let t0=90000; window.__noRender=true;
   const step=()=>{t0+=33;window.__step(0.033,t0);};
@@ -103,7 +103,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
         if(dd<bd){bd=dd;bs=rcum[i]+t*Math.sqrt(L2);}}
       return [bd,bs];};
     const rec={name:road.n,kind:road.k,points:pts.length,done:false,stuck:false,offRoadMax:0,maxSegW:0,offEdgeMaxM:0,offEdgeT:0};
-    const budget=Math.min(parseInt(process.env.MAXBUDGET||'3400'),pts.length*520+350);
+    const budget=Math.min(MAXB,pts.length*520+350);
     for(let k=0;k<budget&&wi<pts.length;k++){
       const ty=Math.atan2(pts[wi][0]-A.x,pts[wi][1]-A.z);
       const err=norm(ty-A.a);
@@ -184,7 +184,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
   window.__coverage=[...cov];
   window.__noRender=false;
   return {log,totalSegsDriven:(window.__coverage||[]).length};
-},slice,DRIVE_BUDGET_MS,TRACE);
+},slice,DRIVE_BUDGET_MS,TRACE,parseInt(process.env.MAXBUDGET||'3400'));
 const recs=(res&&res.log)||[];
 import { writeFileSync as _w } from 'fs';
 for(const r of recs){ for(let si=0;si<3;si++){ const key='_crawlShot'+si; if(r[key]){ const fn='/tmp/crawl-'+r.name.replace(/[^A-Za-z0-9]+/g,'_')+'-'+si+'.jpg'; _w(fn,Buffer.from(r[key].split(',')[1],'base64')); delete r[key]; console.log('CRAWLSHOT',fn); } } }

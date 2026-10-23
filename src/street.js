@@ -409,7 +409,9 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         }
 
         if (r.k >= 3 && L > 20) {
-          const poleOff = w / 2 + 0.9;
+          // narrowed 100Ft pair: the 1.2m median fits NO pole - flip median-side poles to the outer verge
+          const medS = is100Ft ? (nbrSide.get(ri + ':' + i) || 0) : 0;
+          const poleOff = (w / 2 + 0.9) * (medS > 0 ? -1 : 1);
           utilityPoles.push({ x: x1 - uz * poleOff, z: z1 + ux * poleOff, yaw });
         }
       }
