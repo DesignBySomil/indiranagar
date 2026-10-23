@@ -616,6 +616,19 @@ function step(dt, now) {
   if (auto._didUnstick) { auto._didUnstick = false; }
   auto.x = THREE.MathUtils.clamp(auto.x, MAP.x0 + 28, MAP.x1 - 28);
   auto.z = THREE.MathUtils.clamp(auto.z, MAP.z0 + 28, MAP.z1 - 28);
+  // sitting inside solid geometry AT the boundary (e.g. clamped into a building edge): nudge to the nearest free spot
+  const atBound = auto.x === MAP.x0 + 28 || auto.x === MAP.x1 - 28 || auto.z === MAP.z0 + 28 || auto.z === MAP.z1 - 28;
+  if (atBound && hit(auto.x, auto.z)) {
+    let fixed = false;
+    for (let r = 0.5; r <= 18 && !fixed; r += 0.5) {
+      for (let k = 0; k < 16 && !fixed; k++) {
+        const ang = k * Math.PI / 8;
+        const nx = THREE.MathUtils.clamp(auto.x + Math.sin(ang) * r, MAP.x0 + 28, MAP.x1 - 28);
+        const nz = THREE.MathUtils.clamp(auto.z + Math.cos(ang) * r, MAP.z0 + 28, MAP.z1 - 28);
+        if (!hit(nx, nz)) { auto.x = nx; auto.z = nz; auto.v = 0; fixed = true; }
+      }
+    }
+  }
 
   if (stopsGame) auto.goldAuto = stopsGame.state.goldAuto;
   car.position.set(auto.x, 0, auto.z);
