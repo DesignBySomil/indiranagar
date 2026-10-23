@@ -663,6 +663,35 @@ function buildTempoSet(T) {
   };
 }
 
+// footprint test for a displaced (struck) traffic vehicle: 4 corners + centre vs solid, median divider, metro piers and carriageway edge
+function footBlockedFor(tu, solidFn, HWmap, x0, z0, yw) {
+  const hl = tu.halfLen || 2, hw = (HWmap[tu.td && tu.td.key] || 1.0);
+  const cc = Math.cos(yw), ss = Math.sin(yw);
+  const P = (typeof window !== 'undefined') ? window.__piers : null;
+  const D = (typeof window !== 'undefined') ? window.__inDivider : null;
+  const sg = tu.seg;
+  for (const [lx, lz] of [[hw, hl], [-hw, hl], [hw, -hl], [-hw, -hl], [0, 0]]) {
+    const px = x0 + cc * lx + ss * lz, pz = z0 - ss * lx + cc * lz;
+    if (solidFn && solidFn(px, pz)) return true;
+    if (D && D(px, pz)) return true;
+    if (P) for (let i = 0; i < P.length; i++) { const dx = px - P[i][0], dz = pz - P[i][1]; if (dx * dx + dz * dz < 0.49) return true; }
+    if (sg && sg.width) { const lat = Math.abs(-(px - sg.x1) * sg.uz + (pz - sg.z1) * sg.ux); if (sg.width / 2 - lat < -0.4) return true; }
+  }
+  return false;
+}
+
+// shrink a struck car kept offset only as far as needed so its footprint is clear at lane pose pos (last resort; the car keeps moving)
+function fitOffsetTo(tu, solidFn, HW, pos) {
+  const ox = tu.ox || 0, oz = tu.oz || 0, oy = tu.oyaw || 0;
+  if (!footBlockedFor(tu, solidFn, HW, pos.x + ox, pos.z + oz, pos.yaw + oy)) return;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 6; i++) {
+    const m = (lo + hi) / 2;
+    if (footBlockedFor(tu, solidFn, HW, pos.x + ox * m, pos.z + oz * m, pos.yaw + oy * m)) hi = m; else lo = m;
+  }
+  tu.ox = ox * lo; tu.oz = oz * lo; tu.oyaw = oy * lo;
+}
+
 function normalizeRoadSegs(roadSegs, solidFn, minLen = 5) {
   const valid = [];
   for (let i = 0; i < roadSegs.length; i++) {
@@ -1055,7 +1084,21 @@ export function createTraffic({
       const tu = trafficUnits[i];
       if (tu.seg.oneway) tu.dir = 1;
       let forceRecycle = false;
-      tu.t += (tu.dir * tu.speed * safeDt) / tu.seg.len;
+      {
+        const dT = (tu.dir * tu.speed * safeDt) / tu.seg.len;
+        // a struck, displaced car only moves on if its footprint stays clear at the next lane point: it never drags the kept landing into a wall (no snap back to the lane)
+        if ((tu.ox || tu.oz || tu.oyaw) && tu.speed > 0) {
+          const nt = tu.t + dT;
+          const np = computeLanePos(tu.seg, Math.min(1, Math.max(0, nt)), tu.dir);
+          if (!footBlockedFor(tu, solidFn, HW, np.x + (tu.ox || 0), np.z + (tu.oz || 0), np.yaw + (tu.oyaw || 0))) { tu.t = nt; tu.hold = 0; }
+          else {
+            // cannot advance with the landing kept: wait where it landed. Out of the player's sight (over 60 m) or after a 6 s wait,
+            // keep only the part of the landing that is clear at the next lane point so traffic never jams for good.
+            tu.hold = (tu.hold || 0) + safeDt;
+            if (tu.hold > 6 || Math.hypot(tu.seg.x1 + (tu.seg.x2 - tu.seg.x1) * tu.t - player.x, tu.seg.z1 + (tu.seg.z2 - tu.seg.z1) * tu.t - player.z) > 60) { fitOffsetTo(tu, solidFn, HW, np); tu.t = nt; tu.hold = 0; }
+          }
+        } else tu.t += dT;
+      }
 
       // Segment boundary transition
       if (tu.t > 0.97 || tu.t < 0.03) {
@@ -1070,10 +1113,20 @@ export function createTraffic({
         if (typeof window !== 'undefined') { const W = window.__trc = window.__trc || { trans: 0, failNext: 0, failJump: 0, held: 0, recycled: 0, log: [] }; if (nxt && jumpOk) W.trans++; else { if (!nxt) W.failNext++; else W.failJump++; if (W.log.length < 24) W.log.push({ seg: tu.seg.name, t: +tu.t.toFixed(3), dir: tu.dir, ow: tu.seg.oneway ? 1 : 0, nxt: nxt ? nxt.seg.name : null, jumpD: +jumpD.toFixed(2), exit: [ +exitX.toFixed(1), +exitZ.toFixed(1) ] }); } }
         if (nxt && jumpOk) {
           const entryGap = Math.max(0.5, Math.min(gapLon, nxt.seg.len * 0.9));
+          const yawBefore = computeLanePos(tu.seg, T.MathUtils.clamp(tu.t, 0, 1), tu.dir).yaw;
           tu.seg = nxt.seg;
           tu.dir = nxt.dir;
           // entry must land OUTSIDE the 0.03/0.97 boundary window or the unit instantly re-triggers the transition and one-ways forceRecycle-freeze at the entry point
           tu.t = nxt.dir === 1 ? T.MathUtils.clamp(entryGap / nxt.seg.len, 0.05, 0.94) : T.MathUtils.clamp(1 - entryGap / nxt.seg.len, 0.06, 0.95);
+          // struck car carrying a kept landing offset: keep as much of it as stays clear on the new segment (never a stop, never a re-fire of the transition)
+          if (tu.ox || tu.oz || tu.oyaw) {
+            const ep = computeLanePos(tu.seg, tu.t, tu.dir);
+            // the landing turns with the car around a bend (a world offset applied across a junction would drop it inside a building)
+            let dy = ep.yaw - yawBefore; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+            const c = Math.cos(dy), sn = Math.sin(dy), ox0 = tu.ox || 0, oz0 = tu.oz || 0;
+            tu.ox = ox0 * c + oz0 * sn; tu.oz = -ox0 * sn + oz0 * c;
+            fitOffsetTo(tu, solidFn, HW, ep);
+          }
         } else if (tu.seg.oneway) {
           forceRecycle = true;
         } else {
@@ -1112,11 +1165,23 @@ export function createTraffic({
       // impact kick: damped spring, quick hop, spin decay. The offset is steadily
       // baked into a persistent displacement (ox/oz/oyaw) so a struck vehicle
       // STAYS where the impact left it instead of springing back to its lane.
-      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
+      if (tu.ox || tu.oz || tu.oyaw || tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
         // free slide with friction, NO restoring spring: the vehicle lands where the hit sends it
         const fr = Math.exp(-3.2 * safeDt), frs = Math.exp(-4.5 * safeDt);
-        tu.ox = (tu.ox || 0) + tu.kvx * safeDt; tu.oz = (tu.oz || 0) + tu.kvz * safeDt;
-        tu.oyaw = (tu.oyaw || 0) + tu.ksv * safeDt;
+        // collision-aware, substepped: slide/spin in small steps and cancel the part that would put the footprint
+        // into solid geometry, the divider, a pier or off the carriageway. The car stops at its last clear pose.
+        const cox0 = tu.ox || 0, coz0 = tu.oz || 0, coy0 = tu.oyaw || 0;
+        const dOx = tu.kvx * safeDt, dOz = tu.kvz * safeDt, dOy = tu.ksv * safeDt;
+        const nSub = Math.min(12, Math.max(1, Math.ceil(Math.max(Math.hypot(dOx, dOz) / 0.12, Math.abs(dOy) / 0.06))));
+        let sx = cox0, sz = coz0, sy = coy0;
+        for (let q = 0; q < nSub; q++) {
+          const tx = sx + dOx / nSub, tz = sz + dOz / nSub, ty = sy + dOy / nSub;
+          if (!footBlockedFor(tu, solidFn, HW, pos.x + tx, pos.z + tz, pos.yaw + ty)) { sx = tx; sz = tz; sy = ty; }
+          else if (!footBlockedFor(tu, solidFn, HW, pos.x + tx, pos.z + tz, pos.yaw + sy)) { sx = tx; sz = tz; tu.ksv = 0; }
+          else if (!footBlockedFor(tu, solidFn, HW, pos.x + sx, pos.z + sz, pos.yaw + ty)) { sy = ty; tu.kvx = 0; tu.kvz = 0; }
+          else { tu.kvx = 0; tu.kvz = 0; tu.ksv = 0; break; }
+        }
+        tu.ox = sx; tu.oz = sz; tu.oyaw = sy;
         tu.kvx *= fr; tu.kvz *= fr; tu.ksv *= frs;
         if (tu.ky > 0 || tu.kvy > 0) { tu.kvy -= 26 * safeDt; tu.ky += tu.kvy * safeDt; if (tu.ky < 0) { tu.ky = 0; tu.kvy = 0; } }
         if (tu.cool > 0) tu.cool -= safeDt;
@@ -1172,7 +1237,7 @@ export function createTraffic({
       const d2 = ddx * ddx + ddz * ddz;
       if (d2 < bestD) { bestD = d2; best = u; }
     }
-    if (!best || best.cool > 0) return false;
+    if (!best || best.cool > 0 || Math.hypot(best.kvx, best.kvz) > 1.2) return false; // one discrete hit per shove, not re-kicked mid-slide
     const airborne = (best.ky || 0) > 0.02; // never stack a second launch mid-flight
     const mass = best.halfLen < 1.5 ? 1.5 : (best.halfLen > 2.8 ? 0.7 : 1.0);
     const p2 = power * mass;
@@ -1182,7 +1247,7 @@ export function createTraffic({
     best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.6;
     // user bar: a struck vehicle must visibly leave the ground, not just shove sideways
     if (!airborne) best.kvy = Math.min(12, Math.max(best.kvy, 4.5 + p2 * 1.15));
-    best.cool = 0.55;
+    best.cool = 0.9;
     return true;
   }
 
@@ -1523,7 +1588,7 @@ export function createParkedVehicles({
         if (d2 < bestD) { bestD = d2; best = sp; }
       }
     }
-    if (!best || best.cool > 0) return false;
+    if (!best || best.cool > 0 || Math.hypot(best.vx, best.vz) > 1.2) return false;
     const airborne = (best.ky || 0) > 0.02;
     const light = (best.type === 'scooter' || best.type === 'bike') ? 1.6 : (best.type === 'autoRickshaw' ? 1.1 : 0.7);
     const p = power * light;
@@ -1532,7 +1597,7 @@ export function createParkedVehicles({
     best.vaw += (side >= 0 ? 1 : -1) * p * 0.65;
     // same visible-airborne bar for parked vehicles
     if (!airborne) best.vy = Math.min(12, Math.max(best.vy, 4 + p * 1.05));
-    best.cool = 0.55;
+    best.cool = 0.9;
     activeParked.add(best);
     return true;
   }
