@@ -15,7 +15,7 @@ const out = await p.evaluate(()=>{
   for(const ri of [2,8,9]){
     const raw=g.world.roads[ri].p;
     // in-bounds portion: longest contiguous run of points within +-998
-    const ib=raw.map(pt=>Math.abs(pt[0])<998&&Math.abs(pt[1])<998);
+    const ib=raw.map(pt=>pt[0]>=-622&&pt[0]<=802&&pt[1]>=-777&&pt[1]<=747); // playable clamp rect: MAP{x0:-650,x1:830,z0:-805,z1:775} +- 28
     let best=[0,0],cur=null;
     for(let i=0;i<raw.length;i++){ if(ib[i]){ if(cur===null)cur=i; if(i-cur>best[1]-best[0])best=[cur,i]; } else cur=null; }
     const PTS=raw.slice(best[0],best[1]+1).map(pt=>[pt[0],pt[1]]);
