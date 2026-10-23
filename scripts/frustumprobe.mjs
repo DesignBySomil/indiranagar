@@ -28,7 +28,7 @@ const r=await p.evaluate(async()=>{
       const units=(window.__traffic?window.__traffic().units:[])||[];
       units.forEach((u,i)=>{
         const pr=prevT.get(i);
-        if(pr&&Math.hypot(u.x-pr.x,u.z-pr.z)>40){const c=cls(u.x,u.z); e_k=k; const dx=u.x-g.auto.x,dz=u.z-g.auto.z; g.camera.getWorldDirection(V); const dd=Math.hypot(dx,dz)||1; ev.push({kind:'veh',b:c||'out',i,k,d:+dd.toFixed(0),dot:+((dx*V.x+dz*V.z)/dd).toFixed(2),from:[+pr.x.toFixed(0),+pr.z.toFixed(0)],to:[+u.x.toFixed(0),+u.z.toFixed(0)],seg:u.seg&&u.seg.name||'',segPr:pr.seg});}
+        if(pr&&Math.hypot(u.x-pr.x,u.z-pr.z)>40){const c=cls(u.x,u.z); const dx=u.x-g.auto.x,dz=u.z-g.auto.z; g.camera.getWorldDirection(V); const dd=Math.hypot(dx,dz)||1; ev.push({kind:'veh',b:c||'out',i,k,d:+dd.toFixed(0),dot:+((dx*V.x+dz*V.z)/dd).toFixed(2),from:[+pr.x.toFixed(0),+pr.z.toFixed(0)],to:[+u.x.toFixed(0),+u.z.toFixed(0)],seg:u.seg&&u.seg.name||'',segPr:pr.seg});}
         prevT.set(i,{x:u.x,z:u.z,seg:u.seg&&u.seg.name||''});
       });
     }
