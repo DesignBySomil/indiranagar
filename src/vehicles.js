@@ -1098,25 +1098,32 @@ export function createTraffic({
           tu.t = picked.t;
           tu.dir = picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1);
           tu.speed = tu.maxSpeed * 0.8;
+          tu.ox = tu.oz = tu.oyaw = 0;
           pos = computeLanePos(tu.seg, tu.t, tu.dir);
         } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
       }
 
       tu.lastSeg = tu.seg; tu.lastT = tu.t; tu.lastDir = tu.dir;
-      // impact kick: damped spring back to the lane, quick hop, spin decay
+      // impact kick: damped spring, quick hop, spin decay. The offset is steadily
+      // baked into a persistent displacement (ox/oz/oyaw) so a struck vehicle
+      // STAYS where the impact left it instead of springing back to its lane.
       if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
         tu.kvx += (-26 * tu.kx - 5 * tu.kvx) * safeDt; tu.kx += tu.kvx * safeDt;
         tu.kvz += (-26 * tu.kz - 5 * tu.kvz) * safeDt; tu.kz += tu.kvz * safeDt;
         tu.ksv += (-34 * tu.ks - 7 * tu.ksv) * safeDt; tu.ks += tu.ksv * safeDt;
         if (tu.ky > 0 || tu.kvy > 0) { tu.kvy -= 26 * safeDt; tu.ky += tu.kvy * safeDt; if (tu.ky < 0) { tu.ky = 0; tu.kvy = 0; } }
         if (tu.cool > 0) tu.cool -= safeDt;
+        const bake = Math.min(1, 2.5 * safeDt);
+        tu.ox = (tu.ox || 0) + tu.kx * bake; tu.kx -= tu.kx * bake;
+        tu.oz = (tu.oz || 0) + tu.kz * bake; tu.kz -= tu.kz * bake;
+        tu.oyaw = (tu.oyaw || 0) + tu.ks * bake; tu.ks -= tu.ks * bake;
         if (Math.abs(tu.kx) < 0.002 && Math.abs(tu.kvx) < 0.02) { tu.kx = 0; tu.kvx = 0; }
         if (Math.abs(tu.kz) < 0.002 && Math.abs(tu.kvz) < 0.02) { tu.kz = 0; tu.kvz = 0; }
         if (Math.abs(tu.ks) < 0.002 && Math.abs(tu.ksv) < 0.02) { tu.ks = 0; tu.ksv = 0; }
       }
-      tu.x = pos.x + (tu.kx || 0);
-      tu.z = pos.z + (tu.kz || 0);
-      tu.yaw = pos.yaw + (tu.ks || 0);
+      tu.x = pos.x + (tu.ox || 0) + (tu.kx || 0);
+      tu.z = pos.z + (tu.oz || 0) + (tu.kz || 0);
+      tu.yaw = pos.yaw + (tu.oyaw || 0) + (tu.ks || 0);
 
       q4.setFromAxisAngle(yAxis, tu.yaw);
       v3.set(tu.x, tu.ky || 0, tu.z);
@@ -1256,6 +1263,7 @@ export function createParkedVehicles({
       cell = [];
       spatialGrid.set(key, cell);
     }
+    spot.cellKey = key;
     cell.push(spot);
   }
 
@@ -1463,6 +1471,11 @@ export function createParkedVehicles({
         sp.vx += (-22 * sp.ox - 5 * sp.vx) * dt; sp.ox += sp.vx * dt;
         sp.vz += (-22 * sp.oz - 5 * sp.vz) * dt; sp.oz += sp.vz * dt;
         sp.vaw += (-30 * sp.oyaw - 7 * sp.vaw) * dt; sp.oyaw += sp.vaw * dt;
+        // bake the offset into the vehicle's real spot so it does NOT slide back
+        const bake = Math.min(1, 2.5 * dt);
+        sp.x += sp.ox * bake; sp.ox -= sp.ox * bake;
+        sp.z += sp.oz * bake; sp.oz -= sp.oz * bake;
+        sp.yaw += sp.oyaw * bake; sp.oyaw -= sp.oyaw * bake;
         if (sp.ky > 0 || sp.vy > 0) { sp.vy -= 26 * dt; sp.ky += sp.vy * dt; if (sp.ky < 0) { sp.ky = 0; sp.vy = 0; } }
         sp.cool -= dt;
         if (sp.m && sp.idx >= 0) {
@@ -1477,6 +1490,14 @@ export function createParkedVehicles({
         if (sp.cool <= 0 && Math.abs(sp.vx) + Math.abs(sp.vz) + Math.abs(sp.vaw) < 0.05 && Math.abs(sp.ox) + Math.abs(sp.oz) + Math.abs(sp.oyaw) < 0.01 && sp.ky === 0) {
           sp.ox = sp.oz = sp.oyaw = 0; sp.vx = sp.vz = sp.vaw = 0;
           activeParked.delete(sp);
+          // the impact moved it for real: keep collision lookup correct across cells
+          const nc = Math.floor(sp.x / cellSize) + ',' + Math.floor(sp.z / cellSize);
+          if (sp.cellKey !== nc) {
+            const oldCell = spatialGrid.get(sp.cellKey);
+            if (oldCell) { const oi = oldCell.indexOf(sp); if (oi >= 0) oldCell.splice(oi, 1); }
+            let nCell = spatialGrid.get(nc); if (!nCell) { nCell = []; spatialGrid.set(nc, nCell); }
+            nCell.push(sp); sp.cellKey = nc;
+          }
         }
       }
     }
