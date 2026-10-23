@@ -1,3 +1,4 @@
+import { applyAlleyFix } from './alleyfix.js';
 // src/main.js
 import * as THREE from 'three';
 import { setupLighting } from './lighting.js';
@@ -626,6 +627,7 @@ function loop(now) {
 async function boot() {
   setLoad(8, 'Fetching the map');
   world = await (await fetch(import.meta.env.BASE_URL + 'data/world.json')).json();
+  applyAlleyFix(world.roads);
   world.roads.push({ k: 3, n: 'Old Airport Road', p: LEELA_ACCESS_ROAD });
   (function infill() {
     const WM = { 5: 14.5, 4: 10.5, 3: 8.2, 2: 7, 1: 5.5 };
