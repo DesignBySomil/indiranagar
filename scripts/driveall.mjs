@@ -131,7 +131,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
         let tr=trav.get(bi); if(!tr){tr={lo:t,hi:t};trav.set(bi,tr);} else { if(t<tr.lo)tr.lo=t; if(t>tr.hi)tr.hi=t; }
       }
       const bw=bi>=0?segMid[bi][2]:0; if(bw>rec.maxSegW)rec.maxSegW=bw;
-      if(bi>=0){ const over=best-bw/2; if(over>rec.offEdgeMaxM)rec.offEdgeMaxM=over; if(over>0)rec.offEdgeT+=0.033; }
+      if(bi>=0){ const over=best-bw/2; if(over>rec.offEdgeMaxM){rec.offEdgeMaxM=over; rec.offEdgeMaxPos=[+A.x.toFixed(1),+A.z.toFixed(1)];} if(over>0)rec.offEdgeT+=0.033; }
       if(best>12) offT+=0.033; else offT=0;
       if(offT>rec.offRoadMax) rec.offRoadMax=offT;
       if(unstick===0){
