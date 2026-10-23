@@ -505,6 +505,7 @@ function step(dt, now) {
   const max = 17;
   auto.v += (thr * (thr > 0 ? 9.5 : 12.5) - auto.v * 0.35 * (thr === 0 ? 1.8 : 1)) * dt;
   auto.v = THREE.MathUtils.clamp(auto.v, -6, max);
+  const preV = auto.v;
   auto.steer += (str - auto.steer) * Math.min(1, dt * 8.5);
   const dA = auto.steer * dt * 1.85 * THREE.MathUtils.clamp(auto.v / 5, -1, 1);
   const hitA = (x, z, a) => {
@@ -555,6 +556,16 @@ function step(dt, now) {
       if (!hit(auto.x, auto.z + dz * f)) { auto.z += dz * f; auto.v *= 0.8; moved = true; break; }
     }
     if (!moved) auto.v = thr > 0 ? Math.min(auto.v, 0) * 0.2 : Math.max(auto.v, 0) * 0.2;
+  }
+  // impact feedback: if we drove into traffic or a parked vehicle, shove it a little
+  if (Math.abs(preV) > 2.4) {
+    const dirS = preV > 0 ? 1 : -1;
+    const fx0 = Math.sin(auto.a) * dirS, fz0 = Math.cos(auto.a) * dirS;
+    const px0 = auto.x + fx0 * 2.05, pz0 = auto.z + fz0 * 2.05;
+    const kind0 = hitKind(px0, pz0, auto.a);
+    const pw = Math.min(6, Math.abs(preV) * 0.55);
+    if (kind0 === 2) { if (traffic && traffic.kickAt) traffic.kickAt(px0, pz0, fx0, fz0, pw); }
+    else if (kind0 === 1 && parkedVehicles && parkedVehicles.kickAt && parkedVehicles.solid(px0, pz0)) parkedVehicles.kickAt(px0, pz0, fx0, fz0, pw * 0.8);
   }
   // unstick fallback: throttle held but not moving against a collider -> back off, then snap to the road lane
   // Only static geometry triggers the recovery hop. Waiting behind traffic, a cow or a crowd never moves the player: they can wait, reverse or steer around.

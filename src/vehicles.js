@@ -906,7 +906,8 @@ export function createTraffic({
         braking: false,
         x: pos.x,
         z: pos.z,
-        yaw: pos.yaw
+        yaw: pos.yaw,
+        kx: 0, kz: 0, kvx: 0, kvz: 0, ks: 0, ksv: 0, ky: 0, kvy: 0, cool: 0
       });
     }
     td.bodyInst.instanceColor.needsUpdate = true;
@@ -1102,12 +1103,23 @@ export function createTraffic({
       }
 
       tu.lastSeg = tu.seg; tu.lastT = tu.t; tu.lastDir = tu.dir;
-      tu.x = pos.x;
-      tu.z = pos.z;
-      tu.yaw = pos.yaw;
+      // impact kick: damped spring back to the lane, quick hop, spin decay
+      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
+        tu.kvx += (-26 * tu.kx - 9 * tu.kvx) * safeDt; tu.kx += tu.kvx * safeDt;
+        tu.kvz += (-26 * tu.kz - 9 * tu.kvz) * safeDt; tu.kz += tu.kvz * safeDt;
+        tu.ksv += (-34 * tu.ks - 10 * tu.ksv) * safeDt; tu.ks += tu.ksv * safeDt;
+        if (tu.ky > 0 || tu.kvy > 0) { tu.kvy -= 26 * safeDt; tu.ky += tu.kvy * safeDt; if (tu.ky < 0) { tu.ky = 0; tu.kvy = 0; } }
+        if (tu.cool > 0) tu.cool -= safeDt;
+        if (Math.abs(tu.kx) < 0.002 && Math.abs(tu.kvx) < 0.02) { tu.kx = 0; tu.kvx = 0; }
+        if (Math.abs(tu.kz) < 0.002 && Math.abs(tu.kvz) < 0.02) { tu.kz = 0; tu.kvz = 0; }
+        if (Math.abs(tu.ks) < 0.002 && Math.abs(tu.ksv) < 0.02) { tu.ks = 0; tu.ksv = 0; }
+      }
+      tu.x = pos.x + (tu.kx || 0);
+      tu.z = pos.z + (tu.kz || 0);
+      tu.yaw = pos.yaw + (tu.ks || 0);
 
       q4.setFromAxisAngle(yAxis, tu.yaw);
-      v3.set(tu.x, 0, tu.z);
+      v3.set(tu.x, tu.ky || 0, tu.z);
       m4.compose(v3, q4, s3);
 
       tu.td.bodyInst.setMatrixAt(tu.subIdx, m4);
@@ -1142,7 +1154,28 @@ export function createTraffic({
     return false;
   }
 
-  return { group, update, solid, units: trafficUnits };
+  // shove the nearest unit (collision impact reaction)
+  function kickAt(x, z, dx, dz, power) {
+    let best = null, bestD = 3.2 * 3.2;
+    for (let i = 0; i < trafficUnits.length; i++) {
+      const u = trafficUnits[i];
+      const ddx = u.x - x, ddz = u.z - z;
+      const d2 = ddx * ddx + ddz * ddz;
+      if (d2 < bestD) { bestD = d2; best = u; }
+    }
+    if (!best || best.cool > 0) return false;
+    const mass = best.halfLen < 1.5 ? 1.5 : (best.halfLen > 2.8 ? 0.7 : 1.0);
+    const p2 = power * mass;
+    best.kvx += dx * p2;
+    best.kvz += dz * p2;
+    const side = (best.x - x) * dz - (best.z - z) * dx;
+    best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.45;
+    best.kvy = Math.max(best.kvy, p2 * 0.5);
+    best.cool = 0.55;
+    return true;
+  }
+
+  return { group, update, solid, units: trafficUnits, kickAt };
 }
 
 export function createParkedVehicles({
@@ -1264,7 +1297,8 @@ export function createParkedVehicles({
           z: pz,
           yaw: dirYaw + (h - 0.5) * 0.12,
           type,
-          colorIdx
+          colorIdx,
+          ox: 0, oz: 0, ky: 0, oyaw: 0, vx: 0, vz: 0, vy: 0, vaw: 0, cool: 0, m: null, idx: -1
         };
         allSpots.push(spot);
         addToGrid(spot);
@@ -1375,6 +1409,8 @@ export function createParkedVehicles({
     }
 
     // Update InstancedMeshes
+    for (const sp of instancedSpots) { sp.m = null; sp.idx = -1; }
+    instancedSpots.length = 0;
     for (const td of typeDefs) {
       const key = td.key;
       const list = typeBuckets[key] || [];
@@ -1388,9 +1424,11 @@ export function createParkedVehicles({
       for (let i = 0; i < maxCap; i++) {
         if (i < list.length) {
           const sp = list[i];
-          q4.setFromAxisAngle(yAxis, sp.yaw);
-          v3.set(sp.x, 0, sp.z);
+          q4.setFromAxisAngle(yAxis, sp.yaw + (sp.oyaw || 0));
+          v3.set(sp.x + (sp.ox || 0), sp.ky || 0, sp.z + (sp.oz || 0));
           m4.compose(v3, q4, s3);
+          sp.m = m; sp.idx = i;
+          instancedSpots.push(sp);
           m.bodyInst.setMatrixAt(i, m4);
           m.detailInst.setMatrixAt(i, m4);
 
@@ -1410,15 +1448,66 @@ export function createParkedVehicles({
     }
   }
 
+  const instancedSpots = [];
+  const activeParked = new Set();
+
   // Initial populate
   refreshStreaming(true);
 
   function update(dt = 0.016) {
+    if (activeParked.size) {
+      for (const sp of activeParked) {
+        sp.vx += (-22 * sp.ox - 8 * sp.vx) * dt; sp.ox += sp.vx * dt;
+        sp.vz += (-22 * sp.oz - 8 * sp.vz) * dt; sp.oz += sp.vz * dt;
+        sp.vaw += (-30 * sp.oyaw - 10 * sp.vaw) * dt; sp.oyaw += sp.vaw * dt;
+        if (sp.ky > 0 || sp.vy > 0) { sp.vy -= 26 * dt; sp.ky += sp.vy * dt; if (sp.ky < 0) { sp.ky = 0; sp.vy = 0; } }
+        sp.cool -= dt;
+        if (sp.m && sp.idx >= 0) {
+          q4.setFromAxisAngle(yAxis, sp.yaw + sp.oyaw);
+          v3.set(sp.x + sp.ox, sp.ky, sp.z + sp.oz);
+          m4.compose(v3, q4, s3);
+          sp.m.bodyInst.setMatrixAt(sp.idx, m4);
+          sp.m.detailInst.setMatrixAt(sp.idx, m4);
+          sp.m.bodyInst.instanceMatrix.needsUpdate = true;
+          sp.m.detailInst.instanceMatrix.needsUpdate = true;
+        }
+        if (sp.cool <= 0 && Math.abs(sp.vx) + Math.abs(sp.vz) + Math.abs(sp.vaw) < 0.05 && Math.abs(sp.ox) + Math.abs(sp.oz) + Math.abs(sp.oyaw) < 0.01 && sp.ky === 0) {
+          sp.ox = sp.oz = sp.oyaw = 0; sp.vx = sp.vz = sp.vaw = 0;
+          activeParked.delete(sp);
+        }
+      }
+    }
     accumDt += dt;
     if (accumDt >= 0.35) {
       accumDt = 0;
       refreshStreaming(false);
     }
+  }
+
+  // shove the nearest parked vehicle (collision impact reaction)
+  function kickAt(x, z, dx, dz, power) {
+    const cx = Math.floor(x / cellSize), cz = Math.floor(z / cellSize);
+    let best = null, bestD = 3.0 * 3.0;
+    for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) {
+      const cell = spatialGrid.get(`${i},${j}`);
+      if (!cell) continue;
+      for (let k = 0; k < cell.length; k++) {
+        const sp = cell[k];
+        const ddx = sp.x - x, ddz = sp.z - z;
+        const d2 = ddx * ddx + ddz * ddz;
+        if (d2 < bestD) { bestD = d2; best = sp; }
+      }
+    }
+    if (!best || best.cool > 0) return false;
+    const light = (best.type === 'scooter' || best.type === 'bike') ? 1.6 : (best.type === 'autoRickshaw' ? 1.1 : 0.7);
+    const p = power * light;
+    best.vx += dx * p; best.vz += dz * p;
+    const side = (best.x - x) * dz - (best.z - z) * dx;
+    best.vaw += (side >= 0 ? 1 : -1) * p * 0.5;
+    best.vy = Math.max(best.vy, p * 0.35);
+    best.cool = 0.55;
+    activeParked.add(best);
+    return true;
   }
 
   const HALF = { hatch: [0.95, 2.25], sedan: [1.0, 2.55], suv: [1.1, 2.55], autoRickshaw: [0.85, 1.6], scooter: [0.5, 1.05], bike: [0.45, 1.05] };
@@ -1440,5 +1529,5 @@ export function createParkedVehicles({
     return false;
   }
 
-  return { group, update, solid };
+  return { group, update, solid, kickAt };
 }
