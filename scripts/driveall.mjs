@@ -38,7 +38,7 @@ for(const r of world.roads){
   for(const pt of r.p){ if(inMap(pt[0],pt[1])) run.push(pt); else flush(); }
   flush();
 }
-const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:280000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=480,270']});
+const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:900000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=480,270']});
 const p=await b.newPage(); await p.setViewport({width:480,height:270});
 p.on('pageerror',e=>console.log('PAGEERR',String(e).slice(0,120)));
 await p.goto('http://localhost:4180/'+(process.env.TRAFFIC?('?traffic='+process.env.TRAFFIC):''),{waitUntil:'domcontentloaded',timeout:60000});
