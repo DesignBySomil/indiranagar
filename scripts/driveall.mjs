@@ -1,7 +1,7 @@
 const T0=Date.now();
 import puppeteer from 'puppeteer-core';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-const [,,START='0',COUNT='8',PROG='/tmp/drive-progress.json']=process.argv;
+const [,,START='0',COUNT='8',PROG='/tmp/drive-progress.json',TRACE='0']=process.argv;
 const world=JSON.parse(readFileSync('public/data/world.json'));
 const MAP={x0:-650,x1:830,z0:-805,z1:775};
 const inMap=(x,z)=>x>MAP.x0+35&&x<MAP.x1-35&&z>MAP.z0+35&&z<MAP.z1-35;
@@ -36,7 +36,8 @@ await p.exposeFunction('reportRoute',(idx,rec,covN)=>{
   console.log('ROUTE',+START+idx,rec.done?'DONE':'PART',rec.name,'wp',rec.waypointsReached+'/'+rec.waypointsTotal,'segs',rec.segsTraversed);
 });
 const TIME_BUDGET_MS=0; // computed after boot
-const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
+p.on('console',m=>{const t=m.text(); if(t.startsWith('TR ')) console.log(t);});
+const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
   const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
   let t0=90000; window.__noRender=true;
   const step=()=>{t0+=33;window.__step(0.033,t0);};
@@ -68,13 +69,17 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
     // route arc-length coverage: 1m bins along the route's own polyline
     const rpts=pts; const rcum=[0]; for(let i=1;i<rpts.length;i++) rcum.push(rcum[i-1]+Math.hypot(rpts[i][0]-rpts[i-1][0],rpts[i][1]-rpts[i-1][1]));
     const rLen=rcum[rcum.length-1]; const bins=new Set();
+    // corridor tolerance from THIS road's actual width + vehicle margin (not a flat radius)
+    const wMap={5:7.6,4:7.2,3:7.0,2:6.6,1:5.5};
+    const rw=/Chinmaya/i.test(road.n)?4.8:(/100\s*Feet|100Ft/i.test(road.n)?5.2:(wMap[road.k]||7.0));
+    const corridorTol=rw/2+1.2;
     const arcPos=(x,z)=>{let bd=1e9,bs=0;
       for(let i=0;i<rpts.length-1;i++){const dx=rpts[i+1][0]-rpts[i][0],dz=rpts[i+1][1]-rpts[i][1];const L2=dx*dx+dz*dz||1e-9;
         let t=((x-rpts[i][0])*dx+(z-rpts[i][1])*dz)/L2; t=Math.max(0,Math.min(1,t));
         const px=rpts[i][0]+t*dx,pz=rpts[i][1]+t*dz; const dd=Math.hypot(x-px,z-pz);
         if(dd<bd){bd=dd;bs=rcum[i]+t*Math.sqrt(L2);}}
       return [bd,bs];};
-    const rec={name:road.n,kind:road.k,points:pts.length,done:false,stuck:false,offRoadMax:0,maxSegW:0};
+    const rec={name:road.n,kind:road.k,points:pts.length,done:false,stuck:false,offRoadMax:0,maxSegW:0,offEdgeMaxM:0,offEdgeT:0};
     const budget=Math.min(1900,pts.length*240+350);
     for(let k=0;k<budget&&wi<pts.length;k++){
       const ty=Math.atan2(pts[wi][0]-A.x,pts[wi][1]-A.z);
@@ -85,9 +90,14 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
       const wantSlow=Math.abs(err)>0.55;
       K.KeyW=wantSlow?(A.v<3.2):(A.v<8.5);
       K.KeyS=!wantSlow?false:(A.v>4.5);
+      if(unstick>0){ // override BEFORE step: reverse out with steering wiggle
+        K.KeyW=false; K.KeyS=true; K.KeyA=(unstick%60)<30; K.KeyD=!K.KeyA;
+        unstick--; if(unstick===0) stuckT=0;
+      }
       step();
       dist+=Math.hypot(A.x-lx,A.z-lz); lx=A.x; lz=A.z;
-      { const [bd,bs]=arcPos(A.x,A.z); if(bd<8) bins.add(Math.floor(bs)); }
+      if(TRACE==='1'&&k<400&&k%10===0) console.log('TR',k,'x',A.x.toFixed(1),'z',A.z.toFixed(1),'v',A.v.toFixed(2),'a',A.a.toFixed(2),'W',K.KeyW?1:0,'A',K.KeyA?1:0,'D',K.KeyD?1:0,'S',K.KeyS?1:0,'wi',wi,'unst',unstick);
+      { const [bd,bs]=arcPos(A.x,A.z); if(bd<corridorTol) bins.add(Math.floor(bs)); }
       const d=Math.hypot(pts[wi][0]-A.x,pts[wi][1]-A.z);
       if(d<5.5||(d>lastD+0.01&&lastD<9)){ wi++; lastD=1e9; } else lastD=Math.min(lastD,d);
       // physical traversal: project onto nearest seg axis; credit only after covering >=50% of its length within corridor
@@ -98,17 +108,16 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
         let tr=trav.get(bi); if(!tr){tr={lo:t,hi:t};trav.set(bi,tr);} else { if(t<tr.lo)tr.lo=t; if(t>tr.hi)tr.hi=t; }
       }
       const bw=bi>=0?segMid[bi][2]:0; if(bw>rec.maxSegW)rec.maxSegW=bw;
+      if(bi>=0){ const over=best-bw/2; if(over>rec.offEdgeMaxM)rec.offEdgeMaxM=over; if(over>0)rec.offEdgeT+=0.033; }
       if(best>12) offT+=0.033; else offT=0;
       if(offT>rec.offRoadMax) rec.offRoadMax=offT;
-      if(unstick>0){ // reversing out
-        K.KeyW=false; K.KeyS=true; K.KeyA=(unstick%60)<30; K.KeyD=!K.KeyA;
-        unstick--;
-        if(unstick===0){ K.KeyS=K.KeyA=K.KeyD=false; stuckT=0; }
-      } else if(Math.abs(A.v)<0.35&&K.KeyW){
-        stuckT+=0.033;
-        if(stuckT>2&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; }
-        else if(stuckT>5){ rec.stuck=true; break; }
-      } else stuckT=0;
+      if(unstick===0){
+        if(Math.abs(A.v)<0.35&&K.KeyW){
+          stuckT+=0.033;
+          if(stuckT>2&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; }
+          else if(stuckT>5){ rec.stuck=true; break; }
+        } else stuckT=0;
+      }
     }
     K.KeyW=K.KeyA=K.KeyD=K.KeyS=false;
     rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0);
@@ -116,6 +125,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
     rec.fullRoute=rec.arcFrac>=0.95; // whole corridor traversed, small endpoint tolerance
     rec.segDetail=segDetail; rec.offRoadMax=+rec.offRoadMax.toFixed(1);
     rec.maxSegW=+rec.maxSegW.toFixed(1);
+    rec.offEdgeMaxM=+rec.offEdgeMaxM.toFixed(1); rec.offEdgeT=+rec.offEdgeT.toFixed(1);
     rec.waypointsReached=wi-1; rec.waypointsTotal=pts.length-1;
     for(const [bi,tr] of trav){ const m=segMid[bi]; const len=Math.hypot(m[5]-m[3],m[6]-m[4]);
       segDetail.push({seg:bi,lo:+tr.lo.toFixed(2),hi:+tr.hi.toFixed(2),len:+len.toFixed(1),cov:+(tr.hi-tr.lo).toFixed(2)});
@@ -129,7 +139,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
   window.__coverage=[...cov];
   window.__noRender=false;
   return {log,totalSegsDriven:(window.__coverage||[]).length};
-},slice,DRIVE_BUDGET_MS);
+},slice,DRIVE_BUDGET_MS,TRACE);
 const recs=(res&&res.log)||[];
 console.log(JSON.stringify({processed:recs.length,total:prog.done,of:roads.length,segsDriven:prog.totalSegsDriven,incidents:prog.incidents.length}));
 await b.close(); process.exit(0);
