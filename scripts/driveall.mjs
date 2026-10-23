@@ -64,7 +64,16 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
     window.__spawnAt(pts[0][0],pts[0][1],yaw0);
     for(let k=0;k<15;k++) step();
     let wi=1, stuckT=0, offT=0, dist=0, lx=A.x, lz=A.z, lastD=1e9, unstick=0, unstickTries=0;
-    const segsHit=new Set(); const trav=new Map();
+    const segsHit=new Set(); const trav=new Map(); const segDetail=[];
+    // route arc-length coverage: 1m bins along the route's own polyline
+    const rpts=pts; const rcum=[0]; for(let i=1;i<rpts.length;i++) rcum.push(rcum[i-1]+Math.hypot(rpts[i][0]-rpts[i-1][0],rpts[i][1]-rpts[i-1][1]));
+    const rLen=rcum[rcum.length-1]; const bins=new Set();
+    const arcPos=(x,z)=>{let bd=1e9,bs=0;
+      for(let i=0;i<rpts.length-1;i++){const dx=rpts[i+1][0]-rpts[i][0],dz=rpts[i+1][1]-rpts[i][1];const L2=dx*dx+dz*dz||1e-9;
+        let t=((x-rpts[i][0])*dx+(z-rpts[i][1])*dz)/L2; t=Math.max(0,Math.min(1,t));
+        const px=rpts[i][0]+t*dx,pz=rpts[i][1]+t*dz; const dd=Math.hypot(x-px,z-pz);
+        if(dd<bd){bd=dd;bs=rcum[i]+t*Math.sqrt(L2);}}
+      return [bd,bs];};
     const rec={name:road.n,kind:road.k,points:pts.length,done:false,stuck:false,offRoadMax:0,maxSegW:0};
     const budget=Math.min(1900,pts.length*240+350);
     for(let k=0;k<budget&&wi<pts.length;k++){
@@ -78,6 +87,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
       K.KeyS=!wantSlow?false:(A.v>4.5);
       step();
       dist+=Math.hypot(A.x-lx,A.z-lz); lx=A.x; lz=A.z;
+      { const [bd,bs]=arcPos(A.x,A.z); if(bd<8) bins.add(Math.floor(bs)); }
       const d=Math.hypot(pts[wi][0]-A.x,pts[wi][1]-A.z);
       if(d<5.5||(d>lastD+0.01&&lastD<9)){ wi++; lastD=1e9; } else lastD=Math.min(lastD,d);
       // physical traversal: project onto nearest seg axis; credit only after covering >=50% of its length within corridor
@@ -101,10 +111,15 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
       } else stuckT=0;
     }
     K.KeyW=K.KeyA=K.KeyD=K.KeyS=false;
-    rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0); rec.offRoadMax=+rec.offRoadMax.toFixed(1);
+    rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0);
+    rec.routeLen=+rLen.toFixed(0); rec.arcCoveredM=bins.size; rec.arcFrac=+(bins.size/Math.max(1,Math.floor(rLen))).toFixed(2);
+    rec.fullRoute=rec.arcFrac>=0.95; // whole corridor traversed, small endpoint tolerance
+    rec.segDetail=segDetail; rec.offRoadMax=+rec.offRoadMax.toFixed(1);
     rec.maxSegW=+rec.maxSegW.toFixed(1);
     rec.waypointsReached=wi-1; rec.waypointsTotal=pts.length-1;
-    for(const [bi,tr] of trav){ if(tr.hi-tr.lo>=0.5){ segsHit.add(bi); cov.add(bi); } }
+    for(const [bi,tr] of trav){ const m=segMid[bi]; const len=Math.hypot(m[5]-m[3],m[6]-m[4]);
+      segDetail.push({seg:bi,lo:+tr.lo.toFixed(2),hi:+tr.hi.toFixed(2),len:+len.toFixed(1),cov:+(tr.hi-tr.lo).toFixed(2)});
+      if(tr.hi-tr.lo>=0.5){ segsHit.add(bi); cov.add(bi); } }
     rec.segsTraversed=segsHit.size; rec.segsList=[...segsHit];
     rec.unstickTries=unstickTries;
     rec.start=[+pts[0][0].toFixed(0),+pts[0][1].toFixed(0)]; rec.end=[+A.x.toFixed(0),+A.z.toFixed(0)];
