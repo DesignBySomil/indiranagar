@@ -665,6 +665,11 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       stGroup.add(canopy);
     } catch {}
 
+    // Green bed under the station support pillars too - user: EVERY pillar must sit fully on the green strip
+    const stCurb = new THREE.Mesh(new THREE.BoxGeometry(44, 0.16, 3.6), new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.9 }));
+    stCurb.position.set(0, 0.08, 0); stCurb.receiveShadow = true; stGroup.add(stCurb);
+    const stGrass = new THREE.Mesh(new THREE.BoxGeometry(44, 0.14, 3.2), new THREE.MeshStandardMaterial({ color: 0x3e7d32, roughness: 0.95 }));
+    stGrass.position.set(0, 0.15, 0); stGrass.receiveShadow = true; stGroup.add(stGrass);
     // Support pillars & escalator/stair housings at sides
     for (let px = -18; px <= 18; px += 12) {
       const pier = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.25, 7.4, 14), concMat);
