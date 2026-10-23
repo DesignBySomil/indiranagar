@@ -838,7 +838,7 @@ export function createCrowd({
       if (sl.pedId < 0) continue;
       const q = peds[sl.pedId];
       const ddx = q.x - player.x, ddz = q.z - player.z;
-      if (ddx * ddx + ddz * ddz > 65 * 65) { sl.pedId = -1; sl.g.visible = false; }
+      if (ddx * ddx + ddz * ddz > 65 * 65) { q._lastGemVariant = sl.variant; sl.pedId = -1; sl.g.visible = false; q._gemVariant = undefined; }
     }
     // assign free slots to the nearest unlocked peds, matching clothing class so the swap never changes who someone is
     for (let k = 0; k < byDist.length; k++) {
@@ -848,9 +848,12 @@ export function createCrowd({
       for (let j = 0; j < gemSlots.length; j++) if (gemSlots[j].pedId === p.id) { locked = true; break; }
       if (locked) continue;
       const classes = gemClass[p.tkey] || [2, 3];
-      for (let j = 0; j < gemSlots.length; j++) {
-        if (gemSlots[j].pedId === -1 && classes.includes(gemSlots[j].variant)) { gemSlots[j].pedId = p.id; break; }
+      let picked = -1;
+      if (p._lastGemVariant !== undefined) {
+        for (let j = 0; j < gemSlots.length; j++) if (gemSlots[j].pedId === -1 && gemSlots[j].variant === p._lastGemVariant) { picked = j; break; }
       }
+      if (picked === -1) for (let j = 0; j < gemSlots.length; j++) { if (gemSlots[j].pedId === -1 && classes.includes(gemSlots[j].variant)) { picked = j; break; } }
+      if (picked !== -1) { gemSlots[picked].pedId = p.id; p._gemVariant = gemSlots[picked].variant; }
     }
     for (let j = 0; j < gemSlots.length; j++) {
       const g = gemSlots[j].g;
