@@ -73,7 +73,8 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
 
   // Real Bangalore road widths: single carriageway 1-lane each way (~7m residential, ~10.5m 12th Main/CMH),
   // 100 Feet Road as two separated one-way carriageways (2 lanes each, pale concrete) with narrow 0.5m concrete divider
-  const widthMap = { 5: 14.5, 4: 10.5, 3: 8.2, 2: 7.0, 1: 5.5 };
+  // User rule (2026-10-23): ONLY 2-lane roads - one lane each way, no 3/4-lane roads.
+  const widthMap = { 5: 7.6, 4: 7.2, 3: 7.0, 2: 6.6, 1: 5.5 };
 
   const pos = [], col = [], uvs = [], idx = [];
   const fpPos = [], fpCol = [], fpUvs = [], fpIdx = [];
@@ -101,7 +102,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   });
   const nbrSide = new Map();
   const medianQuads = [];
-  const W100 = 10;
+  const W100 = 8.2; // 100 Feet Road: 2 lanes total (user rule), pale concrete kept
   for (const a of hundredSegs) {
     const nx = -a.uz, nz = a.ux;
     const mx = (a.x1 + a.x2) / 2, mz = (a.z1 + a.z2) / 2;
@@ -211,9 +212,9 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         name: r.n || '',
         kind: r.k,
         width: w,
-        lanes: is100Ft ? 2 : 1,
-        oneway: is100Ft,
-        divided: is100Ft
+        lanes: 1, // every road: one lane each way
+        oneway: false,
+        divided: false
       });
       roadSegs.push(segObj);
 
@@ -875,7 +876,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const treeGrid = new Set();
 
   for (const r of world.roads) {
-    const rw = (r.n && r.n.includes('100 Feet')) ? 14.5 : (widthMap[r.k] || 7.0);
+    const rw = (r.n && r.n.includes('100 Feet')) ? W100 : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? 7.6 : (widthMap[r.k] || 7.0));
     const fw = r.k >= 4 ? 2.3 : 1.5;
     const vergeOffset = rw * 0.5 + fw + 0.55;
 
@@ -959,7 +960,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   // Street Lamps
   for (const r of world.roads) {
     if (r.k < 3) continue;
-    const rw = (r.n && r.n.includes('100 Feet')) ? 14.5 : (widthMap[r.k] || 8.2);
+    const rw = (r.n && r.n.includes('100 Feet')) ? W100 : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? 7.6 : (widthMap[r.k] || 7.0));
     for (let i = 0; i < r.p.length - 1; i++) {
       const [x1, z1] = r.p[i], [x2, z2] = r.p[i + 1];
       const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz);
