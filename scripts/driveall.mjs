@@ -4,7 +4,9 @@ import puppeteer from 'puppeteer-core';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 const [,,START='0',COUNT='8',PROG='/tmp/drive-progress.json']=process.argv;
 const world=JSON.parse(readFileSync('public/data/world.json'));
-const roads=world.roads.filter(r=>r.p&&r.p.length>1);
+const MAP={x0:-650,x1:830,z0:-805,z1:775};
+const inMap=(x,z)=>x>MAP.x0+35&&x<MAP.x1-35&&z>MAP.z0+35&&z<MAP.z1-35;
+const roads=world.roads.filter(r=>r.p&&r.p.length>1&&r.p.some(pt=>inMap(pt[0],pt[1])));
 const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:280000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=480,270']});
 const p=await b.newPage(); await p.setViewport({width:480,height:270});
 p.on('pageerror',e=>console.log('PAGEERR',String(e).slice(0,120)));
@@ -31,7 +33,7 @@ const res=await p.evaluate(async(slice)=>{
       // steering controller toward waypoint
       const ty=Math.atan2(pts[wi][0]-A.x,pts[wi][1]-A.z);
       const err=norm(ty-A.a);
-      K.KeyA=err<-0.06; K.KeyD=err>0.06; K.KeyW=Math.abs(err)<1.2; K.KeyS=false;
+      K.KeyA=err<-0.06; K.KeyD=err>0.06; K.KeyW=Math.abs(err)<2.6; K.KeyS=Math.abs(err)>=2.6; // keep rolling while turning
       step();
       dist+=Math.hypot(A.x-lx,A.z-lz); lx=A.x; lz=A.z;
       const d=Math.hypot(pts[wi][0]-A.x,pts[wi][1]-A.z);
