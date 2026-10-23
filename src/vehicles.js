@@ -1170,7 +1170,7 @@ export function createTraffic({
     best.kvz += dz * p2;
     const side = (best.x - x) * dz - (best.z - z) * dx;
     best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.45;
-    best.kvy = Math.max(best.kvy, p2 * 0.5);
+    best.kvy = Math.max(best.kvy, p2 * 0.95);
     best.cool = 0.55;
     return true;
   }
@@ -1506,7 +1506,7 @@ export function createParkedVehicles({
     best.vx += dx * p; best.vz += dz * p;
     const side = (best.x - x) * dz - (best.z - z) * dx;
     best.vaw += (side >= 0 ? 1 : -1) * p * 0.5;
-    best.vy = Math.max(best.vy, p * 0.35);
+    best.vy = Math.max(best.vy, p * 0.85);
     best.cool = 0.55;
     activeParked.add(best);
     return true;

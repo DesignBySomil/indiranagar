@@ -564,7 +564,11 @@ function step(dt, now) {
     const px0 = auto.x + fx0 * 2.05, pz0 = auto.z + fz0 * 2.05;
     const kind0 = hitKind(px0, pz0, auto.a);
     const pw = Math.min(6, Math.abs(preV) * 0.55);
-    if (kind0 === 2) { if (traffic && traffic.kickAt) traffic.kickAt(px0, pz0, fx0, fz0, pw); }
+    if (kind0 === 2) {
+      if (traffic && traffic.kickAt) traffic.kickAt(px0, pz0, fx0, fz0, pw);
+      if (crowd && crowd.kickAt) crowd.kickAt(px0, pz0, fx0, fz0, pw * 1.15);
+      if (life && life.kickAt) life.kickAt(px0, pz0, fx0, fz0, pw);
+    }
     else if (kind0 === 1 && parkedVehicles && parkedVehicles.kickAt && parkedVehicles.solid(px0, pz0)) parkedVehicles.kickAt(px0, pz0, fx0, fz0, pw * 0.8);
   }
   // unstick fallback: throttle held but not moving against a collider -> back off, then snap to the road lane

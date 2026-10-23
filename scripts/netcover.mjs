@@ -6,9 +6,10 @@ await p.goto('http://localhost:4180/?ao=0',{waitUntil:'domcontentloaded',timeout
 await p.waitForFunction(()=>window.__game&&window.__game.auto&&window.__game.world&&window.__step,{timeout:180000});
 await p.evaluate(()=>{const g=window.__game;g.go(0);window.__noRender=true;window.__paused=true;const T=g.traffic,C=g.crowd,L=g.life;if(T)T.solid=()=>false;if(C)C.solid=()=>false;if(L)L.solid=()=>false;});
 const NSEGS=await p.evaluate(()=>window.__game.roadSegs().length);
+const SW_START=+(process.argv[2]||0), SW_END=Math.min(NSEGS,+(process.argv[3]||NSEGS));
 console.log('SEGS',NSEGS);
-for(let start=0;start<NSEGS;start+=40){
-  const out=await p.evaluate((start,end)=>{
+for(let start=SW_START;start<SW_END;start+=40){
+  const out=await p.evaluate((start,end,SW_END_)=>{
     const g=window.__game,K=window.__keys;
     const X0=-622,X1=802,Z0=-777,Z1=747;
     const FP=[[0.85,1.8],[-0.85,1.8],[0.85,-1.3],[-0.85,-1.3],[0,1.95],[0,0.3],[0,-1.3]];
@@ -23,7 +24,7 @@ for(let start=0;start<NSEGS;start+=40){
       return [t0,t1];
     };
     const res={total:0,outWorld:0,tooShort:0,drives:0,completed:0,partial:0,blockedStart:0,wedges:0,orbits:0,totalLen:0,drivenLen:0,problems:[]};
-    const segs=g.roadSegs().slice(start,end);
+    const segs=g.roadSegs().slice(start,Math.min(end,SW_END_));
     for(let si0=0;si0<segs.length;si0++){
       const si=start+si0, s=segs[si0];
       const x1=s.x1??s[0],z1=s.z1??s[1],x2=s.x2??s[2],z2=s.z2??s[3];
@@ -73,7 +74,7 @@ for(let start=0;start<NSEGS;start+=40){
     }
     res.totalLen=+res.totalLen.toFixed(0); res.drivenLen=+res.drivenLen.toFixed(0);
     return res;
-  }, start, Math.min(start+40,NSEGS));
+  }, start, Math.min(start+40,NSEGS), SW_END);
   console.log('BATCH',start,'-',Math.min(start+40,NSEGS)-1,JSON.stringify({drives:out.drives,completed:out.completed,wedges:out.wedges,orbits:out.orbits,partial:out.partial,blockedStart:out.blockedStart,outWorld:out.outWorld}));
   if(out.problems.length)console.log('PROBLEMS',JSON.stringify(out.problems));
 }

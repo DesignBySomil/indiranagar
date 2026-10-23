@@ -454,8 +454,10 @@ export function createCrowd({
     };
     g.visible = false;
     group.add(g);
-    gemSlots.push(g);
+    gemSlots.push({ g, variant: j % gemProto.length, pedId: -1 });
   }
+  // a walker's model must be STABLE: a slot stays locked to the same ped until that ped is far away
+  const gemClass = { saree: [0, 1], kurta: [4], lungi: [5], shirt: [2, 3] };
   const mZero = new T.Matrix4().makeScale(0, 0, 0);
 
   // 8 Vibrant Indian Street Clothing Palette Variants
@@ -695,6 +697,8 @@ export function createCrowd({
   const s3 = new T.Vector3(PS, PS, PS);
   const yAxis = new T.Vector3(0, 1, 0);
   const xAxis = new T.Vector3(1, 0, 0);
+  const eul = new T.Euler();
+  const qAll = new T.Quaternion();
   let elapsed = 0;
 
   function update(dt = 0.016, hour = 17.8) {
@@ -704,6 +708,42 @@ export function createCrowd({
 
     for (let i = 0; i < maxPeds; i++) {
       const p = peds[i];
+
+      // Knocked-by-impact ped: ballistic flight, tumble, land, recover to a footpath
+      if (p.kn) {
+        const kn = p.kn;
+        kn.t += safeDt;
+        kn.vx *= Math.max(0, 1 - 1.6 * safeDt); kn.vz *= Math.max(0, 1 - 1.6 * safeDt);
+        kn.vy -= 22 * safeDt;
+        p.x += kn.vx * safeDt; p.z += kn.vz * safeDt;
+        p.ky = (p.ky || 0) + kn.vy * safeDt;
+        if (p.ky <= 0 && kn.vy < 0) {
+          p.ky = 0;
+          if (kn.landT === undefined) kn.landT = elapsed;
+          if (elapsed - kn.landT > 1.1) {
+            const picked = pickFootpathPlacement(p.x, p.z, 0, 0, 2, 60, false, p.id + elapsed * 13);
+            p.seg = picked.seg; p.t = picked.t; p.kerbOff = picked.kerbOff;
+            p.kn = null; p.ky = 0;
+            continue;
+          }
+        }
+        const tumble = kn.t * kn.spin;
+        eul.set(tumble, p.yaw, tumble * 0.6);
+        qAll.setFromEuler(eul);
+        const place = (inst, sub, ox, oy, oz) => {
+          vPos.set(ox * PS, oy * PS, oz * PS).applyQuaternion(qAll);
+          vPos.x += p.x; vPos.y += p.ky; vPos.z += p.z;
+          m4.compose(vPos, qAll, s3);
+          inst.setMatrixAt(sub, m4);
+        };
+        place(p.torsoInst, p.torsoSub, 0, 0, 0);
+        place(p.headInst, p.headSub, 0, 1.38, 0);
+        place(legLInst, p.id, 0.085, 0.68, 0);
+        place(legRInst, p.id, -0.085, 0.68, 0);
+        place(armLInst, p.id, 0.215, 1.13, 0);
+        place(armRInst, p.id, -0.215, 1.13, 0);
+        continue;
+      }
       const seg = p.seg;
 
       // Advance along footpath
@@ -792,10 +832,30 @@ export function createCrowd({
       byDist.push([dx * dx + dz * dz, i]);
     }
     byDist.sort((a, b) => a[0] - b[0]);
+    // release locks for peds that moved out of range (hysteresis: in at 60m, out at 65m)
     for (let j = 0; j < gemSlots.length; j++) {
-      const g = gemSlots[j];
-      if (j >= byDist.length || byDist[j][0] > 3600) { g.visible = false; continue; }
-      const p = peds[byDist[j][1]];
+      const sl = gemSlots[j];
+      if (sl.pedId < 0) continue;
+      const q = peds[sl.pedId];
+      const ddx = q.x - player.x, ddz = q.z - player.z;
+      if (ddx * ddx + ddz * ddz > 65 * 65) { sl.pedId = -1; sl.g.visible = false; }
+    }
+    // assign free slots to the nearest unlocked peds, matching clothing class so the swap never changes who someone is
+    for (let k = 0; k < byDist.length; k++) {
+      if (byDist[k][0] > 3600) break;
+      const p = peds[byDist[k][1]];
+      let locked = false;
+      for (let j = 0; j < gemSlots.length; j++) if (gemSlots[j].pedId === p.id) { locked = true; break; }
+      if (locked) continue;
+      const classes = gemClass[p.tkey] || [2, 3];
+      for (let j = 0; j < gemSlots.length; j++) {
+        if (gemSlots[j].pedId === -1 && classes.includes(gemSlots[j].variant)) { gemSlots[j].pedId = p.id; break; }
+      }
+    }
+    for (let j = 0; j < gemSlots.length; j++) {
+      const g = gemSlots[j].g;
+      if (gemSlots[j].pedId < 0) { g.visible = false; continue; }
+      const p = peds[gemSlots[j].pedId];
       p.torsoInst.setMatrixAt(p.torsoSub, mZero);
       p.headInst.setMatrixAt(p.headSub, mZero);
       armLInst.setMatrixAt(p.id, mZero);
@@ -803,9 +863,14 @@ export function createCrowd({
       legLInst.setMatrixAt(p.id, mZero);
       legRInst.setMatrixAt(p.id, mZero);
       g.visible = true;
-      g.position.set(p.x, 0, p.z);
-      g.rotation.set(0, p.yaw, 0);
-      tickWalk(g, elapsed + p.phase, Math.min(1.6, p.speed * 0.8));
+      if (p.kn) {
+        g.position.set(p.x, p.ky || 0, p.z);
+        g.rotation.set(p.kn.t * p.kn.spin, p.yaw, p.kn.t * p.kn.spin * 0.6);
+      } else {
+        g.position.set(p.x, 0, p.z);
+        g.rotation.set(0, p.yaw, 0);
+        tickWalk(g, elapsed + p.phase, Math.min(1.6, p.speed * 0.8));
+      }
     }
 
     for (let v = 0; v < torsoVariants.length; v++) {
@@ -823,14 +888,40 @@ export function createCrowd({
   // Populate initial transforms immediately at startup
   update(0.016, 17.8);
 
+  // impact reaction: the nearest walker gets knocked off their feet (playful hop, no gore)
+  function kickAt(x, z, dx, dz, power) {
+    let best = null, bestD = 2.4 * 2.4;
+    for (let i = 0; i < peds.length; i++) {
+      const q = peds[i];
+      if (q.kn) continue;
+      const ddx = q.x - x, ddz = q.z - z;
+      const d2 = ddx * ddx + ddz * ddz;
+      if (d2 < bestD) { bestD = d2; best = q; }
+    }
+    if (!best) return false;
+    const pw = Math.min(8, power * 1.5);
+    const side = (best.x - x) * dz - (best.z - z) * dx;
+    best.kn = {
+      vx: dx * pw * 1.6 + (side >= 0 ? dz : -dz) * pw * 0.35,
+      vz: dz * pw * 1.6 - (side >= 0 ? dx : -dx) * pw * 0.35,
+      vy: 3.4 + pw * 0.5,
+      spin: (side >= 0 ? 1 : -1) * (2.2 + Math.min(3, pw * 0.4)),
+      t: 0,
+      landT: undefined
+    };
+    best.ky = 0.02;
+    return true;
+  }
+
   function solid(x, z) {
     for (let i = 0; i < peds.length; i++) {
       const q = peds[i];
+      if (q.kn) continue; // a knocked ped is airborne/recovering, not a wall
       const dx = x - q.x, dz = z - q.z;
       if (dx * dx + dz * dz < 0.36) return true;
     }
     return false;
   }
 
-  return { group, update, solid, peds };
+  return { group, update, solid, peds, kickAt };
 }
