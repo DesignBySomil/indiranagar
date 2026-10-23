@@ -821,7 +821,7 @@ try {
     renderer,
     world,
     stops,
-    getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a, speed: auto.v }),
+    getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a, speed: auto.v, yaw: auto.a }),
     ui: { $, showCard }
   });
   icons = buildIcons(world, scene, nightUniform, solid);
@@ -832,7 +832,7 @@ try {
     world,
     vendorSpots: street.vendorSpots,
     roadSegs: street.roadSegs,
-    getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a, speed: auto.v }),
+    getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a, speed: auto.v, yaw: auto.a }),
     playerCar: car,
     stops,
     ui: { $, showCard: () => {} },
@@ -879,7 +879,7 @@ try {
   shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
   traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); if (q === null || q === '') return 150; const n = parseInt(q); return Number.isFinite(n) ? Math.max(0, Math.min(220, n)) : 150; })() });
   parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
-  crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z }), nightUniform, count: 120 });
+  crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z, yaw: auto.a }), nightUniform, count: 120 });
   bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   hazards = createHazards({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid });
   buildMini();
@@ -1009,3 +1009,4 @@ try {
   window.__game = { get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();
+  window.__peds = crowd.peds; // DEBUG: pop-in verification (strip before preview)

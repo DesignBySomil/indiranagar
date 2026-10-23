@@ -547,9 +547,13 @@ export function createCrowd({
         score -= Math.abs(dist - (minDist + maxDist) * 0.5);
       }
 
-      if (biasAhead && dist > 1) {
+      if (dist > 1) {
         const dot = (dx * hx + dz * hz) / dist;
-        score += dot * 75;
+        // No visible pop-in: a recycled walker must not materialize inside the player's
+        // forward view cone nearby (chase cam looks along hx/hz). Ahead placements stay
+        // allowed from 80m out, where a new walker reads as walking into view.
+        if (dot > 0.5 && dist < 80) score -= 1500;
+        else if (biasAhead) score += dot * 75;
       }
 
       if (!isSolidSafe(pt.x, pt.z)) {
