@@ -13,15 +13,16 @@ const r=await p.evaluate(()=>{
     if(!o.isMesh&&!o.isSprite) return;
     const m=o.material; if(!m) return;
     const c=m.color;
-    const dark=c&&c.r<0.14&&c.g<0.14&&c.b<0.14;
-    if(!dark) return;
+    // board-like only; any material
     if(!o.geometry||!o.geometry.parameters) return;
     const pr=o.geometry.parameters;
     const w=pr.width||0,h=pr.height||0;
-    if(w<0.7||w>4.5||h<0.7||h>3.2) return;
+    const dep=pr.depth||0;
+    if(w<0.7||w>4.5||h<0.5||h>3.2||dep>0.35) return;
     o.getWorldPosition(v);
     let chain=[],an=o; while(an&&chain.length<4){chain.push(an.name||an.type);an=an.parent;}
-    if(v.y<1.0||v.y>5.5) return;
+    if(v.y<1.4||v.y>4.6) return;
+    if(!(v.x>150&&v.x<540&&v.z>-310&&v.z<-230)) return;
     out.push({x:+v.x.toFixed(1),y:+v.y.toFixed(1),z:+v.z.toFixed(1),w,h,mat:m.type,hasMap:!!m.map,emi:m.emissiveIntensity,chain:chain.join('<'),vis:o.visible});
   });
   return {n:out.length,hits:out.slice(0,40)};

@@ -572,7 +572,7 @@ export function createStreetLife({
       if (Math.hypot(c.x - auto.x, c.z - auto.z) < 13 && c.cooldown <= 0) {
         c.cooldown = 6;
         playMoo();
-        spawnBubble(c.mesh, 'Gomatha, side please!', 3.0, 2.6, false);
+        spawnBubble(c.mesh, 'Shoo, cow - move aside, please!', 3.0, 2.6, false);
       }
     }
   }

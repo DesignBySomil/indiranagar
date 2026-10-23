@@ -6,11 +6,11 @@ await p.goto('http://localhost:4180/',{waitUntil:'domcontentloaded',timeout:6000
 await p.waitForFunction(()=>window.__game&&window.__step,{timeout:120000});
 const r=await p.evaluate(async()=>{
   const g=window.__game; g.go(0);
-  g.state.hour=18.4; if(g.applyTime)g.applyTime(18.4);
+  g.state.hour=18.3; if(g.applyTime)g.applyTime(18.3);
   const cvs=document.getElementById('c');
   const cap=async()=>{ await new Promise(r=>requestAnimationFrame(r)); return cvs.toDataURL('image/png'); };
   window.__noRender=true; let t0=90000; const step=(n)=>{for(let k=0;k<n;k++){t0+=33;window.__step(0.033,t0);}};
-  g.auto.x=-388; g.auto.z=-227; g.auto.a=Math.PI*0.75; g.auto.v=0; // face SW toward building row at -401..-409,-239
+  g.auto.x=-985; g.auto.z=-242; g.auto.a=Math.PI/2+0.05; g.auto.v=0; // face east along CMH toward viaduct glow
   step(40);
   const frames=[];
   window.__noRender=false; frames.push(await cap()); window.__noRender=true;

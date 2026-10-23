@@ -165,8 +165,8 @@ export function createNPCs({
   const skinMat = new T.MeshStandardMaterial({ color: 0xd4946a, roughness: 0.65 });
   const hairMat = new T.MeshStandardMaterial({ color: 0x18181b, roughness: 0.8 });
   const phoneMat = new T.MeshBasicMaterial({ color: 0x7dd3fc });
-  const hailMarkerMat = new T.SpriteMaterial({ map: makeMarkerTexture('!', '#facc15', '#111'), transparent: true, depthWrite: false });
-  const questMarkerMat = new T.SpriteMaterial({ map: makeMarkerTexture('★', '#38bdf8', '#111'), transparent: true, depthWrite: false });
+  const hailMarkerMat = new T.SpriteMaterial({ map: makeMarkerTexture('!', '#facc15', '#111'), transparent: true, depthWrite: false, fog: false });
+  const questMarkerMat = new T.SpriteMaterial({ map: makeMarkerTexture('★', '#38bdf8', '#111'), transparent: true, depthWrite: false, fog: false });
 
   // Build 1.8m stylized readable character mesh with articulated arms, legs & role accessories
   function buildCharacterMesh(cfg) {
