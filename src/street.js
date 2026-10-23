@@ -384,8 +384,11 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       // Collect parked bike/car spots, vendor spots, utility poles along road edges
       if (L > 14 && r.k >= 2) {
         const yaw = Math.atan2(ux, uz);
+        // narrowed 100Ft pair: the median side has no verge - vendor carts/kerb props go to the OUTER verge only
+        // (median-side cart landed on the 1.2m strip and clipped the opposite carriageway; same class as the pole flip)
+        const medSide = is100Ft ? (nbrSide.get(ri + ':' + i) || 0) : 0;
         for (let s = 6; s < L - 5; s += 13) {
-          const side = hash(s, z1) > 0.5 ? 1 : -1;
+          const side = medSide !== 0 ? (medSide > 0 ? -1 : 1) : (hash(s, z1) > 0.5 ? 1 : -1);
           const edgeOff = (w / 2 - 0.55) * side;
           const kerbOff = (w / 2 + 1.35) * side;
           const px = x1 + ux * s - uz * edgeOff;

@@ -942,7 +942,7 @@ try {
     if (camRig) camRig.update(0.016, true); else syncCamera(0.016, true);
     clampCam();
   }
-  window.__renderer = renderer; window.__scene = scene; window.__step = step; window.__inDivider = inDivider; window.__spawnAt = spawnAt; window.__placeOnRoad = placeOnRoad; window.__traffic = () => traffic; window.__solid = solid;
+  window.__renderer = renderer; window.__scene = scene; window.__step = step; window.__pick = (nx, ny) => { const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(nx, ny), camera); return rc.intersectObjects(scene.children, true).slice(0, 6).map(h => ({ d: +h.distance.toFixed(1), pt: [+h.point.x.toFixed(1), +h.point.y.toFixed(1), +h.point.z.toFixed(1)], type: h.object.type, geo: h.object.geometry && h.object.geometry.type, inst: h.instanceId ?? null, mat: h.object.material && h.object.material.color ? h.object.material.color.getHexString() : (h.object.material && h.object.material.type) || '' })); }; window.__inDivider = inDivider; window.__spawnAt = spawnAt; window.__placeOnRoad = placeOnRoad; window.__traffic = () => traffic; window.__solid = solid;
   spawnAt(stops[0].p.x, stops[0].p.z, Math.PI);
   auto.v = 0;
   auto.steer = 0;
