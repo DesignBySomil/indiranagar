@@ -611,7 +611,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const purpMat = makeNeonMaterial(0x7c3aed, 1.35);
 
   if (metroPiers.length) {
-    const pierInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.8, 0.9, 8.8, 12), concMat, metroPiers.length);
+    const pierInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.5, 0.6, 8.8, 12), concMat, metroPiers.length);
     const deckInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.6, 1.35, 27), concMat, metroDecks.length);
     const bandInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.8, 0.32, 27), purpMat, metroDecks.length);
     metroPiers.forEach(([x, z, yaw], i) => {
