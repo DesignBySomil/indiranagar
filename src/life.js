@@ -757,6 +757,14 @@ export function createStreetLife({
         b.timer -= dt;
         b.sprite.position.set(b.target.position.x, b.yOff, b.target.position.z);
         b.sprite.material.opacity = Math.min(1, b.timer * 1.5);
+        // keep the bubble a readable size on screen: a world-size sprite next to the camera would cover the whole view
+        if (camera && camera.position) {
+          const cd = Math.hypot(b.sprite.position.x - camera.position.x, b.yOff - camera.position.y, b.sprite.position.z - camera.position.z);
+          const maxW = 0.3 * 2 * Math.max(cd, 0.5) * Math.tan((camera.fov || 60) * Math.PI / 360) * (camera.aspect || 1.6);
+          const w = Math.min(9.2, maxW);
+          b.sprite.scale.set(w, w * (2.9 / 9.2), 1);
+          if (cd < 1.5) b.sprite.material.opacity = 0;
+        }
         if (b.timer <= 0) b.sprite.visible = false;
       }
     }
