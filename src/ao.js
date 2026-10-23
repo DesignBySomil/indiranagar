@@ -33,6 +33,20 @@ export function createAmbientOcclusion({ THREE: T = THREE, renderer, scene, came
       });
     }
 
+    // GTAOPass renders the scene with an override material for depth/normals and hides only Points/Lines. A transparent
+    // Sprite (speech bubble) close to the camera was drawn there as an opaque quad, which blacked out a screen region.
+    // Hide visible Sprites for the AO pass only; the pass restores them through its own visibility cache.
+    if (typeof gtaoPass._overrideVisibility === 'function') {
+      const baseOverride = gtaoPass._overrideVisibility.bind(gtaoPass);
+      gtaoPass._overrideVisibility = function () {
+        baseOverride();
+        const cache = this._visibilityCache;
+        this.scene.traverse((object) => {
+          if (object.isSprite && object.visible) { object.visible = false; cache.push(object); }
+        });
+      };
+    }
+
     if (composer && Array.isArray(composer.passes)) {
       // Insert GTAOPass right after the RenderPass (index 1)
       if (composer.passes.length >= 1) {
