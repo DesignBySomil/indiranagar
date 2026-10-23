@@ -289,9 +289,10 @@ export function createStreetLife({
   const bubblePool = [];
   for (let i = 0; i < 8; i++) {
     const bData = makeBubbleTexture('Turn on the meter, friend!');
-    const mat = new T.SpriteMaterial({ map: bData.tex, transparent: true, depthWrite: false, fog: false });
+    const mat = new T.SpriteMaterial({ map: bData.tex, transparent: true, depthWrite: false, depthTest: false, fog: false, color: new T.Color(0.8, 0.8, 0.8) });
     const sp = new T.Sprite(mat);
     sp.scale.set(9.2, 2.9, 1);
+    sp.renderOrder = 999;
     sp.visible = false;
     root.add(sp);
     bubblePool.push({ sprite: sp, c: bData.c, ctx: bData.ctx, tex: bData.tex, text: '', isBurst: false, timer: 0, target: null, yOff: 3.3 });
@@ -757,6 +758,28 @@ export function createStreetLife({
         b.timer -= dt;
         b.sprite.position.set(b.target.position.x, b.yOff, b.target.position.z);
         b.sprite.material.opacity = Math.min(1, b.timer * 1.5);
+        // keep the bubble a readable size on screen: a world-size sprite next to the camera would cover the whole view
+        if (camera && camera.position) {
+          const cd = Math.hypot(b.sprite.position.x - camera.position.x, b.yOff - camera.position.y, b.sprite.position.z - camera.position.z);
+          const maxW = 0.3 * 2 * Math.max(cd, 0.5) * Math.tan((camera.fov || 60) * Math.PI / 360) * (camera.aspect || 1.6);
+          const w = Math.min(9.2, maxW);
+          b.sprite.scale.set(w, w * (2.9 / 9.2), 1);
+          if (cd < 1.5) b.sprite.material.opacity = 0;
+          // keep the whole bubble inside the viewport: nudge it along the camera's right/up axes until its box is on screen
+          if (cd >= 1.5 && camera.matrixWorldInverse) {
+            const v = b.sprite.position.clone().applyMatrix4(camera.matrixWorldInverse);
+            const depth = -v.z;
+            if (depth > 0.1) {
+              const halfH = depth * Math.tan((camera.fov || 60) * Math.PI / 360), halfW = halfH * (camera.aspect || 1.6);
+              const bw = w / 2, bh = (w * (2.9 / 9.2)) / 2;
+              const nx = Math.max(-halfW + bw, Math.min(halfW - bw, v.x)), ny = Math.max(-halfH + bh, Math.min(halfH - bh, v.y));
+              if (nx !== v.x || ny !== v.y) {
+                const r = new THREE.Vector3(1, 0, 0).transformDirection(camera.matrixWorld), u = new THREE.Vector3(0, 1, 0).transformDirection(camera.matrixWorld);
+                b.sprite.position.addScaledVector(r, nx - v.x).addScaledVector(u, ny - v.y);
+              }
+            }
+          }
+        }
         if (b.timer <= 0) b.sprite.visible = false;
       }
     }
