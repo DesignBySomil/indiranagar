@@ -471,6 +471,19 @@ export function createRainTrees({
     litterInst.setMatrixAt(i, m4);
   }
 
+  // Camera overhead volumes: keep the chase-cam narrow-lane lift below every crown (Somil black-overlay fix)
+  if (bridgeVolumes) {
+    for (const sp of treeSpots) {
+      const shift = sp.overhangsRoad ? 1.8 : 0;
+      bridgeVolumes.push({
+        x: sp.x + Math.sin(sp.roadInwardYaw) * shift,
+        z: sp.z + Math.cos(sp.roadInwardYaw) * shift,
+        r: 4.4 * sp.scaleXZ + 0.8,
+        clearanceY: 5.8 * sp.scaleY
+      });
+    }
+  }
+
   const allInstanced = [trunkInst, rainInst, gulInst, ficusInst, bandInst, guardInst, litterInst];
   for (const inst of allInstanced) {
     if (inst.count > 0) {

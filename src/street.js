@@ -155,6 +155,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       bar.position.set(mx, 5.5, mz);
       bar.rotation.y = Math.atan2(nx2, nz2);
       gantry.add(bar);
+      bridgeVolumes.push({ x: mx, z: mz, r: half + 1, clearanceY: 5.3, rect: { x: mx, z: mz, yaw: Math.atan2(nx2, nz2), halfLen: half, halfW: 0.5 } });
       const fx = -sg.ux, fz = -sg.uz; // face oncoming traffic
       const yawF = Math.atan2(fx, fz);
       for (const off of [-2.2, 2.2]) {
