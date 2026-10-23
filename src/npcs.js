@@ -507,14 +507,10 @@ export function createNPCs({
       }
     }
 
-    if (closestNpc) {
-      const prompt = closestNpc.role === 'passenger'
-        ? `[E] Pick Up → ${closestNpc.dest}`
-        : '[E] Talk';
-      showNpcCard(closestNpc.name, closestNpc.lines[closestNpc.lineIdx % closestNpc.lines.length], prompt, performance.now() < npcFullUntil);
-    } else {
-      hideNpcCard();
-    }
+    // No automatic proximity card: the dark prompt popping up on its own (worst right
+    // after a collision, when the player stops near someone) is the user's "black thing".
+    // The card now appears ONLY after the player presses E to interact (handled in interact()).
+    if (!closestNpc && npcCard) hideNpcCard();
   }
 
   return {
