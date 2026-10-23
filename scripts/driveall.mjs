@@ -87,7 +87,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
     const yaw0=Math.atan2(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]);
     window.__spawnAt(pts[0][0],pts[0][1],yaw0);
     for(let k=0;k<15;k++) step();
-    let wi=1, stuckT=0, offT=0, dist=0, lx=A.x, lz=A.z, lastD=1e9, unstick=0, unstickTries=0;
+    let wi=1, stuckT=0, offT=0, dist=0, lx=A.x, lz=A.z, lastD=1e9, unstick=0, unstickTries=0; const progBuf=[];
     const segsHit=new Set(); const trav=new Map(); const segDetail=[];
     // route arc-length coverage: 1m bins along the route's own polyline
     const rpts=pts; const rcum=[0]; for(let i=1;i<rpts.length;i++) rcum.push(rcum[i-1]+Math.hypot(rpts[i][0]-rpts[i-1][0],rpts[i][1]-rpts[i-1][1]));
@@ -146,6 +146,22 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
           else if(stuckT>16){ rec.stuck=true; break; }
         } else stuckT=0;
       }
+      // creep detector: 10s sliding window, flag when displacement < 15m even if v > stuck threshold
+      progBuf.push([A.x,A.z]); if(progBuf.length>300)progBuf.shift();
+      if(Math.abs(A.v)<2&&K.KeyW&&unstick===0) rec._crawlT=(rec._crawlT||0)+1; else rec._crawlT=0;
+      if((progBuf.length===300&&(Math.hypot(A.x-progBuf[0][0],A.z-progBuf[0][1])<15||rec._crawlT>120))&&!rec._crawlShot){
+        const [x0,z0]=progBuf[0]; const adv=Math.hypot(A.x-x0,A.z-z0);
+        {
+          const t=window.__traffic&&window.__traffic();
+          const hx=Math.sin(A.a),hz=Math.cos(A.a);
+          const ahead=t&&t.units?t.units.filter(u=>{const dx=u.x-A.x,dz=u.z-A.z;const d=Math.hypot(dx,dz);return d<25&&(dx*hx+dz*hz)>-2&&(Math.abs(-dx*hz+dz*hx)<7);}).map(u=>({x:+u.x.toFixed(1),z:+u.z.toFixed(1),v:+((u.speed??0)).toFixed(1),seg:(u.seg&&u.seg.name)||'',held:u.__held||0,braking:u.braking?1:0})):null;
+          rec.crawl={pos:[+A.x.toFixed(1),+A.z.toFixed(1)],wi,adv10s:+adv.toFixed(1),inDivider:window.__inDivider?!!window.__inDivider(A.x,A.z):null,solidHere:window.__solid(A.x,A.z),solidAhead3m:window.__solid(A.x+hx*3,A.z+hz*3),ahead};
+          window.__noRender=false; await new Promise(r=>requestAnimationFrame(r));
+          rec._crawlShot=document.getElementById('c').toDataURL('image/jpeg',0.82);
+          window.__noRender=true;
+          console.log('CRAWL',JSON.stringify(rec.crawl));
+        }
+      }
     }
     K.KeyW=K.KeyA=K.KeyD=K.KeyS=false;
     rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0);
@@ -169,5 +185,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
   return {log,totalSegsDriven:(window.__coverage||[]).length};
 },slice,DRIVE_BUDGET_MS,TRACE);
 const recs=(res&&res.log)||[];
+import { writeFileSync as _w } from 'fs';
+for(const r of recs){ if(r._crawlShot){ const fn='/tmp/crawl-'+r.name.replace(/[^A-Za-z0-9]+/g,'_')+'.jpg'; _w(fn,Buffer.from(r._crawlShot.split(',')[1],'base64')); delete r._crawlShot; console.log('CRAWLSHOT',fn); } }
 console.log(JSON.stringify({processed:recs.length,total:prog.done,of:roads.length,segsDriven:prog.totalSegsDriven,incidents:prog.incidents.length}));
 await b.close(); process.exit(0);
