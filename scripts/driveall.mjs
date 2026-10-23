@@ -103,7 +103,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
         if(dd<bd){bd=dd;bs=rcum[i]+t*Math.sqrt(L2);}}
       return [bd,bs];};
     const rec={name:road.n,kind:road.k,points:pts.length,done:false,stuck:false,offRoadMax:0,maxSegW:0,offEdgeMaxM:0,offEdgeT:0};
-    const budget=Math.min(3400,pts.length*240+350);
+    const budget=Math.min(parseInt(process.env.MAXBUDGET||'3400'),pts.length*520+350);
     for(let k=0;k<budget&&wi<pts.length;k++){
       const ty=Math.atan2(pts[wi][0]-A.x,pts[wi][1]-A.z);
       const err=norm(ty-A.a);
@@ -149,15 +149,16 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
       // creep detector: 10s sliding window, flag when displacement < 15m even if v > stuck threshold
       progBuf.push([A.x,A.z]); if(progBuf.length>300)progBuf.shift();
       if(Math.abs(A.v)<2&&K.KeyW&&unstick===0) rec._crawlT=(rec._crawlT||0)+1; else rec._crawlT=0;
-      if((progBuf.length===300&&(Math.hypot(A.x-progBuf[0][0],A.z-progBuf[0][1])<15||rec._crawlT>120))&&!rec._crawlShot){
+      rec._shots=rec._shots||0;
+      if((progBuf.length===300&&(Math.hypot(A.x-progBuf[0][0],A.z-progBuf[0][1])<15||rec._crawlT>120))&&rec._shots<3&&(k-(rec._lastShotK||-999))>500){
         const [x0,z0]=progBuf[0]; const adv=Math.hypot(A.x-x0,A.z-z0);
         {
           const t=window.__traffic&&window.__traffic();
           const hx=Math.sin(A.a),hz=Math.cos(A.a);
           const ahead=t&&t.units?t.units.filter(u=>{const dx=u.x-A.x,dz=u.z-A.z;const d=Math.hypot(dx,dz);return d<25&&(dx*hx+dz*hz)>-2&&(Math.abs(-dx*hz+dz*hx)<7);}).map(u=>({x:+u.x.toFixed(1),z:+u.z.toFixed(1),v:+((u.speed??0)).toFixed(1),seg:(u.seg&&u.seg.name)||'',held:u.__held||0,braking:u.braking?1:0})):null;
-          rec.crawl={pos:[+A.x.toFixed(1),+A.z.toFixed(1)],wi,adv10s:+adv.toFixed(1),inDivider:window.__inDivider?!!window.__inDivider(A.x,A.z):null,solidHere:window.__solid(A.x,A.z),solidAhead3m:window.__solid(A.x+hx*3,A.z+hz*3),ahead};
+          rec._shots++; rec.crawl=rec.crawl||[]; rec.crawl.push({pos:[+A.x.toFixed(1),+A.z.toFixed(1)],wi,adv10s:+adv.toFixed(1),inDivider:window.__inDivider?!!window.__inDivider(A.x,A.z):null,solidHere:window.__solid(A.x,A.z),solidAhead3m:window.__solid(A.x+hx*3,A.z+hz*3),ahead});
           window.__noRender=false; await new Promise(r=>requestAnimationFrame(r));
-          rec._crawlShot=document.getElementById('c').toDataURL('image/jpeg',0.82);
+          rec['_crawlShot'+rec._shots]=document.getElementById('c').toDataURL('image/jpeg',0.82); rec._lastShotK=k;
           window.__noRender=true;
           console.log('CRAWL',JSON.stringify(rec.crawl));
         }
@@ -186,6 +187,6 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
 },slice,DRIVE_BUDGET_MS,TRACE);
 const recs=(res&&res.log)||[];
 import { writeFileSync as _w } from 'fs';
-for(const r of recs){ if(r._crawlShot){ const fn='/tmp/crawl-'+r.name.replace(/[^A-Za-z0-9]+/g,'_')+'.jpg'; _w(fn,Buffer.from(r._crawlShot.split(',')[1],'base64')); delete r._crawlShot; console.log('CRAWLSHOT',fn); } }
+for(const r of recs){ for(let si=0;si<3;si++){ const key='_crawlShot'+si; if(r[key]){ const fn='/tmp/crawl-'+r.name.replace(/[^A-Za-z0-9]+/g,'_')+'-'+si+'.jpg'; _w(fn,Buffer.from(r[key].split(',')[1],'base64')); delete r[key]; console.log('CRAWLSHOT',fn); } } }
 console.log(JSON.stringify({processed:recs.length,total:prog.done,of:roads.length,segsDriven:prog.totalSegsDriven,incidents:prog.incidents.length}));
 await b.close(); process.exit(0);
