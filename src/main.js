@@ -902,7 +902,7 @@ try {
         if (base < 1 || base > c.L - 1) continue;
         for (const off of [2.2, -2.2, 3.4, -3.4, 0]) {
           const cx = c.x1 + ux * base + nx * off, cz = c.z1 + uz * base + nz * off;
-          if (!hitAt(cx, cz)) return { x: cx, z: cz, a: ang };
+          if (!hitArea(cx, cz)) return { x: cx, z: cz, a: ang };
         }
       }
     }
@@ -911,6 +911,15 @@ try {
   function hitAt(px, pz) {
     return !!(solid(px, pz) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)));
   }
+  // Footprint-aware check: the auto is ~2.6m long / ~1.6m wide; a point probe lets spawns
+  // land with a pole or parked vehicle clipping the body, which pins the car at 0 speed.
+  function hitArea(px, pz) {
+    if (hitAt(px, pz)) return true;
+    for (const [ox, oz] of [[1.3, 0], [-1.3, 0], [0, 1.3], [0, -1.3], [0.9, 0.9], [-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9]]) {
+      if (hitAt(px + ox, pz + oz)) return true;
+    }
+    return false;
+  }
   function spawnAt(x, z, aPref) {
     x = THREE.MathUtils.clamp(x, MAP.x0 + 30, MAP.x1 - 30); z = THREE.MathUtils.clamp(z, MAP.z0 + 30, MAP.z1 - 30);
     const r = placeOnRoad(x, z);
@@ -918,9 +927,13 @@ try {
     if (aPref !== undefined) { const d = Math.abs(Math.atan2(Math.sin(a - aPref), Math.cos(a - aPref))); if (d > Math.PI / 2) a += Math.PI; }
     { const fx1 = Math.sin(a), fz1 = Math.cos(a), ex = r.x + fx1 * 70, ez = r.z + fz1 * 70;
       if (ex < MAP.x0 + 28 || ex > MAP.x1 - 28 || ez < MAP.z0 + 28 || ez > MAP.z1 - 28) a += Math.PI; } // face away from the map edge
-    // Never spawn facing a wall: if the lane ahead is blocked within 5m but clear behind, face the other way
+    // Never spawn facing a wall: probe clearance at several distances, flip only when
+    // the way ahead is badly blocked AND the reverse run is genuinely longer - never
+    // flip from one blocked space into another.
     { const fx0 = Math.sin(a), fz0 = Math.cos(a);
-      if (hitAt(r.x + fx0 * 5, r.z + fz0 * 5) && !hitAt(r.x - fx0 * 5, r.z - fz0 * 5)) a += Math.PI; }
+      const clearRun = (sx, sz) => { let m = 0; for (const d of [1, 2, 3.5, 5, 7, 9, 12]) { if (hitArea(r.x + sx * d, r.z + sz * d)) break; m = d; } return m; };
+      const fwd = clearRun(fx0, fz0), back = clearRun(-fx0, -fz0);
+      if (fwd < 3.5 && back >= fwd + 3) a += Math.PI; }
     window.__noCardUntil = performance.now() + 3500;
     { const ce = document.getElementById('stop-card-v2'); if (ce) ce.classList.remove('on'); }
     auto.x = r.x; auto.z = r.z; auto.a = a; auto.v = 0; auto.steer = 0;
