@@ -1,0 +1,12 @@
+import puppeteer from 'puppeteer-core';
+const [,, out, hour='17.5', idx='0'] = process.argv;
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1100,620'] });
+const p = await b.newPage(); await p.setViewport({ width: +(process.env.W||1100), height: +(process.env.H||620), isMobile: !!process.env.MOB, hasTouch: !!process.env.MOB });
+await p.goto(process.env.URL || 'http://localhost:4173/', { waitUntil: 'load' });
+await p.waitForFunction('window.__game', { timeout: 90000 });
+const info = await p.evaluate(([h, idx]) => { const g = window.__game; g.state.hour = +h; g.state.auto = false; g.state.snap = true; g.go();
+  const t = g.trees.treeSpots.filter(s => Math.hypot(s.x + 133, s.z + 345) > 60 && Math.abs(s.x) < 400 && Math.abs(s.z) < 500)[+idx];
+  window.__spawnAt(t.x - 4, t.z); for (let k = 0; k < 20; k++) window.__step(0.05, 0); return [t.x, t.z, g.camera.position.x, g.camera.position.z]; }, [hour, idx]);
+console.log(JSON.stringify(info));
+await new Promise(r => setTimeout(r, 3500));
+await p.screenshot({ path: out }); await b.close();
