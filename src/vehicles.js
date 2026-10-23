@@ -1464,6 +1464,7 @@ export function createParkedVehicles({
 
   const instancedSpots = [];
   const activeParked = new Set();
+  if (typeof window !== 'undefined') window.__parkedSpots = () => instancedSpots.map(sp => ({ x: +sp.x.toFixed(1), z: +sp.z.toFixed(1), type: sp.type, yaw: +sp.yaw.toFixed(2) }));
 
   // Initial populate
   refreshStreaming(true);
