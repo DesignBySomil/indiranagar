@@ -1,5 +1,4 @@
-// Drive-through coverage: physically drive road polylines with simulated keys.
-// Usage: node scripts/driveall.mjs <startIdx> <count> <progressFile>
+const T0=Date.now();
 import puppeteer from 'puppeteer-core';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 const [,,START='0',COUNT='8',PROG='/tmp/drive-progress.json']=process.argv;
@@ -21,8 +20,23 @@ const p=await b.newPage(); await p.setViewport({width:480,height:270});
 p.on('pageerror',e=>console.log('PAGEERR',String(e).slice(0,120)));
 await p.goto('http://localhost:4180/',{waitUntil:'domcontentloaded',timeout:60000});
 await p.waitForFunction(()=>window.__game&&window.__game.auto&&window.__step,{timeout:120000});
+const BOOT_MS=Date.now()-T0; const DRIVE_BUDGET_MS=Math.max(25000,103000-BOOT_MS);
 const slice=roads.slice(+START,+START+ +COUNT).map(r=>({n:r.n||'(unnamed)',k:r.k,p:r.p}));
-const res=await p.evaluate(async(slice)=>{
+let prog=existsSync(PROG)?JSON.parse(readFileSync(PROG)):{done:0,records:[],incidents:[]};
+let segTotal=prog.totalSegsDriven||0;
+await p.exposeFunction('reportRoute',(idx,rec,covN)=>{
+  const row={idx:+START+idx,...rec};
+  const oi=prog.records.findIndex(r=>r.idx===row.idx);
+  if(oi>=0) prog.records[oi]=row; else prog.records.push(row);
+  if(rec.stuck||rec.offRoadMax>2||rec.maxSegW>7.8) prog.incidents.push(rec);
+  prog.done=Math.max(prog.done,+START+idx+1);
+  const u=new Set(); prog.records.forEach(r=>(r.segsList||[]).forEach(q=>u.add(q)));
+  segTotal=u.size; prog.totalSegsDriven=u.size;
+  writeFileSync(PROG,JSON.stringify(prog));
+  console.log('ROUTE',+START+idx,rec.done?'DONE':'PART',rec.name,'wp',rec.waypointsReached+'/'+rec.waypointsTotal,'segs',rec.segsTraversed);
+});
+const TIME_BUDGET_MS=0; // computed after boot
+const res=await p.evaluate(async(slice,TIME_BUDGET_MS)=>{
   const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
   let t0=90000; window.__noRender=true;
   const step=()=>{t0+=33;window.__step(0.033,t0);};
@@ -30,45 +44,77 @@ const res=await p.evaluate(async(slice)=>{
   const A=g.auto, K=window.__keys;
   const log=[];
   function norm(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
+  const segsAll=g.roadSegs();
+  const segMid=segsAll.map(s=>{const x1=s.x1??s[0],z1=s.z1??s[1],x2=s.x2??s[2],z2=s.z2??s[3];return [(x1+x2)/2,(z1+z2)/2,(s.width??s[6])||7,x1,z1,x2,z2];});
+  const ptSeg=(x,z,m)=>{const dx=m[5]-m[3],dz=m[6]-m[4];const L2=dx*dx+dz*dz||1e-9;let t=((x-m[3])*dx+(z-m[4])*dz)/L2;t=Math.max(0,Math.min(1,t));return Math.hypot(x-(m[3]+t*dx),z-(m[4]+t*dz));};
+  // 40m buckets so per-step nearest-seg is O(few)
+  const buckets=new Map();
+  segMid.forEach((m,i)=>{const key=Math.floor(m[0]/40)+','+Math.floor(m[1]/40);let a=buckets.get(key);if(!a){a=[];buckets.set(key,a);}a.push(i);});
+  const nearSeg=(x,z)=>{const cx=Math.floor(x/40),cz=Math.floor(z/40);let best=1e9,bi=-1;
+    for(let i=cx-1;i<=cx+1;i++)for(let j=cz-1;j<=cz+1;j++){const a=buckets.get(i+','+j);if(!a)continue;
+      for(const q of a){const m=segMid[q];const dd=ptSeg(x,z,m);if(dd<best){best=dd;bi=q;}}}
+    return [best,bi];};
+  const cov=new Set(); const tStart=performance.now();
+  let ri=-1;
   for(const road of slice){
+    ri++;
+    if(ri>0&&performance.now()-tStart>TIME_BUDGET_MS) break; // stop between routes, never mid-route
     const pts=road.p;
-    // start at first point, aim at second
     const yaw0=Math.atan2(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1]);
     window.__spawnAt(pts[0][0],pts[0][1],yaw0);
-    for(let k=0;k<25;k++) step(); // let chunks stream near spawn
-    let wi=1, stuckT=0, maxW=0, offT=0, dist=0, lx=A.x, lz=A.z;
+    for(let k=0;k<15;k++) step();
+    let wi=1, stuckT=0, offT=0, dist=0, lx=A.x, lz=A.z, lastD=1e9, unstick=0, unstickTries=0;
+    const segsHit=new Set(); const trav=new Map();
     const rec={name:road.n,kind:road.k,points:pts.length,done:false,stuck:false,offRoadMax:0,maxSegW:0};
-    for(let k=0;k<1400&&wi<pts.length;k++){
-      // steering controller toward waypoint
+    const budget=Math.min(1900,pts.length*240+350);
+    for(let k=0;k<budget&&wi<pts.length;k++){
       const ty=Math.atan2(pts[wi][0]-A.x,pts[wi][1]-A.z);
       const err=norm(ty-A.a);
-      K.KeyA=err<-0.06; K.KeyD=err>0.06; K.KeyW=Math.abs(err)<2.6; K.KeyS=Math.abs(err)>=2.6; // keep rolling while turning
+      // CORRECT input model: str=+1 is KeyA and INCREASES auto.a; err>0 needs a to increase -> KeyA
+      K.KeyA=err>0.05; K.KeyD=err<-0.05;
+      // keep speed in the steering-authority band; slow for sharp turns
+      const wantSlow=Math.abs(err)>0.55;
+      K.KeyW=wantSlow?(A.v<3.2):(A.v<8.5);
+      K.KeyS=!wantSlow?false:(A.v>4.5);
       step();
       dist+=Math.hypot(A.x-lx,A.z-lz); lx=A.x; lz=A.z;
       const d=Math.hypot(pts[wi][0]-A.x,pts[wi][1]-A.z);
-      if(d<6){ wi++; }
-      // seg width audit at current position
-      const segs=g.roadSegs(); let best=1e9,bw=0;
-      for(const s of segs){const x1=s.x1??s[0],z1=s.z1??s[1],x2=s.x2??s[2],z2=s.z2??s[3];
-        const mx=(x1+x2)/2,mz=(z1+z2)/2;const dd=Math.hypot(mx-A.x,mz-A.z);if(dd<best){best=dd;bw=s.width??s[6];}}
-      if(bw>maxW)maxW=bw;
+      if(d<5.5||(d>lastD+0.01&&lastD<9)){ wi++; lastD=1e9; } else lastD=Math.min(lastD,d);
+      // physical traversal: project onto nearest seg axis; credit only after covering >=50% of its length within corridor
+      const [best,bi]=nearSeg(A.x,A.z);
+      if(bi>=0&&best<segMid[bi][2]/2+1.6){
+        const m=segMid[bi]; const dx=m[5]-m[3],dz=m[6]-m[4]; const L2=dx*dx+dz*dz||1e-9;
+        let t=((A.x-m[3])*dx+(A.z-m[4])*dz)/L2; t=Math.max(0,Math.min(1,t));
+        let tr=trav.get(bi); if(!tr){tr={lo:t,hi:t};trav.set(bi,tr);} else { if(t<tr.lo)tr.lo=t; if(t>tr.hi)tr.hi=t; }
+      }
+      const bw=bi>=0?segMid[bi][2]:0; if(bw>rec.maxSegW)rec.maxSegW=bw;
       if(best>12) offT+=0.033; else offT=0;
       if(offT>rec.offRoadMax) rec.offRoadMax=offT;
-      if(Math.abs(A.v)<0.4&&K.KeyW){ stuckT+=0.033; if(stuckT>4){ rec.stuck=true; break; } } else stuckT=0;
+      if(unstick>0){ // reversing out
+        K.KeyW=false; K.KeyS=true; K.KeyA=(unstick%60)<30; K.KeyD=!K.KeyA;
+        unstick--;
+        if(unstick===0){ K.KeyS=K.KeyA=K.KeyD=false; stuckT=0; }
+      } else if(Math.abs(A.v)<0.35&&K.KeyW){
+        stuckT+=0.033;
+        if(stuckT>2&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; }
+        else if(stuckT>5){ rec.stuck=true; break; }
+      } else stuckT=0;
     }
-    K.KeyW=K.KeyA=K.KeyD=false;
-    rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0); rec.maxSegW=+maxW.toFixed(1); rec.offRoadMax=+rec.offRoadMax.toFixed(1);
+    K.KeyW=K.KeyA=K.KeyD=K.KeyS=false;
+    rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0); rec.offRoadMax=+rec.offRoadMax.toFixed(1);
+    rec.maxSegW=+rec.maxSegW.toFixed(1);
     rec.waypointsReached=wi-1; rec.waypointsTotal=pts.length-1;
+    for(const [bi,tr] of trav){ if(tr.hi-tr.lo>=0.5){ segsHit.add(bi); cov.add(bi); } }
+    rec.segsTraversed=segsHit.size; rec.segsList=[...segsHit];
+    rec.unstickTries=unstickTries;
     rec.start=[+pts[0][0].toFixed(0),+pts[0][1].toFixed(0)]; rec.end=[+A.x.toFixed(0),+A.z.toFixed(0)];
     log.push(rec);
+    await window.reportRoute(ri,rec,cov.size);
   }
+  window.__coverage=[...cov];
   window.__noRender=false;
-  return log;
-},slice);
-let prog=existsSync(PROG)?JSON.parse(readFileSync(PROG)): {done:0,records:[],incidents:[]};
-res.forEach(r=>{prog.records.push({idx:+START+prog.records.length,...r});
-  if(r.stuck||r.offRoadMax>2||r.maxSegW>7.8) prog.incidents.push(r);});
-prog.done=Math.max(prog.done,+START+res.length);
-writeFileSync(PROG,JSON.stringify(prog));
-console.log(JSON.stringify({processed:res.length,total:prog.done,of:roads.length,incidents:prog.incidents.length,slice:res}));
+  return {log,totalSegsDriven:(window.__coverage||[]).length};
+},slice,DRIVE_BUDGET_MS);
+const recs=(res&&res.log)||[];
+console.log(JSON.stringify({processed:recs.length,total:prog.done,of:roads.length,segsDriven:prog.totalSegsDriven,incidents:prog.incidents.length}));
 await b.close(); process.exit(0);
