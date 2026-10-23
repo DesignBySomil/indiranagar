@@ -683,8 +683,25 @@ export function createCrowd({
           p.ky = 0;
           if (kn.landT === undefined) kn.landT = elapsed;
           if (elapsed - kn.landT > 1.1) {
-            const picked = pickFootpathPlacement(p.x, p.z, 0, 0, 2, 60, false, p.id + elapsed * 13);
-            p.seg = picked.seg; p.t = picked.t; p.kerbOff = picked.kerbOff;
+            // stand up where it landed and walk back to the footpath: re-attach to the nearest footpath segment at the
+            // ped's real lateral offset (no position jump), then ease the offset to a normal footpath lane.
+            let bs = null, bt = 0.5, bl = 0, bd = 1e9;
+            for (let wi = 0; wi < walkSegs.length; wi++) {
+              const sg = walkSegs[wi];
+              const rx = p.x - sg.x1, rz = p.z - sg.z1;
+              const tt = (rx * sg.ux + rz * sg.uz) / sg.len;
+              if (tt < 0.06 || tt > 0.94) continue;
+              const lat = rx * (-sg.uz) + rz * sg.ux;
+              const d = Math.abs(lat - 4.2 * Math.sign(lat || 1)); // distance from a typical footpath lane
+              if (d < bd) { bd = d; bs = sg; bt = tt; bl = lat; }
+            }
+            if (bs && bd < 40) {
+              p.seg = bs; p.t = bt; p.kerbOff = bl;
+              p.kerbTarget = computeFootpathOffset(bs, bl >= 0 ? 1 : -1, p.id);
+            } else {
+              const picked = pickFootpathPlacement(p.x, p.z, 0, 0, 2, 60, false, p.id + elapsed * 13);
+              p.seg = picked.seg; p.t = picked.t; p.kerbOff = picked.kerbOff;
+            }
             p.kn = null; p.ky = 0;
             continue;
           }
@@ -699,6 +716,10 @@ export function createCrowd({
       }
       const seg = p.seg;
 
+      if (p.kerbTarget !== undefined) { // walking back to the footpath lane after being struck
+        const dk = p.kerbTarget - p.kerbOff, stp = 1.4 * safeDt;
+        if (Math.abs(dk) <= stp) { p.kerbOff = p.kerbTarget; p.kerbTarget = undefined; } else p.kerbOff += Math.sign(dk) * stp;
+      }
       // Advance along footpath
       const nextT = p.t + (p.dir * p.speed * safeDt) / seg.len;
       const candPt = evalFootpathPoint(seg, nextT, p.kerbOff);
