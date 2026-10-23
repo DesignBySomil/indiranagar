@@ -60,7 +60,7 @@ await p.exposeFunction('reportRoute',(idx,rec,covN)=>{
 });
 const TIME_BUDGET_MS=0; // computed after boot
 p.on('console',m=>{const t=m.text(); if(t.startsWith('TR ')||t.startsWith('JAM')) console.log(t);});
-await p.evaluate((slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
+await p.evaluate((slice,TIME_BUDGET_MS,TRACE,MAXB,NOUNS)=>{
   const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
   let t0=90000; window.__noRender=true;
   const step=()=>{t0+=33;window.__step(0.033,t0);};
@@ -172,7 +172,8 @@ await p.evaluate((slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
             const t=window.__traffic&&window.__traffic();
             rec.jam=t&&t.units?t.units.filter(u=>Math.hypot(u.x-A.x,u.z-A.z)<45).map(u=>({x:+u.x.toFixed(1),z:+u.z.toFixed(1),v:+((u.speed??u.v)??-1).toFixed(1),t:+(u.t??-1).toFixed(2),seg:(u.seg&&u.seg.name)||'',ow:!!(u.seg&&u.seg.oneway),ux:+(u.seg&&u.seg.ux||0).toFixed(2),uz:+(u.seg&&u.seg.uz||0).toFixed(2),dir:u.dir})):null;
             console.log('JAM',JSON.stringify({car:[+A.x.toFixed(1),+A.z.toFixed(1)],a:+A.a.toFixed(2),units:rec.jam})); }
-          if(stuckT>12&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; rec.waited=true; (rec.unsticks=rec.unsticks||[]).push({x:+A.x.toFixed(1),z:+A.z.toFixed(1),wi}); }
+          if(stuckT>12&&unstickTries<2&&!NOUNS){ unstick=75; unstickTries++; stuckT=0; rec.waited=true; (rec.unsticks=rec.unsticks||[]).push({x:+A.x.toFixed(1),z:+A.z.toFixed(1),wi}); }
+          else if(stuckT>12&&unstickTries<2&&NOUNS){ unstickTries=2; (rec.unstickSkips=rec.unstickSkips||[]).push({x:+A.x.toFixed(1),z:+A.z.toFixed(1),wi,stuckT:+stuckT.toFixed(1)}); }
           else if(stuckT>16){ rec.stuck=true; break; }
         } else stuckT=0;
       }
@@ -205,7 +206,7 @@ await p.evaluate((slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
     }
     return {type:'chunk',ri,wi:R.wi,k:R.k,budget:R.budget,dist:+R.dist.toFixed(0),pos:[+A.x.toFixed(1),+A.z.toFixed(1)]};
   };
-},slice,DRIVE_BUDGET_MS,TRACE,parseInt(process.env.MAXBUDGET||'3400'));
+},slice,DRIVE_BUDGET_MS,TRACE,parseInt(process.env.MAXBUDGET||'3400'),process.env.NOUNSTICK==='1');
 const CHUNK=parseInt(process.env.CHUNK||'400');
 const recs=[];
 for(;;){
