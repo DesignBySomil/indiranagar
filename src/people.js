@@ -520,7 +520,7 @@ export function createCrowd({
   }
 
   // Pick a footpath placement within [minDist, maxDist] of player, clear of solidFn
-  function pickFootpathPlacement(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal) {
+  function pickFootpathPlacementRaw(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal, allowCone) {
     let bestSeg = walkSegs[0];
     let bestT = 0.5;
     let bestOff = 4.2;
@@ -552,7 +552,7 @@ export function createCrowd({
         // No visible pop-in: a recycled walker must not materialize inside the player's
         // forward view cone nearby (chase cam looks along hx/hz). Ahead placements stay
         // allowed from 80m out, where a new walker reads as walking into view.
-        if (dot > 0.5 && dist < 80) score -= 1500;
+        if (!allowCone && dot > 0.5 && dist < 300) continue; // hard reject: never materialize in the camera's forward half-cone (soft penalty lost to stride-clustered sampling)
         else if (biasAhead) score += dot * 75;
       }
 
@@ -568,7 +568,13 @@ export function createCrowd({
       }
     }
 
-    return { seg: bestSeg, t: bestT, kerbOff: bestOff };
+    return { seg: bestSeg, t: bestT, kerbOff: bestOff, score: bestScore };
+  }
+
+  function pickFootpathPlacement(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal) {
+    const r = pickFootpathPlacementRaw(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal, false);
+    if (r.score > -1e8) return r;
+    return pickFootpathPlacementRaw(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal + 31.7, true); // last resort
   }
 
   const p0 = readPlayer();

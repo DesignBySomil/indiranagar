@@ -28,17 +28,17 @@ const r=await p.evaluate(async()=>{
       const units=(window.__traffic?window.__traffic().units:[])||[];
       units.forEach((u,i)=>{
         const pr=prevT.get(i);
-        if(pr&&Math.hypot(u.x-pr.x,u.z-pr.z)>40){const c=cls(u.x,u.z); if(c)ev.push({kind:'veh',b:c});}
+        if(pr&&Math.hypot(u.x-pr.x,u.z-pr.z)>40){const c=cls(u.x,u.z); const dx=u.x-g.auto.x,dz=u.z-g.auto.z; g.camera.getWorldDirection(V); const dd=Math.hypot(dx,dz)||1; if(c)ev.push({kind:'veh',b:c,d:+dd.toFixed(0),dot:+((dx*V.x+dz*V.z)/dd).toFixed(2),held:u.__held||0,why:u.__why||''});}
         prevT.set(i,{x:u.x,z:u.z});
       });
     }
     return ev;
   }
-  const tally=ev=>{const t={lt80:0,'80_150':0,'150_300':0,gt300:0};ev.forEach(e=>t[e.b]++);return{events:ev.length,inFrustum:t,ped:ev.filter(e=>e.kind==='ped').length,veh:ev.filter(e=>e.kind==='veh').length};};
+  const tally=ev=>{const t={lt80:0,'80_150':0,'150_300':0,gt300:0};ev.forEach(e=>t[e.b]++);return{events:ev.length,inFrustum:t,ped:ev.filter(e=>e.kind==='ped').length,veh:ev.filter(e=>e.kind==='veh').length,vehDetail:ev.filter(e=>e.kind==='veh').slice(0,10)};};
   const out={};
   out.chase=tally(run(350,null));
   const rig=g.camRig;
-  if(rig&&rig.set){rig.set(1); out.driverMode=rig.name; out.driver=tally(run(300,null)); rig.set(2); out.passengerMode=rig.name; out.passenger=tally(run(300,null)); rig.set(0);}
+  if(rig&&rig.set){rig.set('driver'); out.driverMode=rig.name; out.driver=tally(run(300,null)); rig.set('passenger'); out.passengerMode=rig.name; out.passenger=tally(run(300,null)); rig.set('chase');}
   // drag-look ~74deg right via synthetic pointer path on canvas
   const cv=document.querySelector('canvas');
   const opts={bubbles:true,clientX:160,clientY:90,pointerId:1};
@@ -46,7 +46,7 @@ const r=await p.evaluate(async()=>{
   cv.dispatchEvent(new PointerEvent('pointermove',{...opts,clientX:160+217}));
   out.drag=tally(run(250,null));
   cv.dispatchEvent(new PointerEvent('pointerup',opts));
-  return out;
+  out.trc=window.__trc||null; return out;
 });
 console.log('RESULT '+JSON.stringify(r));
 await b.close(); process.exit(0);

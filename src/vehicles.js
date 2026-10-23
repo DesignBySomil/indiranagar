@@ -790,7 +790,7 @@ export function createTraffic({
   }
 
   // Pick a road segment & lane position within [minDist, maxDist] of (px, pz), optionally biased ahead of heading
-  function pickRoadPlacement(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal) {
+  function pickRoadPlacementRaw(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal, allowCone) {
     let bestSeg = validSegs[0];
     let bestT = 0.5;
     let bestScore = -1e9;
@@ -814,9 +814,15 @@ export function createTraffic({
         score -= Math.abs(dist - (minDist + maxDist) * 0.5);
       }
 
-      if (biasAhead && dist > 1) {
+      if (dist > 1) {
         const dot = (dx * hx + dz * hz) / dist;
-        score += dot * 95;
+        // no visible pop-in: a recycled vehicle must not materialize inside the camera's
+        // forward half-cone (hx/hz come from the live camera via getAuto). HARD reject, not a
+        // score penalty: the 28-trial stride samples one array-neighborhood, so a soft penalty
+        // can still lose to nothing and let an in-view spawn win. If every trial is in-cone the
+        // caller falls back to the unconstrained best (last resort only).
+        if (!allowCone && dot > 0.5 && dist < 350) continue;
+        if (biasAhead) score += dot * 95;
       }
 
       if (solidFn && solidFn(cx, cz)) {
@@ -830,7 +836,14 @@ export function createTraffic({
       }
     }
 
-    return { seg: bestSeg, t: bestT };
+    return { seg: bestSeg, t: bestT, score: bestScore };
+  }
+
+  function pickRoadPlacement(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal) {
+    const r = pickRoadPlacementRaw(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal, false);
+    if (r.score > -1e8) return r;
+    // every trial landed in the camera cone: last resort, allow it rather than stall the sim
+    return pickRoadPlacementRaw(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal + 31.7, true);
   }
 
   // Compute left-hand traffic lane offset (India keep-left rule)
