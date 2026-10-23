@@ -442,7 +442,7 @@ export function createCrowd({
   group.add(armLInst, armRInst, legLInst, legRInst);
 
   // High-fidelity articulated pedestrians for the nearest walkers (draw calls bounded by slot count)
-  const GEM_SLOTS = 18;
+  const GEM_SLOTS = 26;
   const gemProto = [0, 1, 2, 3, 4, 5].map(v => buildPedestrianMerged(v));
   const gemSlots = [];
   for (let j = 0; j < GEM_SLOTS; j++) {
