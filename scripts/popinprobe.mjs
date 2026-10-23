@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer-core';
-const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:280000,args:['--no-sandbox','--disable-gpu','--window-size=320,180']});
-const p=await b.newPage(); await p.setViewport({width:320,height:180});
+const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:280000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=320,180']});
+const p=await b.newPage(); p.on('pageerror',e=>console.log('PAGEERR',e.message)); p.on('error',e=>console.log('CRASH',e.message)); p.on('console',m=>{const t=m.text(); if(!t.startsWith('THREE')) console.log('CON',t.slice(0,200));}); await p.setViewport({width:320,height:180});
 await p.goto('http://localhost:4180/?traffic=0',{waitUntil:'domcontentloaded',timeout:60000});
 await p.waitForFunction(()=>window.__game&&window.__game.auto&&window.__step&&window.__peds,{timeout:120000});
 const r=await p.evaluate(async()=>{
