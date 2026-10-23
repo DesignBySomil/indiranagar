@@ -1105,9 +1105,9 @@ export function createTraffic({
       tu.lastSeg = tu.seg; tu.lastT = tu.t; tu.lastDir = tu.dir;
       // impact kick: damped spring back to the lane, quick hop, spin decay
       if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
-        tu.kvx += (-26 * tu.kx - 9 * tu.kvx) * safeDt; tu.kx += tu.kvx * safeDt;
-        tu.kvz += (-26 * tu.kz - 9 * tu.kvz) * safeDt; tu.kz += tu.kvz * safeDt;
-        tu.ksv += (-34 * tu.ks - 10 * tu.ksv) * safeDt; tu.ks += tu.ksv * safeDt;
+        tu.kvx += (-26 * tu.kx - 5 * tu.kvx) * safeDt; tu.kx += tu.kvx * safeDt;
+        tu.kvz += (-26 * tu.kz - 5 * tu.kvz) * safeDt; tu.kz += tu.kvz * safeDt;
+        tu.ksv += (-34 * tu.ks - 7 * tu.ksv) * safeDt; tu.ks += tu.ksv * safeDt;
         if (tu.ky > 0 || tu.kvy > 0) { tu.kvy -= 26 * safeDt; tu.ky += tu.kvy * safeDt; if (tu.ky < 0) { tu.ky = 0; tu.kvy = 0; } }
         if (tu.cool > 0) tu.cool -= safeDt;
         if (Math.abs(tu.kx) < 0.002 && Math.abs(tu.kvx) < 0.02) { tu.kx = 0; tu.kvx = 0; }
@@ -1457,9 +1457,9 @@ export function createParkedVehicles({
   function update(dt = 0.016) {
     if (activeParked.size) {
       for (const sp of activeParked) {
-        sp.vx += (-22 * sp.ox - 8 * sp.vx) * dt; sp.ox += sp.vx * dt;
-        sp.vz += (-22 * sp.oz - 8 * sp.vz) * dt; sp.oz += sp.vz * dt;
-        sp.vaw += (-30 * sp.oyaw - 10 * sp.vaw) * dt; sp.oyaw += sp.vaw * dt;
+        sp.vx += (-22 * sp.ox - 5 * sp.vx) * dt; sp.ox += sp.vx * dt;
+        sp.vz += (-22 * sp.oz - 5 * sp.vz) * dt; sp.oz += sp.vz * dt;
+        sp.vaw += (-30 * sp.oyaw - 7 * sp.vaw) * dt; sp.oyaw += sp.vaw * dt;
         if (sp.ky > 0 || sp.vy > 0) { sp.vy -= 26 * dt; sp.ky += sp.vy * dt; if (sp.ky < 0) { sp.ky = 0; sp.vy = 0; } }
         sp.cool -= dt;
         if (sp.m && sp.idx >= 0) {
