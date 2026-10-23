@@ -371,7 +371,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
     </div>
     <div class="sc-title" id="sc-title">Toit</div>
     <div class="sc-line"><strong>Try this:</strong> <span id="sc-order"></span></div>
-    <div class="sc-line"><strong>Jaano:</strong> <span id="sc-fact"></span></div>
+    <div class="sc-line"><strong>Did you know:</strong> <span id="sc-fact"></span></div>
     <div class="sc-driver" id="sc-driver"></div>
     <div class="sc-actions">
       <button id="btn-fav">★ Pin Favourite (+50% ₹)</button>
