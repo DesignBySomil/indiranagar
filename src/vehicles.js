@@ -663,7 +663,7 @@ function buildTempoSet(T) {
   };
 }
 
-function normalizeRoadSegs(roadSegs, solidFn, minLen = 12) {
+function normalizeRoadSegs(roadSegs, solidFn, minLen = 5) {
   const valid = [];
   for (let i = 0; i < roadSegs.length; i++) {
     const s = roadSegs[i];
@@ -1065,12 +1065,14 @@ export function createTraffic({
         const fUz = tu.seg.uz * tu.dir;
         const next = findConnectedSegment(tu.seg, exitX, exitZ, fUx, fUz);
         const nxt = next && !(next.seg.oneway && next.dir !== 1) ? next : null;
-        let jumpOk = !!nxt;
-        if (nxt) { const cp = computeLanePos(tu.seg, T.MathUtils.clamp(tu.t, 0, 1), tu.dir); const np2 = computeLanePos(nxt.seg, nxt.dir === 1 ? 0.05 : 0.95, nxt.dir); if (Math.hypot(np2.x - cp.x, np2.z - cp.z) > 4) jumpOk = false; }
+        let jumpOk = !!nxt; let jumpD = -1; let gapLon = 0;
+        if (nxt) { const cp = computeLanePos(tu.seg, T.MathUtils.clamp(tu.t, 0, 1), tu.dir); const np2 = computeLanePos(nxt.seg, nxt.dir === 1 ? 0 : 1, nxt.dir); const dxj = np2.x - cp.x, dzj = np2.z - cp.z; gapLon = dxj * fUx + dzj * fUz; const gapLat = -dxj * fUz + dzj * fUx; jumpD = Math.hypot(dxj, dzj); if (Math.abs(gapLat) > 3.5 || gapLon < -2 || gapLon > 18) jumpOk = false; }
+        if (typeof window !== 'undefined') { const W = window.__trc = window.__trc || { trans: 0, failNext: 0, failJump: 0, held: 0, recycled: 0, log: [] }; if (nxt && jumpOk) W.trans++; else { if (!nxt) W.failNext++; else W.failJump++; if (W.log.length < 24) W.log.push({ seg: tu.seg.name, t: +tu.t.toFixed(3), dir: tu.dir, ow: tu.seg.oneway ? 1 : 0, nxt: nxt ? nxt.seg.name : null, jumpD: +jumpD.toFixed(2), exit: [ +exitX.toFixed(1), +exitZ.toFixed(1) ] }); } }
         if (nxt && jumpOk) {
+          const entryGap = Math.max(0.5, Math.min(gapLon, nxt.seg.len * 0.9));
           tu.seg = nxt.seg;
           tu.dir = nxt.dir;
-          tu.t = nxt.dir === 1 ? 0.05 : 0.95;
+          tu.t = nxt.dir === 1 ? Math.min(0.97, entryGap / nxt.seg.len) : Math.max(0.03, 1 - entryGap / nxt.seg.len);
         } else if (tu.seg.oneway) {
           forceRecycle = true;
         } else {
@@ -1086,6 +1088,7 @@ export function createTraffic({
       const dz = pos.z - player.z;
       const dist = Math.hypot(dx, dz);
       const wantsRecycle = forceRecycle || dist > 320 || (solidFn && solidFn(pos.x, pos.z));
+      if (typeof window !== 'undefined' && wantsRecycle) { window.__trc = window.__trc || { trans:0,failNext:0,failJump:0,held:0,recycled:0,log:[] }; if (dist <= 200 && tu.lastSeg) window.__trc.held++; else window.__trc.recycled++; }
       if (wantsRecycle && dist <= 200 && tu.lastSeg) {
         // never pop a vehicle in or out where the player can see it: hold at the last good spot until the player is far
         tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir;
@@ -1181,7 +1184,7 @@ export function createTraffic({
     return true;
   }
 
-  return { group, update, solid, units: trafficUnits, kickAt };
+  return { group, update, solid, units: trafficUnits, kickAt, __segs: roadSegs, __validSegs: validSegs, __findNext: findConnectedSegment };
 }
 
 export function createParkedVehicles({
