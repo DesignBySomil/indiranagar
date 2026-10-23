@@ -1108,18 +1108,15 @@ export function createTraffic({
       // baked into a persistent displacement (ox/oz/oyaw) so a struck vehicle
       // STAYS where the impact left it instead of springing back to its lane.
       if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
-        tu.kvx += (-26 * tu.kx - 5 * tu.kvx) * safeDt; tu.kx += tu.kvx * safeDt;
-        tu.kvz += (-26 * tu.kz - 5 * tu.kvz) * safeDt; tu.kz += tu.kvz * safeDt;
-        tu.ksv += (-34 * tu.ks - 7 * tu.ksv) * safeDt; tu.ks += tu.ksv * safeDt;
+        // free slide with friction, NO restoring spring: the vehicle lands where the hit sends it
+        const fr = Math.exp(-3.2 * safeDt), frs = Math.exp(-4.5 * safeDt);
+        tu.ox = (tu.ox || 0) + tu.kvx * safeDt; tu.oz = (tu.oz || 0) + tu.kvz * safeDt;
+        tu.oyaw = (tu.oyaw || 0) + tu.ksv * safeDt;
+        tu.kvx *= fr; tu.kvz *= fr; tu.ksv *= frs;
         if (tu.ky > 0 || tu.kvy > 0) { tu.kvy -= 26 * safeDt; tu.ky += tu.kvy * safeDt; if (tu.ky < 0) { tu.ky = 0; tu.kvy = 0; } }
         if (tu.cool > 0) tu.cool -= safeDt;
-        const bake = Math.min(1, 2.5 * safeDt);
-        tu.ox = (tu.ox || 0) + tu.kx * bake; tu.kx -= tu.kx * bake;
-        tu.oz = (tu.oz || 0) + tu.kz * bake; tu.kz -= tu.kz * bake;
-        tu.oyaw = (tu.oyaw || 0) + tu.ks * bake; tu.ks -= tu.ks * bake;
-        if (Math.abs(tu.kx) < 0.002 && Math.abs(tu.kvx) < 0.02) { tu.kx = 0; tu.kvx = 0; }
-        if (Math.abs(tu.kz) < 0.002 && Math.abs(tu.kvz) < 0.02) { tu.kz = 0; tu.kvz = 0; }
-        if (Math.abs(tu.ks) < 0.002 && Math.abs(tu.ksv) < 0.02) { tu.ks = 0; tu.ksv = 0; }
+        if (Math.abs(tu.kvx) + Math.abs(tu.kvz) < 0.05) { tu.kvx = 0; tu.kvz = 0; }
+        if (Math.abs(tu.ksv) < 0.05) tu.ksv = 0;
       }
       tu.x = pos.x + (tu.ox || 0) + (tu.kx || 0);
       tu.z = pos.z + (tu.oz || 0) + (tu.kz || 0);
@@ -1469,14 +1466,11 @@ export function createParkedVehicles({
   function update(dt = 0.016) {
     if (activeParked.size) {
       for (const sp of activeParked) {
-        sp.vx += (-22 * sp.ox - 5 * sp.vx) * dt; sp.ox += sp.vx * dt;
-        sp.vz += (-22 * sp.oz - 5 * sp.vz) * dt; sp.oz += sp.vz * dt;
-        sp.vaw += (-30 * sp.oyaw - 7 * sp.vaw) * dt; sp.oyaw += sp.vaw * dt;
-        // bake the offset into the vehicle's real spot so it does NOT slide back
-        const bake = Math.min(1, 2.5 * dt);
-        sp.x += sp.ox * bake; sp.ox -= sp.ox * bake;
-        sp.z += sp.oz * bake; sp.oz -= sp.oz * bake;
-        sp.yaw += sp.oyaw * bake; sp.oyaw -= sp.oyaw * bake;
+        // free slide with friction, NO restoring spring: it stays where the impact leaves it
+        const fr = Math.exp(-3.2 * dt), frs = Math.exp(-4.5 * dt);
+        sp.x += sp.vx * dt; sp.z += sp.vz * dt; sp.yaw += sp.vaw * dt;
+        sp.vx *= fr; sp.vz *= fr; sp.vaw *= frs;
+        sp.ox = sp.oz = sp.oyaw = 0;
         if (sp.ky > 0 || sp.vy > 0) { sp.vy -= 26 * dt; sp.ky += sp.vy * dt; if (sp.ky < 0) { sp.ky = 0; sp.vy = 0; } }
         sp.cool -= dt;
         if (sp.m && sp.idx >= 0) {
