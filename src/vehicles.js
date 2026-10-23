@@ -1171,6 +1171,7 @@ export function createTraffic({
       if (d2 < bestD) { bestD = d2; best = u; }
     }
     if (!best || best.cool > 0) return false;
+    const airborne = (best.ky || 0) > 0.02; // never stack a second launch mid-flight
     const mass = best.halfLen < 1.5 ? 1.5 : (best.halfLen > 2.8 ? 0.7 : 1.0);
     const p2 = power * mass;
     best.kvx += dx * p2;
@@ -1178,7 +1179,7 @@ export function createTraffic({
     const side = (best.x - x) * dz - (best.z - z) * dx;
     best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.6;
     // user bar: a struck vehicle must visibly leave the ground, not just shove sideways
-    best.kvy = Math.min(12, Math.max(best.kvy, 4.5 + p2 * 1.15));
+    if (!airborne) best.kvy = Math.min(12, Math.max(best.kvy, 4.5 + p2 * 1.15));
     best.cool = 0.55;
     return true;
   }
@@ -1523,13 +1524,14 @@ export function createParkedVehicles({
       }
     }
     if (!best || best.cool > 0) return false;
+    const airborne = (best.ky || 0) > 0.02;
     const light = (best.type === 'scooter' || best.type === 'bike') ? 1.6 : (best.type === 'autoRickshaw' ? 1.1 : 0.7);
     const p = power * light;
     best.vx += dx * p; best.vz += dz * p;
     const side = (best.x - x) * dz - (best.z - z) * dx;
     best.vaw += (side >= 0 ? 1 : -1) * p * 0.65;
     // same visible-airborne bar for parked vehicles
-    best.vy = Math.min(12, Math.max(best.vy, 4 + p * 1.05));
+    if (!airborne) best.vy = Math.min(12, Math.max(best.vy, 4 + p * 1.05));
     best.cool = 0.55;
     activeParked.add(best);
     return true;
