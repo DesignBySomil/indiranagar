@@ -20,6 +20,9 @@ export const BLDG_FIX = [
   { sig: [-447.7, 194.2], edge: [2, 3], d: 1.2 },
   { sig: [-440.9, 208.3], edge: [0, 1], d: 0.6 },
   { sig: [-368.9, 204.2], edge: [0, 1], d: 0.8 },
+  // Appareddy Palya Road bend: building corner (-514.4,221.3) ate ~2.3m into the 6.6m
+  // carriageway on the inside of the northwest bend; auto beached against it (coverage idx 43).
+  { sig: [-525.1, 217.6], edge: [1, 2], d: 2.6 },
 ];
 export function applyBldgFix(buildings) {
   for (const f of BLDG_FIX) {
