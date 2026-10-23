@@ -672,7 +672,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     stGrass.position.set(0, 0.15, 0); stGrass.receiveShadow = true; stGroup.add(stGrass);
     // Support pillars & escalator/stair housings at sides
     for (let px = -18; px <= 18; px += 12) {
-      const pier = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.25, 7.4, 14), concMat);
+      const pier = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.9, 7.4, 14), concMat);
       pier.position.set(px, 3.7, 0);
       stGroup.add(pier);
     }
