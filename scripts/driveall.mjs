@@ -6,7 +6,16 @@ const [,,START='0',COUNT='8',PROG='/tmp/drive-progress.json']=process.argv;
 const world=JSON.parse(readFileSync('public/data/world.json'));
 const MAP={x0:-650,x1:830,z0:-805,z1:775};
 const inMap=(x,z)=>x>MAP.x0+35&&x<MAP.x1-35&&z>MAP.z0+35&&z<MAP.z1-35;
-const roads=world.roads.filter(r=>r.p&&r.p.length>1&&r.p.some(pt=>inMap(pt[0],pt[1])));
+// user: ALL reachable game roads. Clip each polyline to maximal runs of consecutive
+// in-bounds points (reachable portions of partially-in-bounds roads still count).
+const roads=[];
+for(const r of world.roads){
+  if(!r.p||r.p.length<2) continue;
+  let run=[];
+  const flush=()=>{ if(run.length>=2) roads.push({n:r.n||'(unnamed)',k:r.k,p:run}); run=[]; };
+  for(const pt of r.p){ if(inMap(pt[0],pt[1])) run.push(pt); else flush(); }
+  flush();
+}
 const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:280000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=480,270']});
 const p=await b.newPage(); await p.setViewport({width:480,height:270});
 p.on('pageerror',e=>console.log('PAGEERR',String(e).slice(0,120)));
@@ -49,6 +58,8 @@ const res=await p.evaluate(async(slice)=>{
     }
     K.KeyW=K.KeyA=K.KeyD=false;
     rec.done=wi>=pts.length; rec.dist=+dist.toFixed(0); rec.maxSegW=+maxW.toFixed(1); rec.offRoadMax=+rec.offRoadMax.toFixed(1);
+    rec.waypointsReached=wi-1; rec.waypointsTotal=pts.length-1;
+    rec.start=[+pts[0][0].toFixed(0),+pts[0][1].toFixed(0)]; rec.end=[+A.x.toFixed(0),+A.z.toFixed(0)];
     log.push(rec);
   }
   window.__noRender=false;
