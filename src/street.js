@@ -83,7 +83,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const patchPos = [], patchCol = [], patchIdx = [];
   const potholeSpots = [];
   const utilityPoles = [];
-  const metroPiers = [], cmhSegs = [], cmhCands = [];
+  const metroPiers = [], metroDecks = [], cmhSegs = [], cmhCands = [];
   let gantryRef = null;
 
   let v = 0, fpV = 0, kbV = 0, dv = 0, divV = 0, patV = 0;
@@ -560,19 +560,54 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
 
   // Metro piers stand in the median between the two carriageways (each carriageway is its own OSM way),
   // never on a carriageway centreline. Each candidate is moved to the midpoint with the nearest opposite way.
+  // point-to-polyline distance against every other drivable way (junction safety for portal columns)
+  // distance to other drivable ways, ignoring the short paired segments near the two reference points
+  const distToRoads = (x, z, refA, refB) => {
+    let best = 1e9;
+    world.roads.forEach((r) => {
+      if (r.k < 2) return;
+      for (let i = 0; i < r.p.length - 1; i++) {
+        const [ax, az] = r.p[i], [bx2, bz2] = r.p[i + 1];
+        const mx2 = (ax + bx2) / 2, mz2 = (az + bz2) / 2;
+        if (Math.hypot(mx2 - refA[0], mz2 - refA[1]) < 11 || Math.hypot(mx2 - refB[0], mz2 - refB[1]) < 11) continue;
+        const dx = bx2 - ax, dz = bz2 - az, L2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+        const d = Math.hypot(x - (ax + dx * t), z - (az + dz * t));
+        if (d < best) best = d;
+      }
+    });
+    return best;
+  };
   for (const [cx, cz, yaw, rj] of cmhCands) {
-    let bd = 1e9, bx = 0, bz = 0;
+    let bd = 1e9, bx = 0, bz = 0, bRi = -1;
     for (const [x1, z1, x2, z2, rk] of cmhSegs) {
       if (rk === rj) continue;
       const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
       const t = Math.max(0, Math.min(1, ((cx - x1) * dx + (cz - z1) * dz) / L2));
       const px = x1 + dx * t, pz = z1 + dz * t, d = Math.hypot(cx - px, cz - pz);
-      if (d < bd) { bd = d; bx = px; bz = pz; }
+      if (d < bd) { bd = d; bx = px; bz = pz; bRi = rk; }
     }
     if (bd < 4 || bd > 22) continue; // no opposite carriageway nearby: no viaduct here
     const mx = (cx + bx) / 2, mz = (cz + bz) / 2;
-    if (metroPiers.some(p => Math.hypot(p[0] - mx, p[1] - mz) < 20)) continue;
-    metroPiers.push([mx, mz, yaw]);
+    if (metroDecks.some(p => Math.hypot(p[0] - mx, p[1] - mz) < 20)) continue;
+    metroDecks.push([mx, mz, yaw]);
+    // direction from this carriageway to its opposite = across the median
+    let px = bx - cx, pz = bz - cz; const pl = Math.hypot(px, pz) || 1; px /= pl; pz /= pl;
+    const HWC = 3.8; // carriageway half-width for the CMH/100 Ft class roads
+    const medianGap = bd - 2 * HWC; // physical clear strip between the carriageway edges
+    if (medianGap >= 3.4) {
+      // genuine median: single central column - unless a third drivable way passes too close
+      if (distToRoads(mx, mz, [cx, cz], [bx, bz]) >= 4.95) metroPiers.push([mx, mz, yaw]);
+      else metroDecks.pop();
+    } else {
+      // no real median: portal frame - columns OUTSIDE both carriageways, never in a lane
+      const off = bd / 2 + HWC + 2.0; // past the far carriageway's outer edge: column radius 1.1 + 0.6m clearance
+      const ax1 = mx + px * off, az1 = mz + pz * off, ax2 = mx - px * off, az2 = mz - pz * off;
+      // but never into a crossing street at a junction: drop the span's columns if either lands on another drivable way
+      if (distToRoads(ax1, az1, [cx, cz], [bx, bz]) < 4.9 || distToRoads(ax2, az2, [cx, cz], [bx, bz]) < 4.9) { metroDecks.pop(); continue; }
+      metroPiers.push([ax1, az1, yaw]);
+      metroPiers.push([ax2, az2, yaw]);
+    }
   }
 
   // Namma Metro Purple Line Viaduct & Real Indiranagar Station from extras.station.pts
@@ -581,11 +616,14 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
 
   if (metroPiers.length) {
     const pierInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.95, 1.1, 8.8, 12), concMat, metroPiers.length);
-    const deckInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.6, 1.35, 27), concMat, metroPiers.length);
-    const bandInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.8, 0.32, 27), purpMat, metroPiers.length);
+    const deckInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.6, 1.35, 27), concMat, metroDecks.length);
+    const bandInst = new THREE.InstancedMesh(new THREE.BoxGeometry(8.8, 0.32, 27), purpMat, metroDecks.length);
     metroPiers.forEach(([x, z, yaw], i) => {
       q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
       m4.compose(v3.set(x, 4.4, z), q4, s3); pierInst.setMatrixAt(i, m4);
+    });
+    metroDecks.forEach(([x, z, yaw], i) => {
+      q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
       m4.compose(v3.set(x, 9.2, z), q4, s3); deckInst.setMatrixAt(i, m4);
       m4.compose(v3.set(x, 9.25, z), q4, s3); bandInst.setMatrixAt(i, m4);
     });
