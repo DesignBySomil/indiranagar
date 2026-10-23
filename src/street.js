@@ -648,7 +648,8 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       stGroup.add(sb);
     }
     scene.add(stGroup);
-    bridgeVolumes.push({ x: scx, z: scz, r: 32, clearanceY: 7.4 });
+    let br = 0; sPts.forEach(pt => { br = Math.max(br, Math.hypot(pt[0] - scx, pt[1] - scz)); });
+    bridgeVolumes.push({ x: scx, z: scz, r: br + 2, clearanceY: 7.4, poly: sPts.map(pt => [pt[0], pt[1]]) });
   }
 
   // Helper to check if a polyline spans a road
@@ -711,7 +712,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       }
 
       scene.add(fbg);
-      bridgeVolumes.push({ x: mx, z: mz, r: span * 0.5 + 3, clearanceY: 4.5 });
+      bridgeVolumes.push({ x: mx, z: mz, r: span * 0.5 + 3, clearanceY: 4.5, rect: { x: mx, z: mz, yaw, halfLen: span * 0.5, halfW: 1.5 } });
     }
   }
 

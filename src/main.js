@@ -282,7 +282,20 @@ function clampCam() {
     let cap = 8.0;
     for (let i = 0; i < camBridgeVols.length; i++) {
       const b = camBridgeVols[i];
-      if (Math.hypot(camera.position.x - b.x, camera.position.z - b.z) < (b.r || 18)) cap = Math.min(cap, (b.clearanceY || 7) - 0.4);
+      if (Math.hypot(camera.position.x - b.x, camera.position.z - b.z) >= (b.r || 18)) continue;
+      let under = true;
+      if (b.poly) { // exact: station concourse is the extruded station polygon at 7.4m
+        under = false; const P = b.poly, cx = camera.position.x, cz = camera.position.z;
+        for (let u = 0, w = P.length - 1; u < P.length; w = u++) {
+          const xi = P[u][0], zi = P[u][1], xj = P[w][0], zj = P[w][1];
+          if ((zi > cz) !== (zj > cz) && cx < ((xj - xi) * (cz - zi)) / (zj - zi) + xi) under = !under;
+        }
+      } else if (b.rect) { // exact: footbridge deck slab (2.4m wide x span), cap only when under the slab
+        const r = b.rect, dx = camera.position.x - r.x, dz = camera.position.z - r.z;
+        const sy = Math.sin(r.yaw), cy = Math.cos(r.yaw);
+        under = Math.abs(dx * sy + dz * cy) <= r.halfLen + 1 && Math.abs(dx * cy - dz * sy) <= r.halfW;
+      }
+      if (under) cap = Math.min(cap, (b.clearanceY || 7) - 0.4);
     }
     yT = Math.min(cap, camera.position.y + (4.2 - dCam) * 1.8);
   }
