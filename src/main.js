@@ -234,10 +234,11 @@ function syncCamera(dt, snap = false) {
     camRoll += ((-auto.steer * auto.v * 0.0028) - camRoll) * Math.min(1, dt * 6);
   }
 
-  function nearSolid(x, z) { const m = 1.4; return solid(x, z) || solid(x + m, z) || solid(x - m, z) || solid(x, z + m) || solid(x, z - m); }
+  function nearSolid(x, z, m = 1.4) { return solid(x, z) || solid(x + m, z) || solid(x - m, z) || solid(x, z + m) || solid(x, z - m); }
+  function losBlocked(cx, cz) { if (solid(auto.x, auto.z)) return false; for (let t = 0.15; t < 0.9; t += 0.15) if (solid(cx + (auto.x - cx) * t, cz + (auto.z - cz) * t)) return true; return false; }
   // keep the camera outside buildings: pull it toward the auto until the spot is free
   for (let k = 0; k < 14; k++) {
-    if (!(nearSolid(camera.position.x, camera.position.z) || (parkedVehicles && parkedVehicles.solid(camera.position.x, camera.position.z)))) break;
+    if (!(nearSolid(camera.position.x, camera.position.z, 0.8) || losBlocked(camera.position.x, camera.position.z) || (parkedVehicles && parkedVehicles.solid(camera.position.x, camera.position.z)))) break;
     camera.position.x += (auto.x - camera.position.x) * 0.25;
     camera.position.z += (auto.z - camera.position.z) * 0.25;
   }
@@ -258,7 +259,8 @@ function syncCamera(dt, snap = false) {
 
 function clampCam() {
   if (camRig && camRig.name && !/chase/i.test(camRig.name)) return;
-  const bad = (x, z) => solid(x, z) || solid(x + 1.4, z) || solid(x - 1.4, z) || solid(x, z + 1.4) || solid(x, z - 1.4) || (parkedVehicles && parkedVehicles.solid(x, z)) || (traffic && traffic.solid(x, z)) || (crowd && crowd.solid(x, z));
+  const m = 0.8; const los = (x, z) => { if (solid(auto.x, auto.z)) return false; for (let t = 0.15; t < 0.9; t += 0.15) if (solid(x + (auto.x - x) * t, z + (auto.z - z) * t)) return true; return false; };
+  const bad = (x, z) => solid(x, z) || solid(x + m, z) || solid(x - m, z) || solid(x, z + m) || solid(x, z - m) || los(x, z) || (parkedVehicles && parkedVehicles.solid(x, z)) || (traffic && traffic.solid(x, z)) || (crowd && crowd.solid(x, z));
   const q = camera.quaternion.clone();
   for (let k = 0; k < 24; k++) {
     if (!bad(camera.position.x, camera.position.z)) break;
