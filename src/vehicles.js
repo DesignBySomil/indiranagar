@@ -1169,8 +1169,9 @@ export function createTraffic({
     best.kvx += dx * p2;
     best.kvz += dz * p2;
     const side = (best.x - x) * dz - (best.z - z) * dx;
-    best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.45;
-    best.kvy = Math.max(best.kvy, p2 * 0.95);
+    best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.6;
+    // user bar: a struck vehicle must visibly leave the ground, not just shove sideways
+    best.kvy = Math.min(12, Math.max(best.kvy, 4.5 + p2 * 1.15));
     best.cool = 0.55;
     return true;
   }
@@ -1505,8 +1506,9 @@ export function createParkedVehicles({
     const p = power * light;
     best.vx += dx * p; best.vz += dz * p;
     const side = (best.x - x) * dz - (best.z - z) * dx;
-    best.vaw += (side >= 0 ? 1 : -1) * p * 0.5;
-    best.vy = Math.max(best.vy, p * 0.85);
+    best.vaw += (side >= 0 ? 1 : -1) * p * 0.65;
+    // same visible-airborne bar for parked vehicles
+    best.vy = Math.min(12, Math.max(best.vy, 4 + p * 1.05));
     best.cool = 0.55;
     activeParked.add(best);
     return true;
