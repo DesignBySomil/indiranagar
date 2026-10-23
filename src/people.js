@@ -391,55 +391,14 @@ export function createCrowd({
   });
 
   // 4 Torso Attire Variants (Kurta, Shirt+Backpack, Saree, Lungi)
-  const torsoVariants = [
-    { key: 'saree', geo: buildTorsoVariant(T, 'saree'), count: Math.round(maxPeds * 0.25) },
-    { key: 'kurta', geo: buildTorsoVariant(T, 'kurta'), count: Math.round(maxPeds * 0.25) },
-    { key: 'lungi', geo: buildTorsoVariant(T, 'lungi'), count: Math.round(maxPeds * 0.20) },
-    { key: 'shirt', geo: buildTorsoVariant(T, 'shirt'), count: 0 }
+  // Walker clothing-class quotas (identity classes; geometry comes from the shared gem variants)
+  const classCounts = [
+    ['saree', Math.round(maxPeds * 0.25)],
+    ['kurta', Math.round(maxPeds * 0.25)],
+    ['lungi', Math.round(maxPeds * 0.20)],
+    ['shirt', 0]
   ];
-  torsoVariants[3].count = Math.max(1, maxPeds - (torsoVariants[0].count + torsoVariants[1].count + torsoVariants[2].count));
-
-  for (let v = 0; v < torsoVariants.length; v++) {
-    const tv = torsoVariants[v];
-    tv.inst = new T.InstancedMesh(tv.geo, clothMat, tv.count);
-    tv.inst.castShadow = true;
-    tv.inst.receiveShadow = true;
-    tv.inst.frustumCulled = false;
-    group.add(tv.inst);
-  }
-
-  // 4 Head Variants (Black Hair, Hair Bun with Gajra, Grey Hair + Moustache, Cap/Topi)
-  const headVariants = [
-    { key: 'bun', geo: buildHeadVariant(T, 'bun'), count: torsoVariants[0].count },
-    { key: 'blackHair', geo: buildHeadVariant(T, 'blackHair'), count: torsoVariants[1].count + Math.floor(torsoVariants[3].count * 0.6) },
-    { key: 'greyHair', geo: buildHeadVariant(T, 'greyHair'), count: torsoVariants[2].count },
-    { key: 'cap', geo: buildHeadVariant(T, 'cap'), count: 0 }
-  ];
-  headVariants[3].count = Math.max(1, maxPeds - (headVariants[0].count + headVariants[1].count + headVariants[2].count));
-
-  for (let h = 0; h < headVariants.length; h++) {
-    const hv = headVariants[h];
-    hv.inst = new T.InstancedMesh(hv.geo, fixedMat, hv.count);
-    hv.inst.castShadow = true;
-    hv.inst.frustumCulled = false;
-    group.add(hv.inst);
-  }
-
-  // Separate Swinging Limbs (Left/Right Arms tinted with garment palette, Left/Right Legs)
-  const armGeo = buildArmGeo(T);
-  const legGeo = buildLegGeo(T);
-
-  const armLInst = new T.InstancedMesh(armGeo, clothMat, maxPeds);
-  const armRInst = new T.InstancedMesh(armGeo, clothMat, maxPeds);
-  const legLInst = new T.InstancedMesh(legGeo, fixedMat, maxPeds);
-  const legRInst = new T.InstancedMesh(legGeo, fixedMat, maxPeds);
-
-  armLInst.castShadow = armRInst.castShadow = true;
-  legLInst.castShadow = legRInst.castShadow = true;
-  armLInst.frustumCulled = armRInst.frustumCulled = false;
-  legLInst.frustumCulled = legRInst.frustumCulled = false;
-
-  group.add(armLInst, armRInst, legLInst, legRInst);
+  classCounts[3][1] = Math.max(1, maxPeds - (classCounts[0][1] + classCounts[1][1] + classCounts[2][1]));
 
   // High-fidelity articulated pedestrians for the nearest walkers (draw calls bounded by slot count)
   const GEM_SLOTS = 26;
@@ -459,6 +418,37 @@ export function createCrowd({
   // a walker's model must be STABLE: a slot stays locked to the same ped until that ped is far away
   const gemClass = { saree: [0, 1], kurta: [4], lungi: [5], shirt: [2, 3] };
   const mZero = new T.Matrix4().makeScale(0, 0, 0);
+  const sOne = new T.Vector3(1, 1, 1);
+  // Far LOD: each clothing variant baked to a static merged mesh set, instanced.
+  // Far walkers render the SAME model as the near detailed mesh (no walk articulation) - the 60m swap no longer changes a walker's silhouette.
+  const farVariants = [];
+  for (let v = 0; v < gemProto.length; v++) {
+    const proto = buildPedestrianMerged(v);
+    proto.updateWorldMatrix(true, true);
+    const byMat = new Map();
+    proto.traverse(o => {
+      if (!o.isMesh) return;
+      const geo = o.geometry.clone().applyMatrix4(o.matrixWorld);
+      const key = o.material.uuid;
+      if (!byMat.has(key)) byMat.set(key, { mat: o.material, geos: [] });
+      byMat.get(key).geos.push(geo);
+    });
+    const sets = [];
+    for (const { mat, geos } of byMat.values()) {
+      const merged = geos.length > 1 ? mergeGeometries(geos, false) : geos[0];
+      if (!merged) continue;
+      const im = new T.InstancedMesh(merged, mat, maxPeds);
+      im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
+      for (let k = 0; k < maxPeds; k++) im.setMatrixAt(k, mZero);
+      group.add(im);
+      sets.push(im);
+    }
+    farVariants.push(sets);
+  }
+  const farVariantOf = (p) => {
+    const cls = gemClass[p.tkey] || [2, 3];
+    return p._gemVariant !== undefined ? p._gemVariant : (p._lastGemVariant !== undefined ? p._lastGemVariant : cls[p.id % cls.length]);
+  };
 
   // 8 Vibrant Indian Street Clothing Palette Variants
   const palette8 = [
@@ -582,28 +572,11 @@ export function createCrowd({
   const startPool = nearSegs.length > 0 ? nearSegs : walkSegs;
 
   const peds = [];
-  let tVarIdx = 0, tSubIdx = 0;
-  let hVarIdx = 0, hSubIdx = 0;
+  let cIdx = 0, cSub = 0;
 
   for (let i = 0; i < maxPeds; i++) {
-    while (tVarIdx < torsoVariants.length - 1 && tSubIdx >= torsoVariants[tVarIdx].count) {
-      tVarIdx++;
-      tSubIdx = 0;
-    }
-    while (hVarIdx < headVariants.length - 1 && hSubIdx >= headVariants[hVarIdx].count) {
-      hVarIdx++;
-      hSubIdx = 0;
-    }
-
-    const tv = torsoVariants[tVarIdx];
-    const hv = headVariants[hVarIdx];
-    const myTSub = tSubIdx++;
-    const myHSub = hSubIdx++;
-
-    colC.setHex(palette8[i % palette8.length]);
-    tv.inst.setColorAt(myTSub, colC);
-    armLInst.setColorAt(i, colC);
-    armRInst.setColorAt(i, colC);
+    while (cIdx < classCounts.length - 1 && cSub >= classCounts[cIdx][1]) { cIdx++; cSub = 0; }
+    const tkey = classCounts[cIdx][0]; cSub++;
 
     // Initial placement along nearby footpaths within 15m..140m of player
     let seg = startPool[i % startPool.length];
@@ -623,17 +596,13 @@ export function createCrowd({
     const dir = (i % 2 === 0) ? 1 : -1;
     peds.push({
       id: i,
-      torsoInst: tv.inst,
-      torsoSub: myTSub,
-      headInst: hv.inst,
-      headSub: myHSub,
-      isSaree: tv.key === 'saree',
-      tkey: tv.key,
+      isSaree: tkey === 'saree',
+      tkey,
       seg,
       t: tParam,
       dir,
       kerbOff,
-      speed: 1.05 + hash(i, myTSub, 41) * 0.55,
+      speed: 1.05 + hash(i, cSub, 41) * 0.55,
       phase: i * 1.13,
       x: pt.x,
       z: pt.z,
@@ -641,13 +610,6 @@ export function createCrowd({
     });
   }
 
-  for (let v = 0; v < torsoVariants.length; v++) {
-    if (torsoVariants[v].inst.instanceColor) {
-      torsoVariants[v].inst.instanceColor.needsUpdate = true;
-    }
-  }
-  armLInst.instanceColor.needsUpdate = true;
-  armRInst.instanceColor.needsUpdate = true;
 
   // Static Street Vendors standing by pushcarts on wide verges
   const vendorSpots = [];
@@ -730,18 +692,9 @@ export function createCrowd({
         const tumble = kn.t * kn.spin;
         eul.set(tumble, p.yaw, tumble * 0.6);
         qAll.setFromEuler(eul);
-        const place = (inst, sub, ox, oy, oz) => {
-          vPos.set(ox * PS, oy * PS, oz * PS).applyQuaternion(qAll);
-          vPos.x += p.x; vPos.y += p.ky; vPos.z += p.z;
-          m4.compose(vPos, qAll, s3);
-          inst.setMatrixAt(sub, m4);
-        };
-        place(p.torsoInst, p.torsoSub, 0, 0, 0);
-        place(p.headInst, p.headSub, 0, 1.38, 0);
-        place(legLInst, p.id, 0.085, 0.68, 0);
-        place(legRInst, p.id, -0.085, 0.68, 0);
-        place(armLInst, p.id, 0.215, 1.13, 0);
-        place(armRInst, p.id, -0.215, 1.13, 0);
+        vPos.set(p.x, p.ky, p.z);
+        m4.compose(vPos, qAll, sOne);
+        for (const im of farVariants[farVariantOf(p)]) im.setMatrixAt(i, m4);
         continue;
       }
       const seg = p.seg;
@@ -777,52 +730,10 @@ export function createCrowd({
       p.z = pt.z;
       p.yaw = Math.atan2(p.seg.ux * p.dir, p.seg.uz * p.dir);
 
-      const walkCycle = elapsed * (p.speed * 5.2) + p.phase;
-      const swing = Math.sin(walkCycle) * 0.46;
-      const bob = Math.abs(Math.cos(walkCycle)) * 0.022;
-
       qYaw.setFromAxisAngle(yAxis, p.yaw);
-
-      // 1. Torso matrix
-      vPos.set(p.x, bob * PS, p.z);
-      m4.compose(vPos, qYaw, s3);
-      p.torsoInst.setMatrixAt(p.torsoSub, m4);
-
-      // 2. Head matrix (with subtle natural head turn/nod)
-      vPos.set(p.x, (1.38 + bob) * PS, p.z);
-      m4.compose(vPos, qYaw, s3);
-      p.headInst.setMatrixAt(p.headSub, m4);
-
-      const cosY = Math.cos(p.yaw);
-      const sinY = Math.sin(p.yaw);
-
-      // 3. Left & Right Swinging Legs (hip pivot at y = 0.68)
-      const legStride = p.isSaree ? swing * 0.45 : swing;
-      qSwing.setFromAxisAngle(xAxis, legStride);
-      qLimb.copy(qYaw).multiply(qSwing);
-      vPos.set(p.x + cosY * 0.085 * PS, (0.68 + bob * 0.5) * PS, p.z - sinY * 0.085 * PS);
-      m4.compose(vPos, qLimb, s3);
-      legLInst.setMatrixAt(i, m4);
-
-      qSwing.setFromAxisAngle(xAxis, -legStride);
-      qLimb.copy(qYaw).multiply(qSwing);
-      vPos.set(p.x - cosY * 0.085 * PS, (0.68 + bob * 0.5) * PS, p.z + sinY * 0.085 * PS);
-      m4.compose(vPos, qLimb, s3);
-      legRInst.setMatrixAt(i, m4);
-
-      // 4. Left & Right Swinging Arms (shoulder pivot at y = 1.13)
-      const armSwing = swing * 0.72;
-      qSwing.setFromAxisAngle(xAxis, -armSwing);
-      qLimb.copy(qYaw).multiply(qSwing);
-      vPos.set(p.x + cosY * 0.215 * PS, (1.13 + bob) * PS, p.z - sinY * 0.215 * PS);
-      m4.compose(vPos, qLimb, s3);
-      armLInst.setMatrixAt(i, m4);
-
-      qSwing.setFromAxisAngle(xAxis, armSwing);
-      qLimb.copy(qYaw).multiply(qSwing);
-      vPos.set(p.x - cosY * 0.215 * PS, (1.13 + bob) * PS, p.z + sinY * 0.215 * PS);
-      m4.compose(vPos, qLimb, s3);
-      armRInst.setMatrixAt(i, m4);
+      vPos.set(p.x, 0, p.z);
+      m4.compose(vPos, qYaw, sOne);
+      for (const im of farVariants[farVariantOf(p)]) im.setMatrixAt(i, m4);
     }
 
     // Swap the nearest walkers to the high-fidelity models (hide their instanced proxies)
@@ -859,12 +770,7 @@ export function createCrowd({
       const g = gemSlots[j].g;
       if (gemSlots[j].pedId < 0) { g.visible = false; continue; }
       const p = peds[gemSlots[j].pedId];
-      p.torsoInst.setMatrixAt(p.torsoSub, mZero);
-      p.headInst.setMatrixAt(p.headSub, mZero);
-      armLInst.setMatrixAt(p.id, mZero);
-      armRInst.setMatrixAt(p.id, mZero);
-      legLInst.setMatrixAt(p.id, mZero);
-      legRInst.setMatrixAt(p.id, mZero);
+      for (const im of farVariants[farVariantOf(p)]) im.setMatrixAt(p.id, mZero);
       g.visible = true;
       if (p.kn) {
         g.position.set(p.x, p.ky || 0, p.z);
@@ -876,16 +782,7 @@ export function createCrowd({
       }
     }
 
-    for (let v = 0; v < torsoVariants.length; v++) {
-      torsoVariants[v].inst.instanceMatrix.needsUpdate = true;
-    }
-    for (let h = 0; h < headVariants.length; h++) {
-      headVariants[h].inst.instanceMatrix.needsUpdate = true;
-    }
-    armLInst.instanceMatrix.needsUpdate = true;
-    armRInst.instanceMatrix.needsUpdate = true;
-    legLInst.instanceMatrix.needsUpdate = true;
-    legRInst.instanceMatrix.needsUpdate = true;
+    for (const sets of farVariants) for (const im of sets) im.instanceMatrix.needsUpdate = true;
   }
 
   // Populate initial transforms immediately at startup
