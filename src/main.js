@@ -302,7 +302,9 @@ function clampCam() {
   camLiftY += (yT - camLiftY) * 0.12;
   if (camLiftY > camera.position.y + 0.02) {
     _clF.set(0, 0, -1).applyQuaternion(camera.quaternion);
-    _clT.copy(camera.position).addScaledVector(_clF, 10);
+    // Aim just ahead of the auto's roof along the view axis: the vehicle stays in frame even at
+    // full lift, heading is unchanged (the target lies on the view-axis vertical plane).
+    _clT.set(auto.x + _clF.x * 4, 1.2, auto.z + _clF.z * 4);
     _clM.lookAt(camera.position, _clT, camera.up); _clQ0.setFromRotationMatrix(_clM);
     camera.position.y = camLiftY;
     _clM.lookAt(camera.position, _clT, camera.up); _clQ1.setFromRotationMatrix(_clM);
