@@ -59,9 +59,8 @@ function makeColouredSign(i) {
   ctx.fillRect(0, 0, 512, 160);
   ctx.strokeStyle = '#fde047'; ctx.lineWidth = 8; ctx.strokeRect(6, 6, 500, 148);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#fef08a'; ctx.font = '700 34px sans-serif'; ctx.fillText(t.kannada || t.smart || '', 256, 42);
-  ctx.fillStyle = '#ffffff'; ctx.font = '800 44px sans-serif'; ctx.fillText(t.eng, 256, 92);
-  ctx.fillStyle = '#7dd3fc'; ctx.font = '600 20px sans-serif'; ctx.fillText(t.sub, 256, 132);
+  ctx.fillStyle = '#ffffff'; ctx.font = '800 46px sans-serif'; ctx.fillText(t.eng, 256, 72);
+  ctx.fillStyle = '#7dd3fc'; ctx.font = '600 22px sans-serif'; ctx.fillText(t.sub, 256, 122);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; return tex;
 }
 function makeShutterTexture() {
