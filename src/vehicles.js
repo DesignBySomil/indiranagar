@@ -663,6 +663,22 @@ function buildTempoSet(T) {
   };
 }
 
+const UNIT_HW = { sedan: 1.05, suv: 1.1, scooter: 0.55, auto: 0.9, tempo: 1.2 };
+
+let _obstacleFn = null; // injected by createTraffic (median divider + metro piers)
+// footprint test for a displaced (struck) traffic vehicle: 4 corners + centre vs solid, median divider and metro piers (no carriageway-edge limit: a struck car may land on the footpath)
+function footBlockedFor(tu, solidFn, HWmap, x0, z0, yw) {
+  const hl = tu.halfLen || 2, hw = (HWmap[tu.td && tu.td.key] || 1.0);
+  const cc = Math.cos(yw), ss = Math.sin(yw);
+  const sg = tu.seg;
+  for (const [lx, lz] of [[hw, hl], [-hw, hl], [hw, -hl], [-hw, -hl], [0, 0]]) {
+    const px = x0 + cc * lx + ss * lz, pz = z0 - ss * lx + cc * lz;
+    if (solidFn && solidFn(px, pz)) return true;
+    if (_obstacleFn && _obstacleFn(px, pz)) return true;
+  }
+  return false;
+}
+
 function normalizeRoadSegs(roadSegs, solidFn, minLen = 5) {
   const valid = [];
   for (let i = 0; i < roadSegs.length; i++) {
@@ -706,10 +722,12 @@ export function createTraffic({
   scene,
   roadSegs = [],
   solidFn = () => 0,
+  obstacleFn = null,
   nightUniform,
   getAuto,
   count = 140
 }) {
+  _obstacleFn = obstacleFn;
   const totalCount = Math.max(140, count || 140);
   const group = new T.Group();
   scene.add(group);
@@ -970,6 +988,7 @@ export function createTraffic({
         segList = { f: [], r: [] };
         laneMap.set(tu.seg, segList);
       }
+      if (tu.wreck) continue; // wrecks block by their real footprint (step 2b), not by lane order
       if (tu.dir === 1) segList.f.push(tu);
       else segList.r.push(tu);
     }
@@ -1050,12 +1069,43 @@ export function createTraffic({
       }
     }
 
+    // 2b. Position-aware wreck blocking: a moving car slows for any wreck whose real footprint crosses its path ahead, in its own lane
+    // or intruding from the opposite one; a wreck on the footpath does not block anything.
+    for (let wi = 0; wi < trafficUnits.length; wi++) {
+      const w = trafficUnits[wi];
+      if (!w.wreck) continue;
+      const wHL = w.halfLen || 2, wHW = UNIT_HW[w.td && w.td.key] || 1.0;
+      const wy = Math.atan2(w.seg.ux * w.dir, w.seg.uz * w.dir) + (w.oyaw || 0);
+      for (let ui = 0; ui < trafficUnits.length; ui++) {
+        const u = trafficUnits[ui];
+        if (u.wreck || u === w) continue;
+        const dx = w.x - u.x, dz = w.z - u.z;
+        if (dx > 40 || dx < -40 || dz > 40 || dz < -40) continue;
+        const fx = u.seg.ux * u.dir, fz = u.seg.uz * u.dir;
+        const fwd = dx * fx + dz * fz;
+        if (fwd > 16) continue;
+        const lat = -dx * fz + dz * fx;
+        const da = wy - Math.atan2(fx, fz);
+        const along = Math.abs(Math.cos(da)) * wHL + Math.abs(Math.sin(da)) * wHW;
+        const lateral = Math.abs(Math.sin(da)) * wHL + Math.abs(Math.cos(da)) * wHW;
+        // fwd <= 0: wreck already abreast/overlapping (e.g. slid into this unit's side): hold still until it is clear; fully behind: ignore
+        if (fwd <= -(along + (u.halfLen || 2))) continue;
+        if (Math.abs(lat) > lateral + (UNIT_HW[u.td && u.td.key] || 1.0) + 0.1) continue;
+        const gap = fwd - along - (u.halfLen || 2);
+        const lim = gap < 2.2 ? 0 : Math.min(u.maxSpeed, 0.9 * (gap - 2.2));
+        if (u.speed > lim) { u.speed = Math.max(lim, u.speed - 7.5 * safeDt); u.wbrk = true; }
+      }
+    }
+
     // 3. Advance positions, transition segments, recycle distant units, and write matrices
     for (let i = 0; i < trafficUnits.length; i++) {
       const tu = trafficUnits[i];
       if (tu.seg.oneway) tu.dir = 1;
       let forceRecycle = false;
-      tu.t += (tu.dir * tu.speed * safeDt) / tu.seg.len;
+      // a struck car becomes a stationary wreck: it stays exactly where the hit left it (no lane advance, no pull back to the lane).
+      // Traffic behind it queues through the normal following logic; it is released only by the existing far-distance recycle.
+      if (tu.wreck) tu.speed = 0;
+      else tu.t += (tu.dir * tu.speed * safeDt) / tu.seg.len;
 
       // Segment boundary transition
       if (tu.t > 0.97 || tu.t < 0.03) {
@@ -1103,7 +1153,7 @@ export function createTraffic({
           tu.t = picked.t;
           tu.dir = picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1);
           tu.speed = tu.maxSpeed * 0.8;
-          tu.ox = tu.oz = tu.oyaw = 0;
+          tu.ox = tu.oz = tu.oyaw = 0; tu.wreck = false; tu.hold = 0; tu.wbrk = false;
           pos = computeLanePos(tu.seg, tu.t, tu.dir);
         } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
       }
@@ -1112,11 +1162,23 @@ export function createTraffic({
       // impact kick: damped spring, quick hop, spin decay. The offset is steadily
       // baked into a persistent displacement (ox/oz/oyaw) so a struck vehicle
       // STAYS where the impact left it instead of springing back to its lane.
-      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
+      if (tu.ox || tu.oz || tu.oyaw || tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
         // free slide with friction, NO restoring spring: the vehicle lands where the hit sends it
         const fr = Math.exp(-3.2 * safeDt), frs = Math.exp(-4.5 * safeDt);
-        tu.ox = (tu.ox || 0) + tu.kvx * safeDt; tu.oz = (tu.oz || 0) + tu.kvz * safeDt;
-        tu.oyaw = (tu.oyaw || 0) + tu.ksv * safeDt;
+        // collision-aware, substepped: slide/spin in small steps and cancel the part that would put the footprint
+        // into solid geometry, the divider, a pier or off the carriageway. The car stops at its last clear pose.
+        const cox0 = tu.ox || 0, coz0 = tu.oz || 0, coy0 = tu.oyaw || 0;
+        const dOx = tu.kvx * safeDt, dOz = tu.kvz * safeDt, dOy = tu.ksv * safeDt;
+        const nSub = Math.min(12, Math.max(1, Math.ceil(Math.max(Math.hypot(dOx, dOz) / 0.12, Math.abs(dOy) / 0.06))));
+        let sx = cox0, sz = coz0, sy = coy0;
+        for (let q = 0; q < nSub; q++) {
+          const tx = sx + dOx / nSub, tz = sz + dOz / nSub, ty = sy + dOy / nSub;
+          if (!footBlockedFor(tu, solidFn, HW, pos.x + tx, pos.z + tz, pos.yaw + ty)) { sx = tx; sz = tz; sy = ty; }
+          else if (!footBlockedFor(tu, solidFn, HW, pos.x + tx, pos.z + tz, pos.yaw + sy)) { sx = tx; sz = tz; tu.ksv = 0; }
+          else if (!footBlockedFor(tu, solidFn, HW, pos.x + sx, pos.z + sz, pos.yaw + ty)) { sy = ty; tu.kvx = 0; tu.kvz = 0; }
+          else { tu.kvx = 0; tu.kvz = 0; tu.ksv = 0; break; }
+        }
+        tu.ox = sx; tu.oz = sz; tu.oyaw = sy;
         tu.kvx *= fr; tu.kvz *= fr; tu.ksv *= frs;
         if (tu.ky > 0 || tu.kvy > 0) { tu.kvy -= 26 * safeDt; tu.ky += tu.kvy * safeDt; if (tu.ky < 0) { tu.ky = 0; tu.kvy = 0; } }
         if (tu.cool > 0) tu.cool -= safeDt;
@@ -1134,12 +1196,14 @@ export function createTraffic({
       tu.td.bodyInst.setMatrixAt(tu.subIdx, m4);
       tu.td.detailInst.setMatrixAt(tu.subIdx, m4);
 
-      if (tu.braking || isNight) {
+      if (tu.wreck) tu.braking = false;
+      if (tu.braking || tu.wbrk || isNight) {
         tu.td.brakeInst.setMatrixAt(tu.subIdx, m4);
       } else {
         mBrake.compose(v3, q4, sBrakeOff);
         tu.td.brakeInst.setMatrixAt(tu.subIdx, mBrake);
       }
+      tu.wbrk = false;
     }
 
     for (let m = 0; m < meshesToUpdate.length; m++) {
@@ -1150,7 +1214,7 @@ export function createTraffic({
   // Run one initial update step so matrices are immediately populated at frame 0
   update(0.016, 17.8);
 
-  const HW = { sedan: 1.05, suv: 1.1, scooter: 0.55, auto: 0.9, tempo: 1.2 };
+  const HW = UNIT_HW;
   function solid(x, z) {
     for (let i = 0; i < trafficUnits.length; i++) {
       const u = trafficUnits[i];
@@ -1172,17 +1236,53 @@ export function createTraffic({
       const d2 = ddx * ddx + ddz * ddz;
       if (d2 < bestD) { bestD = d2; best = u; }
     }
-    if (!best || best.cool > 0) return false;
+    if (!best || best.cool > 0 || Math.hypot(best.kvx, best.kvz) > 1.2) return false; // one discrete hit per shove, not re-kicked mid-slide
     const airborne = (best.ky || 0) > 0.02; // never stack a second launch mid-flight
     const mass = best.halfLen < 1.5 ? 1.5 : (best.halfLen > 2.8 ? 0.7 : 1.0);
     const p2 = power * mass;
     best.kvx += dx * p2;
     best.kvz += dz * p2;
+    let spinScale = 1;
+    // user bar: a struck vehicle flies OUT of the driving path (to the footpath side), it does not just settle in the lane.
+    // Choose the side whose landing pose is free, and size the launch so the slide (distance ~ v / 3.2) puts the whole footprint beyond the carriageway edge.
+    {
+      const sg = best.seg, nx = -sg.uz, nz = sg.ux;
+      const px = best.x - (best.ox || 0), pz = best.z - (best.oz || 0);
+      const lat0 = (px - sg.x1) * nx + (pz - sg.z1) * nz;
+      const hwU = UNIT_HW[best.td && best.td.key] || 1.0;
+      const yEst = Math.min(1.5, Math.abs(best.ksv || 0) / 4.5 + p2 * 0.6 / 4.5); // expected final spin (rad) from the friction decay
+      const ext = Math.abs(Math.sin(yEst)) * (best.halfLen || 2) + Math.abs(Math.cos(yEst)) * hwU; // rotated lateral half-extent
+      const need = sg.width * 0.5 + ext + 0.4; // centre distance from the centreline at which the rotated footprint clears the carriageway
+      const cur = lat0 + (best.ox || 0) * nx + (best.oz || 0) * nz;
+      const sgnPref = (Math.abs(cur) < 0.3) ? (((best.x - x) * dz - (best.z - z) * dx) >= 0 ? 1 : -1) : (cur >= 0 ? 1 : -1);
+      let pick = 0, D = 0;
+      for (const sd of [sgnPref, -sgnPref]) {
+        const Dn = Math.max(1.5, need - sd * cur);
+        const tx = (best.ox || 0) + nx * sd * Dn, tz = (best.oz || 0) + nz * sd * Dn;
+        if (!footBlockedFor(best, solidFn, HW, px + tx, pz + tz, best.yaw)) { pick = sd; D = Dn; break; }
+      }
+      if (!pick) { pick = sgnPref; D = Math.max(1.5, need - pick * cur); }
+      // tight street (wall/solid right beside the carriageway): probe how far an ALIGNED footprint can actually move sideways; if less than needed,
+      // keep the car nearly parallel to the wall (little spin) and send it as far as the room allows, instead of a rotated body half in the lane
+      const laneYaw = Math.atan2(sg.ux * best.dir, sg.uz * best.dir);
+      let room = 0;
+      for (let dd = 0.25; dd <= D + 0.01; dd += 0.25) {
+        if (footBlockedFor(best, solidFn, HW, px + (best.ox || 0) + nx * pick * dd, pz + (best.oz || 0) + nz * pick * dd, laneYaw)) break;
+        room = dd;
+      }
+      const txf = px + (best.ox || 0) + nx * pick * D, tzf = pz + (best.oz || 0) + nz * pick * D;
+      const rotBlocked = footBlockedFor(best, solidFn, HW, txf, tzf, laneYaw + yEst) || footBlockedFor(best, solidFn, HW, txf, tzf, laneYaw - yEst);
+      if (room < D - 0.3 || rotBlocked) { spinScale = 0.2; D = Math.max(0.5, Math.min(D, room)); }
+      const vlat = Math.min(26, D * 3.3);
+      best.kvx = dx * p2 * 0.5 + nx * pick * vlat;
+      best.kvz = dz * p2 * 0.5 + nz * pick * vlat;
+    }
     const side = (best.x - x) * dz - (best.z - z) * dx;
-    best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.6;
+    best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.6 * spinScale;
     // user bar: a struck vehicle must visibly leave the ground, not just shove sideways
     if (!airborne) best.kvy = Math.min(12, Math.max(best.kvy, 4.5 + p2 * 1.15));
-    best.cool = 0.55;
+    best.cool = 0.9;
+    best.wreck = true; // stays where the hit leaves it
     return true;
   }
 
@@ -1522,7 +1622,7 @@ export function createParkedVehicles({
         if (d2 < bestD) { bestD = d2; best = sp; }
       }
     }
-    if (!best || best.cool > 0) return false;
+    if (!best || best.cool > 0 || Math.hypot(best.vx, best.vz) > 1.2) return false;
     const airborne = (best.ky || 0) > 0.02;
     const light = (best.type === 'scooter' || best.type === 'bike') ? 1.6 : (best.type === 'autoRickshaw' ? 1.1 : 0.7);
     const p = power * light;
@@ -1531,7 +1631,7 @@ export function createParkedVehicles({
     best.vaw += (side >= 0 ? 1 : -1) * p * 0.65;
     // same visible-airborne bar for parked vehicles
     if (!airborne) best.vy = Math.min(12, Math.max(best.vy, 4 + p * 1.05));
-    best.cool = 0.55;
+    best.cool = 0.9;
     activeParked.add(best);
     return true;
   }
