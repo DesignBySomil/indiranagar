@@ -1072,7 +1072,8 @@ export function createTraffic({
           const entryGap = Math.max(0.5, Math.min(gapLon, nxt.seg.len * 0.9));
           tu.seg = nxt.seg;
           tu.dir = nxt.dir;
-          tu.t = nxt.dir === 1 ? Math.min(0.97, entryGap / nxt.seg.len) : Math.max(0.03, 1 - entryGap / nxt.seg.len);
+          // entry must land OUTSIDE the 0.03/0.97 boundary window or the unit instantly re-triggers the transition and one-ways forceRecycle-freeze at the entry point
+          tu.t = nxt.dir === 1 ? T.MathUtils.clamp(entryGap / nxt.seg.len, 0.05, 0.94) : T.MathUtils.clamp(1 - entryGap / nxt.seg.len, 0.06, 0.95);
         } else if (tu.seg.oneway) {
           forceRecycle = true;
         } else {
@@ -1091,6 +1092,7 @@ export function createTraffic({
       if (typeof window !== 'undefined' && wantsRecycle) { window.__trc = window.__trc || { trans:0,failNext:0,failJump:0,held:0,recycled:0,log:[] }; if (dist <= 200 && tu.lastSeg) window.__trc.held++; else window.__trc.recycled++; }
       if (wantsRecycle && dist <= 200 && tu.lastSeg) {
         // never pop a vehicle in or out where the player can see it: hold at the last good spot until the player is far
+        tu.__held = (tu.__held || 0) + 1; tu.__why = forceRecycle ? 'force' : (dist > 320 ? 'dist' : 'solid');
         tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir;
         pos = computeLanePos(tu.seg, tu.t, tu.dir);
       } else if (wantsRecycle) {
