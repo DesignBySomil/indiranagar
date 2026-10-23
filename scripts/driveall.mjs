@@ -73,7 +73,9 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
   const ptSeg=(x,z,m)=>{const dx=m[5]-m[3],dz=m[6]-m[4];const L2=dx*dx+dz*dz||1e-9;let t=((x-m[3])*dx+(z-m[4])*dz)/L2;t=Math.max(0,Math.min(1,t));return Math.hypot(x-(m[3]+t*dx),z-(m[4]+t*dz));};
   // 40m buckets so per-step nearest-seg is O(few)
   const buckets=new Map();
-  segMid.forEach((m,i)=>{const key=Math.floor(m[0]/40)+','+Math.floor(m[1]/40);let a=buckets.get(key);if(!a){a=[];buckets.set(key,a);}a.push(i);});
+  // register each seg in EVERY bucket its AABB touches: midpoint-only registration misses long segs whose midpoint is >1 bucket away (offEdge false-positives)
+  segMid.forEach((m,i)=>{const bx0=Math.floor(Math.min(m[3],m[5])/40),bx1=Math.floor(Math.max(m[3],m[5])/40),bz0=Math.floor(Math.min(m[4],m[6])/40),bz1=Math.floor(Math.max(m[4],m[6])/40);
+    for(let bx=bx0;bx<=bx1;bx++)for(let bz=bz0;bz<=bz1;bz++){const key=bx+','+bz;let a=buckets.get(key);if(!a){a=[];buckets.set(key,a);}a.push(i);}});
   const nearSeg=(x,z)=>{const cx=Math.floor(x/40),cz=Math.floor(z/40);let best=1e9,bi=-1;
     for(let i=cx-1;i<=cx+1;i++)for(let j=cz-1;j<=cz+1;j++){const a=buckets.get(i+','+j);if(!a)continue;
       for(const q of a){const m=segMid[q];const dd=ptSeg(x,z,m);if(dd<best){best=dd;bi=q;}}}
@@ -142,7 +144,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE,MAXB)=>{
             const t=window.__traffic&&window.__traffic();
             rec.jam=t&&t.units?t.units.filter(u=>Math.hypot(u.x-A.x,u.z-A.z)<45).map(u=>({x:+u.x.toFixed(1),z:+u.z.toFixed(1),v:+((u.speed??u.v)??-1).toFixed(1),t:+(u.t??-1).toFixed(2),seg:(u.seg&&u.seg.name)||'',ow:!!(u.seg&&u.seg.oneway),ux:+(u.seg&&u.seg.ux||0).toFixed(2),uz:+(u.seg&&u.seg.uz||0).toFixed(2),dir:u.dir})):null;
             console.log('JAM',JSON.stringify({car:[+A.x.toFixed(1),+A.z.toFixed(1)],a:+A.a.toFixed(2),units:rec.jam})); }
-          if(stuckT>12&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; rec.waited=true; }
+          if(stuckT>12&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; rec.waited=true; (rec.unsticks=rec.unsticks||[]).push({x:+A.x.toFixed(1),z:+A.z.toFixed(1),wi}); }
           else if(stuckT>16){ rec.stuck=true; break; }
         } else stuckT=0;
       }
