@@ -207,6 +207,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
   const listeners = [];
 
   const chasePos = new T.Vector3();
+  let _prevAutoX = null, _prevAutoZ = null;
   const chaseLook = new T.Vector3();
 
   function updateButtonLabel() {
@@ -230,7 +231,7 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     const cosA = Math.cos(auto.a || 0);
 
     if (mode === 'chase') {
-      const back = 6.4 + spd * 0.18;
+      const back = 6.4; // Somil 16:22: keep camera-auto distance constant moving vs stopped
       const sideSwing = snap ? 0 : steer * ((auto.v || 0) / 17) * 1.4;
       const tx = auto.x - sinA * back + cosA * sideSwing;
       const tz = auto.z - cosA * back - sinA * sideSwing;
@@ -239,7 +240,14 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
 
       if (snap) {
         chasePos.set(tx, ty, tz);
+        _prevAutoX = auto.x; _prevAutoZ = auto.z;
       } else {
+        // Feed-forward the auto's own displacement, then smooth only the residual:
+        // camera-auto distance stays ~constant at any speed (Somil 16:22 recede fix).
+        if (_prevAutoX === null) { _prevAutoX = auto.x; _prevAutoZ = auto.z; }
+        chasePos.x += auto.x - _prevAutoX;
+        chasePos.z += auto.z - _prevAutoZ;
+        _prevAutoX = auto.x; _prevAutoZ = auto.z;
         const kc = Math.min(1, dt * 5.0);
         chasePos.x += (tx - chasePos.x) * kc;
         chasePos.z += (tz - chasePos.z) * kc;

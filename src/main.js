@@ -263,7 +263,21 @@ const _clM = new THREE.Matrix4(), _clQ0 = new THREE.Quaternion(), _clQ1 = new TH
 function clampCam() {
   if (camRig && camRig.name && !/chase/i.test(camRig.name)) return;
   const m = 0.8; const los = (x, z) => { if (solid(auto.x, auto.z)) return false; for (let t = 0.15; t < 0.9; t += 0.15) if (solid(x + (auto.x - x) * t, z + (auto.z - z) * t)) return true; return false; };
-  const bad = (x, z) => solid(x, z) || solid(x + m, z) || solid(x - m, z) || solid(x, z + m) || solid(x, z - m) || los(x, z) || (parkedVehicles && parkedVehicles.solid(x, z)) || (traffic && traffic.solid(x, z)) || (crowd && crowd.solid(x, z));
+  const dressOcc = (world && world.camDressOcc) || [];
+  const dressBad = (x, z) => {
+    const y = camera.position.y;
+    if (y < 2.3 || y > 4.6) return false;
+    for (let i = 0; i < dressOcc.length; i++) {
+      const o = dressOcc[i];
+      if (y < o.y0 || y > o.y1) continue;
+      const dx = x - o.x, dz = z - o.z;
+      if (Math.abs(dx) > 4 || Math.abs(dz) > 4) continue;
+      const lx = dx * o.sy + dz * o.cy, lz = dx * o.cy - dz * o.sy;
+      if (Math.abs(lx) <= o.hl + 0.5 && Math.abs(lz) <= o.ht + 0.5) return true;
+    }
+    return false;
+  };
+  const bad = (x, z) => solid(x, z) || solid(x + m, z) || solid(x - m, z) || solid(x, z + m) || solid(x, z - m) || los(x, z) || dressBad(x, z) || (parkedVehicles && parkedVehicles.solid(x, z)) || (traffic && traffic.solid(x, z)) || (crowd && crowd.solid(x, z));
   const q = camera.quaternion.clone();
   for (let k = 0; k < 24; k++) {
     if (!bad(camera.position.x, camera.position.z)) break;
@@ -761,6 +775,7 @@ try {
   await new Promise(r => setTimeout(r, 20));
   const street = buildStreet(world, scene, nightUniform, solid, extras);
   camBridgeVols = street.bridgeVolumes || [];
+  window.__camBridgeVols = camBridgeVols;
   window.__piers = street.metroPiers; window.__gantry = street.gantry;
   window.__edge = createMapEdge({ THREE, scene, MAP });
   streetRef = street;
