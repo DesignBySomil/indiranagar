@@ -41,7 +41,7 @@ for(const r of world.roads){
 const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:280000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=480,270']});
 const p=await b.newPage(); await p.setViewport({width:480,height:270});
 p.on('pageerror',e=>console.log('PAGEERR',String(e).slice(0,120)));
-await p.goto('http://localhost:4180/',{waitUntil:'domcontentloaded',timeout:60000});
+await p.goto('http://localhost:4180/'+(process.env.TRAFFIC?('?traffic='+process.env.TRAFFIC):''),{waitUntil:'domcontentloaded',timeout:60000});
 await p.waitForFunction(()=>window.__game&&window.__game.auto&&window.__step,{timeout:120000});
 const BOOT_MS=Date.now()-T0; const DRIVE_BUDGET_MS=Math.max(25000,103000-BOOT_MS);
 const slice=roads.slice(+START,+START+ +COUNT).map(r=>({n:r.n||'(unnamed)',k:r.k,p:r.p}));
@@ -103,7 +103,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
         if(dd<bd){bd=dd;bs=rcum[i]+t*Math.sqrt(L2);}}
       return [bd,bs];};
     const rec={name:road.n,kind:road.k,points:pts.length,done:false,stuck:false,offRoadMax:0,maxSegW:0,offEdgeMaxM:0,offEdgeT:0};
-    const budget=Math.min(1900,pts.length*240+350);
+    const budget=Math.min(3400,pts.length*240+350);
     for(let k=0;k<budget&&wi<pts.length;k++){
       const ty=Math.atan2(pts[wi][0]-A.x,pts[wi][1]-A.z);
       const err=norm(ty-A.a);
@@ -119,7 +119,7 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
       }
       step();
       dist+=Math.hypot(A.x-lx,A.z-lz); lx=A.x; lz=A.z;
-      if(TRACE==='1'&&k<400&&k%10===0) console.log('TR',k,'x',A.x.toFixed(1),'z',A.z.toFixed(1),'v',A.v.toFixed(2),'a',A.a.toFixed(2),'W',K.KeyW?1:0,'A',K.KeyA?1:0,'D',K.KeyD?1:0,'S',K.KeyS?1:0,'wi',wi,'unst',unstick);
+      if(TRACE==='1'&&k%10===0) console.log('TR',k,'x',A.x.toFixed(1),'z',A.z.toFixed(1),'v',A.v.toFixed(2),'a',A.a.toFixed(2),'W',K.KeyW?1:0,'A',K.KeyA?1:0,'D',K.KeyD?1:0,'S',K.KeyS?1:0,'wi',wi,'unst',unstick);
       { const [bd,bs]=arcPos(A.x,A.z); if(bd<corridorTol) bins.add(Math.floor(bs)); }
       const d=Math.hypot(pts[wi][0]-A.x,pts[wi][1]-A.z);
       if(d<5.5||(d>lastD+0.01&&lastD<9)){ wi++; lastD=1e9; } else lastD=Math.min(lastD,d);
