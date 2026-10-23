@@ -884,8 +884,8 @@ try {
   hazards = createHazards({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid });
   buildMini();
 
-  function placeOnRoad(x, z) {
-    const cands = [];
+  function placeOnRoad(x, z, aPref) {
+    let cands = [];
     for (const s of street.roadSegs) {
       const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
       const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
@@ -894,6 +894,20 @@ try {
       cands.push({ d: Math.hypot(x - px, z - pz), x1, z1, dx, dz, L: Math.sqrt(L2), t });
     }
     cands.sort((a, b) => a.d - b.d);
+    // Junction nodes touch several roads at distance ~0; pure distance order is then a
+    // coin flip that can turn a spawn ~90 deg onto the cross street. Among the nearest
+    // tied candidates only, prefer the road whose direction best matches the preferred
+    // heading. Roads farther than the tie window keep pure distance order.
+    if (aPref !== undefined) {
+      const aScore = (c) => {
+        const ang = Math.atan2(c.dx, c.dz);
+        const d = Math.abs(Math.atan2(Math.sin(ang - aPref), Math.cos(ang - aPref)));
+        return Math.min(d, Math.PI - d);
+      };
+      const dBest = cands[0].d;
+      const tied = cands.filter((c) => c.d <= dBest + 3).sort((a, b) => aScore(a) - aScore(b));
+      cands = [...tied, ...cands.filter((c) => c.d > dBest + 3)];
+    }
     for (const c of cands.slice(0, 12)) {
       const ux = c.dx / c.L, uz = c.dz / c.L, ang = Math.atan2(c.dx, c.dz);
       const nx = uz, nz = -ux;
@@ -922,7 +936,7 @@ try {
   }
   function spawnAt(x, z, aPref) {
     x = THREE.MathUtils.clamp(x, MAP.x0 + 30, MAP.x1 - 30); z = THREE.MathUtils.clamp(z, MAP.z0 + 30, MAP.z1 - 30);
-    const r = placeOnRoad(x, z);
+    const r = placeOnRoad(x, z, aPref);
     let a = r.a;
     if (aPref !== undefined) { const d = Math.abs(Math.atan2(Math.sin(a - aPref), Math.cos(a - aPref))); if (d > Math.PI / 2) a += Math.PI; }
     { const fx1 = Math.sin(a), fz1 = Math.cos(a), ex = r.x + fx1 * 70, ez = r.z + fz1 * 70;

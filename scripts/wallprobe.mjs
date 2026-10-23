@@ -1,42 +1,26 @@
 import puppeteer from 'puppeteer-core';
-const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 600000, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=640,360'] });
-const p = await b.newPage(); await p.setViewport({ width: 640, height: 360 });
-await p.goto(process.env.URL, { waitUntil: 'load' });
-await p.waitForFunction('window.__game && window.__step && window.__edge', { timeout: 180000 });
-const out = await p.evaluate(() => {
-  const g = window.__game, B = window.__edge.bounds, K = window.__keys, res = [];
-  g.state.hour = 12.5; g.state.auto = false; g.go(); window.__noRender = true; window.__paused = true;
-  const FP = [[0.85,1.95],[-0.85,1.95],[0.85,-1.3],[-0.85,-1.3],[0,1.95]];
-  const face = { N: B.z0 - 2.25, S: B.z1 + 2.25, W: B.x0 - 2.25, E: B.x1 + 2.25 };
-  const pen = (a) => { let m = -1e9; const s = Math.sin(a), c = Math.cos(a);
-    for (const [lx, lz] of FP) { const px = g.auto.x + c * lx + s * lz, pz = g.auto.z - s * lx + c * lz;
-      m = Math.max(m, face.N - pz, pz - face.S, face.W - px, px - face.E); } return m; };
-  const cases = [
-    ['N 100Feet', -155, -705, Math.PI],
-    ['N x401', 401, -705, Math.PI],
-    ['S', -76, 675, 0],
-    ['W', -550, -252, -Math.PI/2],
-    ['E z-614', 730, -614, Math.PI/2],
-    ['NW-ish', -570, -716, -Math.PI*0.75],
-    ['NE-ish', 401, -705, Math.PI*0.9],
-    ['SE-ish', 794, 680, Math.PI*0.25],
-    ['SW-ish', -570, 675, -Math.PI*0.25],
-  ];
-  for (const [name, x, z, a] of cases) {
-    g.auto.x = x; g.auto.z = z; g.auto.a = a; g.auto.v = 0; g.auto.y = 0; g.state.snap = true;
-    window.__step(0.05, performance.now()); g.state.snap = false;
-    let maxPen = -1e9; K.KeyW = true;
-    for (let i = 0; i < 260; i++) { window.__step(0.05, performance.now()); maxPen = Math.max(maxPen, pen(g.auto.a)); }
-    const atWall = +pen(g.auto.a).toFixed(2), vEnd = +g.auto.v.toFixed(1);
-    K.KeyW = false; K.KeyS = true; const x0 = g.auto.x, z0 = g.auto.z;
-    for (let i = 0; i < 80; i++) window.__step(0.05, performance.now());
-    K.KeyS = false; const rev = +Math.hypot(g.auto.x - x0, g.auto.z - z0).toFixed(1);
-    // turn away: steer full left while throttling
-    K.KeyW = true; K.KeyA = true; const x1 = g.auto.x, z1 = g.auto.z;
-    for (let i = 0; i < 160; i++) window.__step(0.05, performance.now());
-    K.KeyW = false; K.KeyA = false;
-    res.push({ name, maxPenetration: +maxPen.toFixed(2), gapAtStop: atWall, vEnd, reversedM: rev, turnAwayM: +Math.hypot(g.auto.x - x1, g.auto.z - z1).toFixed(1) });
+import { writeFileSync } from 'fs';
+const [,,cx,cz,tag]=process.argv;
+const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:280000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=640,360']});
+const p=await b.newPage(); await p.setViewport({width:640,height:360});
+await p.goto('http://localhost:4180/?traffic=0',{waitUntil:'domcontentloaded',timeout:60000});
+await p.waitForFunction(()=>window.__game&&window.__game.auto&&window.__step,{timeout:120000});
+const out=await p.evaluate(async(cx,cz)=>{
+  const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
+  window.__spawnAt(cx,cz-18,0);
+  let t0=90000; for(let k=0;k<60;k++){t0+=33;window.__step(0.033,t0);}
+  // solid grid: 1m steps over 24x24m around (cx,cz)
+  const rows=[];
+  for(let dz=-12;dz<=12;dz+=1){let row='';
+    for(let dx=-12;dx<=12;dx+=1){ row+=window.__solid(cx+dx,cz+dz)?'#':'.'; }
+    rows.push((cz+dz).toFixed(0).padStart(6)+' '+row);
   }
-  return res;
-});
-console.log(JSON.stringify(out, null, 1)); await b.close();
+  // road segs within 25m
+  const segs=g.roadSegs().map((s,i)=>({i,name:s.name,x1:s.x1??s[0],z1:s.z1??s[1],x2:s.x2??s[2],z2:s.z2??s[3],w:s.width??s[6]}))
+    .filter(s=>Math.min(Math.hypot(s.x1-cx,s.z1-cz),Math.hypot(s.x2-cx,s.z2-cz))<25);
+  return {rows,segs};
+},+cx,+cz);
+console.log('SEGS',JSON.stringify(out.segs));
+console.log('SOLIDMAP (x left-to-right '+(+cx-12)+'..'+(+cx+12)+', z labeled, #=solid):');
+out.rows.forEach(r=>console.log(r));
+await b.close(); process.exit(0);

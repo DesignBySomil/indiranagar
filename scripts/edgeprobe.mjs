@@ -1,24 +1,42 @@
 import puppeteer from 'puppeteer-core';
-import { writeFileSync } from 'fs';
-const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:200000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=640,360']});
-const p=await b.newPage(); await p.setViewport({width:640,height:360}); p.on('console',m=>console.log('[pg]',m.text().slice(0,700)));
-await p.goto('http://localhost:4180/',{waitUntil:'domcontentloaded',timeout:60000});
-await p.waitForFunction(()=>window.__game&&window.__game.auto&&window.__step,{timeout:120000});
-const f=await p.evaluate(async()=>{
-  const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
-  const ex=-86, ez=404.3;
-  const segs=g.roadSegs().map(s=>({x1:s.x1??s[0],z1:s.z1??s[1],x2:s.x2??s[2],z2:s.z2??s[3],w:s.width??s[6],n:s.name||''}));
-  const near=segs.map(s=>{const dx=s.x2-s.x1,dz=s.z2-s.z1,L2=dx*dx+dz*dz||1e-9;let t=((ex-s.x1)*dx+(ez-s.z1)*dz)/L2;t=Math.max(0,Math.min(1,t));return{d:Math.hypot(ex-(s.x1+t*dx),ez-(s.z1+t*dz)),n:s.n,w:s.w};}).sort((a,b2)=>a.d-b2.d).slice(0,5);
-  console.log('NEARSEGS '+JSON.stringify(near));
-  let hits=[];for(let x=ex-8;x<=ex+8;x+=1)for(let z=ez-8;z<=ez+8;z+=1){if(window.__solid(x,z))hits.push(x+','+z);}
-  console.log('SOLID n='+hits.length+' '+hits.slice(0,10).join(' '));
-  window.__spawnAt(ex,ez-25,0);
-  window.__noRender=true; let t0=90000;
-  for(let k=0;k<40;k++){t0+=33;window.__step(0.033,t0);}
-  window.__noRender=false;
-  await new Promise(r=>requestAnimationFrame(r));
-  return document.getElementById('c').toDataURL('image/jpeg',0.82);
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', protocolTimeout: 600000, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=640,360'] });
+const p = await b.newPage(); await p.setViewport({ width: 640, height: 360 });
+await p.goto(process.env.URL, { waitUntil: 'load' });
+await p.waitForFunction('window.__game && window.__step && window.__edge', { timeout: 180000 });
+const out = await p.evaluate(() => {
+  const g = window.__game, B = window.__edge.bounds, K = window.__keys, res = [];
+  g.state.hour = 12.5; g.state.auto = false; g.go(); window.__noRender = true; window.__paused = true;
+  const FP = [[0.85,1.95],[-0.85,1.95],[0.85,-1.3],[-0.85,-1.3],[0,1.95]];
+  const face = { N: B.z0 - 2.25, S: B.z1 + 2.25, W: B.x0 - 2.25, E: B.x1 + 2.25 };
+  const pen = (a) => { let m = -1e9; const s = Math.sin(a), c = Math.cos(a);
+    for (const [lx, lz] of FP) { const px = g.auto.x + c * lx + s * lz, pz = g.auto.z - s * lx + c * lz;
+      m = Math.max(m, face.N - pz, pz - face.S, face.W - px, px - face.E); } return m; };
+  const cases = [
+    ['N 100Feet', -155, -705, Math.PI],
+    ['N x401', 401, -705, Math.PI],
+    ['S', -76, 675, 0],
+    ['W', -550, -252, -Math.PI/2],
+    ['E z-614', 730, -614, Math.PI/2],
+    ['NW-ish', -570, -716, -Math.PI*0.75],
+    ['NE-ish', 401, -705, Math.PI*0.9],
+    ['SE-ish', 794, 680, Math.PI*0.25],
+    ['SW-ish', -570, 675, -Math.PI*0.25],
+  ];
+  for (const [name, x, z, a] of cases) {
+    g.auto.x = x; g.auto.z = z; g.auto.a = a; g.auto.v = 0; g.auto.y = 0; g.state.snap = true;
+    window.__step(0.05, performance.now()); g.state.snap = false;
+    let maxPen = -1e9; K.KeyW = true;
+    for (let i = 0; i < 260; i++) { window.__step(0.05, performance.now()); maxPen = Math.max(maxPen, pen(g.auto.a)); }
+    const atWall = +pen(g.auto.a).toFixed(2), vEnd = +g.auto.v.toFixed(1);
+    K.KeyW = false; K.KeyS = true; const x0 = g.auto.x, z0 = g.auto.z;
+    for (let i = 0; i < 80; i++) window.__step(0.05, performance.now());
+    K.KeyS = false; const rev = +Math.hypot(g.auto.x - x0, g.auto.z - z0).toFixed(1);
+    // turn away: steer full left while throttling
+    K.KeyW = true; K.KeyA = true; const x1 = g.auto.x, z1 = g.auto.z;
+    for (let i = 0; i < 160; i++) window.__step(0.05, performance.now());
+    K.KeyW = false; K.KeyA = false;
+    res.push({ name, maxPenetration: +maxPen.toFixed(2), gapAtStop: atWall, vEnd, reversedM: rev, turnAwayM: +Math.hypot(g.auto.x - x1, g.auto.z - z1).toFixed(1) });
+  }
+  return res;
 });
-writeFileSync('/tmp/edge-404.jpg',Buffer.from(f.split(',')[1],'base64'));
-console.log('SHOT /tmp/edge-404.jpg');
-await b.close(); process.exit(0);
+console.log(JSON.stringify(out, null, 1)); await b.close();
