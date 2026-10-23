@@ -3,6 +3,29 @@ import puppeteer from 'puppeteer-core';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 const [,,START='0',COUNT='8',PROG='/tmp/drive-progress.json',TRACE='0']=process.argv;
 const world=JSON.parse(readFileSync('public/data/world.json'));
+// Mirror src/street.js: narrow the 100Ft one-way pair to GAP100 so harness routes match the built road
+{
+  const W100=5.2, GAP100=W100+1.2;
+  const hSegs=[];
+  world.roads.forEach((r,ri)=>{ if(!(r.n&&r.n.includes('100 Feet')))return;
+    for(let i=0;i<r.p.length-1;i++){ const [ax,az]=r.p[i],[bx,bz]=r.p[i+1]; const L=Math.hypot(bx-ax,bz-az); if(L<0.2)continue;
+      hSegs.push({ri,i,x1:ax,z1:az,x2:bx,z2:bz,ux:(bx-ax)/L,uz:(bz-az)/L,L}); } });
+  const perpOf=new Map();
+  for(const a of hSegs){ const nx=-a.uz,nz=a.ux; const mx=(a.x1+a.x2)/2,mz=(a.z1+a.z2)/2; let best=null;
+    for(const b of hSegs){ if(b.ri===a.ri)continue; if(Math.abs(a.ux*b.ux+a.uz*b.uz)<0.9)continue;
+      const rx=(b.x1+b.x2)/2-mx,rz=(b.z1+b.z2)/2-mz; const along=rx*a.ux+rz*a.uz,perp=rx*nx+rz*nz;
+      if(Math.abs(perp)<5||Math.abs(perp)>30||Math.abs(along)>(a.L+b.L)/2)continue;
+      if(!best||Math.abs(perp)<Math.abs(best.perp))best={b,perp}; }
+    if(best) perpOf.set(a.ri+':'+a.i,best.perp); }
+  const done=new Set();
+  for(const a of hSegs){
+    const perp=perpOf.get(a.ri+':'+a.i); if(perp===undefined)continue;
+    const sh=Math.max(0,(Math.abs(perp)-GAP100)/2); if(sh<=0)continue;
+    const sgn=Math.sign(perp); const sx=-a.uz*sgn*sh, sz=a.ux*sgn*sh;
+    const rp=world.roads[a.ri].p;
+    for(const pi of [a.i,a.i+1]){ const k2=a.ri+':'+pi; if(done.has(k2))continue; done.add(k2); rp[pi][0]+=sx; rp[pi][1]+=sz; }
+  }
+}
 const MAP={x0:-650,x1:830,z0:-805,z1:775};
 const inMap=(x,z)=>x>MAP.x0+35&&x<MAP.x1-35&&z>MAP.z0+35&&z<MAP.z1-35;
 // user: ALL reachable game roads. Clip each polyline to maximal runs of consecutive
@@ -114,8 +137,9 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
       if(unstick===0){
         if(Math.abs(A.v)<0.35&&K.KeyW){
           stuckT+=0.033;
-          if(stuckT>2&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; }
-          else if(stuckT>5){ rec.stuck=true; break; }
+          // wait out signal/queue stops first (signals cycle); reverse only if it never clears
+          if(stuckT>12&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; rec.waited=true; }
+          else if(stuckT>16){ rec.stuck=true; break; }
         } else stuckT=0;
       }
     }

@@ -89,40 +89,82 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
 
   let v = 0, fpV = 0, kbV = 0, dv = 0, divV = 0, patV = 0;
 
-  // 100 Feet Road: two OSM one-way carriageways. Pre-pass finds the opposite carriageway so the gap becomes a narrow median
-  const hundredSegs = [];
-  world.roads.forEach((r, ri) => {
-    if (!(r.n && r.n.includes('100 Feet'))) return;
-    for (let i = 0; i < r.p.length - 1; i++) {
-      const [ax, az] = r.p[i], [bx, bz] = r.p[i + 1];
-      const L = Math.hypot(bx - ax, bz - az);
-      if (L < 0.2) continue;
-      hundredSegs.push({ ri, i, x1: ax, z1: az, x2: bx, z2: bz, ux: (bx - ax) / L, uz: (bz - az) / L, L });
-    }
-  });
-  const nbrSide = new Map();
-  const medianQuads = [];
+  // 100 Feet Road: two OSM one-way carriageways. Pre-pass finds the opposite carriageway so the gap becomes a narrow median.
+  // User rule (2-lane roads, one lane each way): the raw OSM pair sits 10-30m apart, which reads as a
+  // 4-lane-wide corridor from driver height. Narrow the corridor at the source polyline so the two
+  // carriageways sit GAP100 apart (5.2m each + 1.2m median) - one divided 2-lane road.
   const W100 = 5.2; // 100 Feet Road: one-way carriageway pair, 1 lane each = 2 lanes total (user rule)
-  for (const a of hundredSegs) {
-    const nx = -a.uz, nz = a.ux;
-    const mx = (a.x1 + a.x2) / 2, mz = (a.z1 + a.z2) / 2;
-    let best = null;
-    for (const b of hundredSegs) {
-      if (b.ri === a.ri) continue;
-      if (Math.abs(a.ux * b.ux + a.uz * b.uz) < 0.9) continue;
-      const rx = (b.x1 + b.x2) / 2 - mx, rz = (b.z1 + b.z2) / 2 - mz;
-      const along = rx * a.ux + rz * a.uz, perp = rx * nx + rz * nz;
-      if (Math.abs(perp) < 5 || Math.abs(perp) > 30 || Math.abs(along) > (a.L + b.L) / 2) continue;
-      if (!best || Math.abs(perp) < Math.abs(best.perp)) best = { b, perp };
+  const GAP100 = W100 + 1.2;
+  const medianQuads = [];
+  const medianKerbs = [], medianStrips = [];
+  let hundredSegs = [];
+  const nbrSide = new Map();
+  const collectHundred = () => {
+    hundredSegs = [];
+    world.roads.forEach((r, ri) => {
+      if (!(r.n && r.n.includes('100 Feet'))) return;
+      for (let i = 0; i < r.p.length - 1; i++) {
+        const [ax, az] = r.p[i], [bx, bz] = r.p[i + 1];
+        const L = Math.hypot(bx - ax, bz - az);
+        if (L < 0.2) continue;
+        hundredSegs.push({ ri, i, x1: ax, z1: az, x2: bx, z2: bz, ux: (bx - ax) / L, uz: (bz - az) / L, L });
+      }
+    });
+  };
+  const pairHundred = (emit) => {
+    for (const a of hundredSegs) {
+      const nx = -a.uz, nz = a.ux;
+      const mx = (a.x1 + a.x2) / 2, mz = (a.z1 + a.z2) / 2;
+      let best = null;
+      for (const b of hundredSegs) {
+        if (b.ri === a.ri) continue;
+        if (Math.abs(a.ux * b.ux + a.uz * b.uz) < 0.9) continue;
+        const rx = (b.x1 + b.x2) / 2 - mx, rz = (b.z1 + b.z2) / 2 - mz;
+        const along = rx * a.ux + rz * a.uz, perp = rx * nx + rz * nz;
+        if (Math.abs(perp) < 5 || Math.abs(perp) > 30 || Math.abs(along) > (a.L + b.L) / 2) continue;
+        if (!best || Math.abs(perp) < Math.abs(best.perp)) best = { b, perp };
+      }
+      if (!best) continue;
+      const sg = Math.sign(best.perp);
+      nbrSide.set(a.ri + ':' + a.i, sg);
+      if (!emit) { nbrPerp.set(a.ri + ':' + a.i, best.perp); continue; }
+      if (a.ri < best.b.ri) {
+        const o1 = sg * W100 / 2, o2 = best.perp - sg * W100 / 2;
+        if (Math.abs(o2) > Math.abs(o1)) {
+          medianQuads.push([a.x1 + nx * o1, a.z1 + nz * o1, a.x1 + nx * o2, a.z1 + nz * o2, a.x2 + nx * o1, a.z2 + nz * o1, a.x2 + nx * o2, a.z2 + nz * o2]);
+          // kerb edges at each carriageway + raised central divider strip, so the narrow median reads as a divider
+          const oM = (o1 + o2) / 2;
+          medianKerbs.push([a.x1 + nx * o1, a.z1 + nz * o1, a.x2 + nx * o1, a.z2 + nz * o1]);
+          medianKerbs.push([a.x1 + nx * o2, a.z1 + nz * o2, a.x2 + nx * o2, a.z2 + nz * o2]);
+          medianStrips.push([a.x1 + nx * oM, a.z1 + nz * oM, a.x2 + nx * oM, a.z2 + nz * oM]);
+        }
+      }
     }
-    if (!best) continue;
-    const sg = Math.sign(best.perp);
-    nbrSide.set(a.ri + ':' + a.i, sg);
-    if (a.ri < best.b.ri) {
-      const o1 = sg * W100 / 2, o2 = best.perp - sg * W100 / 2;
-      if (Math.abs(o2) > Math.abs(o1)) medianQuads.push([a.x1 + nx * o1, a.z1 + nz * o1, a.x1 + nx * o2, a.z1 + nz * o2, a.x2 + nx * o1, a.z2 + nz * o1, a.x2 + nx * o2, a.z2 + nz * o2]);
+  };
+  const nbrPerp = new Map();
+  collectHundred();
+  pairHundred(false); // measure original pair separation
+  {
+    const done = new Set();
+    for (const a of hundredSegs) {
+      const perp = nbrPerp.get(a.ri + ':' + a.i);
+      if (perp === undefined) continue;
+      const sh = Math.max(0, (Math.abs(perp) - GAP100) / 2);
+      if (sh <= 0) continue;
+      const sgn = Math.sign(perp);
+      const sx = -a.uz * sgn * sh, sz = a.ux * sgn * sh;
+      const rp = world.roads[a.ri].p;
+      for (const pi of [a.i, a.i + 1]) {
+        const k2 = a.ri + ':' + pi;
+        if (done.has(k2)) continue;
+        done.add(k2);
+        rp[pi][0] += sx; rp[pi][1] += sz;
+      }
     }
   }
+  nbrSide.clear();
+  collectHundred();
+  pairHundred(true); // rebuild pairs + median quads on the narrowed corridor
 
   // Overhead signal gantries across 100 Feet Road carriageways (depth cue, Bangalore-style)
   {
@@ -406,6 +448,32 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     const divMesh = new THREE.Mesh(divGeo, new THREE.MeshStandardMaterial({ color: 0xd8d5cc, roughness: 0.85 }));
     divMesh.castShadow = divMesh.receiveShadow = true;
     scene.add(divMesh);
+  }
+
+  // 100 Feet median containment: kerb edges at each carriageway + raised central divider strip
+  const stripGeo = (list, halfW, h) => {
+    const p = [], ix = []; let nv = 0;
+    for (const [x1, z1, x2, z2] of list) {
+      const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz) || 1;
+      const nx = -dz / L * halfW, nz = dx / L * halfW;
+      p.push(x1 + nx, h, z1 + nz, x1 - nx, h, z1 - nz, x2 + nx, h, z2 + nz, x2 - nx, h, z2 - nz);
+      ix.push(nv, nv + 2, nv + 1, nv + 1, nv + 2, nv + 3); nv += 4;
+      p.push(x1 + nx, 0.3, z1 + nz, x2 + nx, 0.3, z2 + nz, x1 + nx, h, z1 + nz, x2 + nx, h, z2 + nz);
+      ix.push(nv, nv + 1, nv + 2, nv + 1, nv + 3, nv + 2); nv += 4;
+      p.push(x1 - nx, 0.3, z1 - nz, x1 - nx, h, z1 - nz, x2 - nx, 0.3, z2 - nz, x2 - nx, h, z2 - nz);
+      ix.push(nv, nv + 1, nv + 2, nv + 1, nv + 3, nv + 2); nv += 4;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+    g.setIndex(ix); g.computeVertexNormals(); return g;
+  };
+  if (medianKerbs.length) {
+    const kerbMesh = new THREE.Mesh(stripGeo(medianKerbs, 0.22, 0.42), new THREE.MeshStandardMaterial({ color: 0xcac6ba, roughness: 0.9, side: THREE.DoubleSide }));
+    kerbMesh.castShadow = kerbMesh.receiveShadow = true;
+    scene.add(kerbMesh);
+    const stripMesh = new THREE.Mesh(stripGeo(medianStrips, 0.25, 0.55), new THREE.MeshStandardMaterial({ color: 0xa8a49a, roughness: 0.9, side: THREE.DoubleSide }));
+    stripMesh.castShadow = stripMesh.receiveShadow = true;
+    scene.add(stripMesh);
   }
 
   // Build Road Patches & Concrete Joint Lines
