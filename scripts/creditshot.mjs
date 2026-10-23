@@ -1,0 +1,10 @@
+import puppeteer from 'puppeteer-core';
+const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=960,540']});
+const p=await b.newPage(); await p.setViewport({width:960,height:540});
+await p.goto('http://localhost:4180/',{waitUntil:'domcontentloaded',timeout:60000});
+await p.waitForFunction(()=>document.querySelector('#start .osmcredit'),{timeout:60000});
+await new Promise(r=>setTimeout(r,1500));
+await p.screenshot({path:'/tmp/osm-credit.png'});
+const t=await p.evaluate(()=>document.querySelector('#start .osmcredit').innerText);
+console.log(JSON.stringify({credit:t}));
+await b.close();

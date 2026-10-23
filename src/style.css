@@ -42,3 +42,5 @@ html,body{height:100%;background:#14181c;color:#f1f4f8;font-family:'Bricolage Gr
 #toggles.open #tgpanel{display:flex}
 #tgpanel label{display:flex;gap:8px;align-items:center;cursor:pointer}
 @media (max-width:520px){#street{max-width:calc(100vw - 170px)}#street b{font-size:16px;line-height:1.2;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+
+.osmcredit{color:#8b95a1;font:11px/1.4 "Bricolage Grotesque",sans-serif;text-align:center}.osmcredit a{color:#8b95a1}
