@@ -663,7 +663,7 @@ function buildTempoSet(T) {
   };
 }
 
-function normalizeRoadSegs(roadSegs, solidFn) {
+function normalizeRoadSegs(roadSegs, solidFn, minLen = 12) {
   const valid = [];
   for (let i = 0; i < roadSegs.length; i++) {
     const s = roadSegs[i];
@@ -676,7 +676,7 @@ function normalizeRoadSegs(roadSegs, solidFn) {
     const dx = x2 - x1;
     const dz = z2 - z1;
     const len = Math.hypot(dx, dz);
-    if (len < 12) continue;
+    if (len < minLen) continue;
     const ux = dx / len;
     const uz = dz / len;
     const mx = (x1 + x2) * 0.5;
@@ -1191,6 +1191,7 @@ export function createParkedVehicles({
   scene.add(group);
 
   const validSegs = normalizeRoadSegs(roadSegs, solidFn);
+  const obstructionSegs = normalizeRoadSegs(roadSegs, null, 6); // junction-mouth shorts included: never let verge spots leak onto their lanes
 
   // 1. Build geometry sets for parked vehicle types
   const hatchSet = buildCarSet(T, 'hatch');
@@ -1213,8 +1214,9 @@ export function createParkedVehicles({
 
   // Helper checks
   function isOnAnyRoad(px, pz, ignoreSeg) {
-    for (let i = 0; i < validSegs.length; i++) {
-      const s = validSegs[i];
+    const obsList = (typeof obstructionSegs !== 'undefined') ? obstructionSegs : validSegs;
+    for (let i = 0; i < obsList.length; i++) {
+      const s = obsList[i];
       if (s === ignoreSeg) continue;
       const apx = px - s.x1;
       const apz = pz - s.z1;
