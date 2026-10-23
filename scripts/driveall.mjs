@@ -59,7 +59,7 @@ await p.exposeFunction('reportRoute',(idx,rec,covN)=>{
   console.log('ROUTE',+START+idx,rec.done?'DONE':'PART',rec.name,'wp',rec.waypointsReached+'/'+rec.waypointsTotal,'segs',rec.segsTraversed);
 });
 const TIME_BUDGET_MS=0; // computed after boot
-p.on('console',m=>{const t=m.text(); if(t.startsWith('TR ')) console.log(t);});
+p.on('console',m=>{const t=m.text(); if(t.startsWith('TR ')||t.startsWith('JAM')) console.log(t);});
 const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
   const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
   let t0=90000; window.__noRender=true;
@@ -138,6 +138,10 @@ const res=await p.evaluate(async(slice,TIME_BUDGET_MS,TRACE)=>{
         if(Math.abs(A.v)<0.35&&K.KeyW){
           stuckT+=0.033;
           // wait out signal/queue stops first (signals cycle); reverse only if it never clears
+          if(TRACE==='1'&&stuckT>3&&!rec._jamDump){ rec._jamDump=true;
+            const t=window.__traffic&&window.__traffic();
+            rec.jam=t&&t.units?t.units.filter(u=>Math.hypot(u.x-A.x,u.z-A.z)<45).map(u=>({x:+u.x.toFixed(1),z:+u.z.toFixed(1),v:+((u.speed??u.v)??-1).toFixed(1),t:+(u.t??-1).toFixed(2),seg:(u.seg&&u.seg.name)||'',ow:!!(u.seg&&u.seg.oneway),ux:+(u.seg&&u.seg.ux||0).toFixed(2),uz:+(u.seg&&u.seg.uz||0).toFixed(2),dir:u.dir})):null;
+            console.log('JAM',JSON.stringify({car:[+A.x.toFixed(1),+A.z.toFixed(1)],a:+A.a.toFixed(2),units:rec.jam})); }
           if(stuckT>12&&unstickTries<2){ unstick=75; unstickTries++; stuckT=0; rec.waited=true; }
           else if(stuckT>16){ rec.stuck=true; break; }
         } else stuckT=0;
