@@ -1,6 +1,7 @@
 // src/people.js
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildPedestrianMerged, tickWalk } from './gempeds.js';
 
 const hash = (x, z, seed = 0) => {
   const s = Math.sin(x * 127.1 + z * 311.7 + seed * 74.7) * 43758.5453123;
@@ -440,6 +441,23 @@ export function createCrowd({
 
   group.add(armLInst, armRInst, legLInst, legRInst);
 
+  // High-fidelity articulated pedestrians for the nearest walkers (draw calls bounded by slot count)
+  const GEM_SLOTS = 18;
+  const gemProto = [0, 1, 2, 3, 4, 5].map(v => buildPedestrianMerged(v));
+  const gemSlots = [];
+  for (let j = 0; j < GEM_SLOTS; j++) {
+    const g = gemProto[j % gemProto.length].clone(true);
+    g.userData.parts = {
+      body: g.getObjectByName('body'), head: g.getObjectByName('head'),
+      leftArm: g.getObjectByName('leftArm'), rightArm: g.getObjectByName('rightArm'),
+      leftLeg: g.getObjectByName('leftLeg'), rightLeg: g.getObjectByName('rightLeg')
+    };
+    g.visible = false;
+    group.add(g);
+    gemSlots.push(g);
+  }
+  const mZero = new T.Matrix4().makeScale(0, 0, 0);
+
   // 8 Vibrant Indian Street Clothing Palette Variants
   const palette8 = [
     0xe11d48, // Rani Pink / Crimson
@@ -608,6 +626,7 @@ export function createCrowd({
       headInst: hv.inst,
       headSub: myHSub,
       isSaree: tv.key === 'saree',
+      tkey: tv.key,
       seg,
       t: tParam,
       dir,
@@ -764,6 +783,29 @@ export function createCrowd({
       vPos.set(p.x - cosY * 0.215 * PS, (1.13 + bob) * PS, p.z + sinY * 0.215 * PS);
       m4.compose(vPos, qLimb, s3);
       armRInst.setMatrixAt(i, m4);
+    }
+
+    // Swap the nearest walkers to the high-fidelity models (hide their instanced proxies)
+    const byDist = [];
+    for (let i = 0; i < peds.length; i++) {
+      const dx = peds[i].x - player.x, dz = peds[i].z - player.z;
+      byDist.push([dx * dx + dz * dz, i]);
+    }
+    byDist.sort((a, b) => a[0] - b[0]);
+    for (let j = 0; j < gemSlots.length; j++) {
+      const g = gemSlots[j];
+      if (j >= byDist.length || byDist[j][0] > 3600) { g.visible = false; continue; }
+      const p = peds[byDist[j][1]];
+      p.torsoInst.setMatrixAt(p.torsoSub, mZero);
+      p.headInst.setMatrixAt(p.headSub, mZero);
+      armLInst.setMatrixAt(p.id, mZero);
+      armRInst.setMatrixAt(p.id, mZero);
+      legLInst.setMatrixAt(p.id, mZero);
+      legRInst.setMatrixAt(p.id, mZero);
+      g.visible = true;
+      g.position.set(p.x, 0, p.z);
+      g.rotation.set(0, p.yaw, 0);
+      tickWalk(g, elapsed + p.phase, Math.min(1.6, p.speed * 0.8));
     }
 
     for (let v = 0; v < torsoVariants.length; v++) {
