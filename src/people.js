@@ -476,12 +476,25 @@ export function createCrowd({
     return { x: px, z: pz, hx: Math.sin(pyaw), hz: Math.cos(pyaw) };
   }
 
+  // Static broad phase only: preserve every exact carriageway test while avoiding
+  // scanning the whole street network for each footpath/recycle candidate.
+  const roadCells = new Map(), ROAD_CELL = 32;
+  for (const r of roadSegs) {
+    const x1 = r.x1 ?? r[0], z1 = r.z1 ?? r[1], x2 = r.x2 ?? r[2], z2 = r.z2 ?? r[3];
+    const w = r.width ?? r[6] ?? 14.0, bound = w * 0.5 + 2.0;
+    const entry = { x1, z1, x2, z2, w, bound };
+    for (let ix = Math.floor((Math.min(x1,x2)-bound)/ROAD_CELL); ix <= Math.floor((Math.max(x1,x2)+bound)/ROAD_CELL); ix++) {
+      for (let iz = Math.floor((Math.min(z1,z2)-bound)/ROAD_CELL); iz <= Math.floor((Math.max(z1,z2)+bound)/ROAD_CELL); iz++) {
+        const key = ix+','+iz;
+        let cell = roadCells.get(key); if (!cell) roadCells.set(key, cell=[]);
+        cell.push(entry);
+      }
+    }
+  }
   function pointOnAnyCarriageway(x, z) {
-    for (let i = 0; i < roadSegs.length; i++) {
-      const r = roadSegs[i];
-      const x1 = r.x1 ?? r[0], z1 = r.z1 ?? r[1], x2 = r.x2 ?? r[2], z2 = r.z2 ?? r[3];
-      const w = r.width ?? r[6] ?? 14.0;
-      const bound = w * 0.5 + 2.0;
+    const candidates = roadCells.get(Math.floor(x/ROAD_CELL)+','+Math.floor(z/ROAD_CELL));
+    if (!candidates) return false;
+    for (const {x1,z1,x2,z2,w,bound} of candidates) {
       if (x < Math.min(x1, x2) - bound || x > Math.max(x1, x2) + bound || z < Math.min(z1, z2) - bound || z > Math.max(z1, z2) + bound) continue;
       const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
       const t = T.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / L2, 0, 1);

@@ -481,11 +481,24 @@ function showCard(kind, name, text) {
   cardT = 4.5;
 }
 
+let dividerSource = null, dividerCells = new Map();
 function inDivider(px, pz) {
     const mq = streetRef && streetRef.medianQuads;
     if (!mq) return false;
-    for (let i = 0; i < mq.length; i++) {
-      const q = mq[i];
+    if (dividerSource !== mq) {
+      dividerSource = mq; dividerCells = new Map();
+      for (const q of mq) {
+        const x3=q[2]+q[4]-q[0], z3=q[3]+q[5]-q[1];
+        const minX=Math.min(q[0],q[2],q[4],x3), maxX=Math.max(q[0],q[2],q[4],x3);
+        const minZ=Math.min(q[1],q[3],q[5],z3), maxZ=Math.max(q[1],q[3],q[5],z3);
+        for(let ix=Math.floor(minX/32);ix<=Math.floor(maxX/32);ix++)for(let iz=Math.floor(minZ/32);iz<=Math.floor(maxZ/32);iz++) {
+          const key=ix+','+iz; let cell=dividerCells.get(key); if(!cell)dividerCells.set(key,cell=[]);cell.push(q);
+        }
+      }
+    }
+    const candidates=dividerCells.get(Math.floor(px/32)+','+Math.floor(pz/32));
+    if (!candidates) return false;
+    for (const q of candidates) {
       const ux = q[2] - q[0], uz = q[3] - q[1], vx = q[4] - q[0], vz = q[5] - q[1];
       const det = ux * vz - uz * vx; if (Math.abs(det) < 1e-6) continue;
       const rx = px - q[0], rz = pz - q[1];
