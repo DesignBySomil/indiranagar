@@ -291,6 +291,7 @@ function buildVendorCartAndVendorGeo(T) {
     parts.push(paintGeo(T, mound, moundColors[m], 0.12));
   }
 
+  const cartPartCount = parts.length; // everything above is the cart; the vendor below is a separate instanced mesh so the two can react independently
   // Standing Vendor beside the cart (x = -0.82, z = 0)
   const vx = -0.82;
   const vLegs = new T.CylinderGeometry(0.14, 0.16, 0.72, 10);
@@ -323,7 +324,7 @@ function buildVendorCartAndVendorGeo(T) {
     parts.push(paintGeo(T, vArm, 0xbd7e52, 0.06));
   }
 
-  return mergeGeometries(parts, false);
+  return { cart: mergeGeometries(parts.slice(0, cartPartCount), false), vendor: mergeGeometries(parts.slice(cartPartCount), false) };
 }
 
 function normalizeWalkSegs(roadSegs, solidFn) {
@@ -628,9 +629,11 @@ export function createCrowd({
     }
   }
 
+  let vendorInstRef = null, vendorPersonInstRef = null;
   if (vendorSpots.length > 0) {
-    const vendorCartGeo = buildVendorCartAndVendorGeo(T);
-    const vendorInst = new T.InstancedMesh(vendorCartGeo, fixedMat, vendorSpots.length);
+    const vendorGeos = buildVendorCartAndVendorGeo(T);
+    const vendorInst = new T.InstancedMesh(vendorGeos.cart, fixedMat, vendorSpots.length);
+    const vendorPersonInst = new T.InstancedMesh(vendorGeos.vendor, fixedMat, vendorSpots.length);
     const vm4 = new T.Matrix4();
     const vq4 = new T.Quaternion();
     const vv3 = new T.Vector3();
@@ -641,12 +644,15 @@ export function createCrowd({
       vq4.setFromAxisAngle(vyAxis, vp.yaw);
       vm4.compose(vv3.set(vp.x, 0, vp.z), vq4, vs3);
       vendorInst.setMatrixAt(i, vm4);
+      vendorPersonInst.setMatrixAt(i, vm4);
     }
     vendorInst.castShadow = true;
     vendorInst.receiveShadow = true;
     vendorInst.frustumCulled = false;
-    vendorInst.instanceMatrix.needsUpdate = true;
-    group.add(vendorInst);
+    vendorPersonInst.castShadow = true; vendorPersonInst.receiveShadow = true; vendorPersonInst.frustumCulled = false;
+    vendorInst.instanceMatrix.needsUpdate = true; vendorPersonInst.instanceMatrix.needsUpdate = true;
+    group.add(vendorInst, vendorPersonInst);
+    vendorInstRef = vendorInst; vendorPersonInstRef = vendorPersonInst;
   }
 
   // Reusable math scratch objects for update()
@@ -683,8 +689,22 @@ export function createCrowd({
           p.ky = 0;
           if (kn.landT === undefined) kn.landT = elapsed;
           if (elapsed - kn.landT > 1.1) {
-            const picked = pickFootpathPlacement(p.x, p.z, 0, 0, 2, 60, false, p.id + elapsed * 13);
-            p.seg = picked.seg; p.t = picked.t; p.kerbOff = picked.kerbOff;
+            // stand up where it landed and walk back to the footpath: re-attach to the nearest footpath segment at the
+            // ped's real lateral offset (no position jump), then ease the offset to a normal footpath lane.
+            let bs = null, bt = 0.5, bl = 0, bd = 1e9;
+            for (let wi = 0; wi < walkSegs.length; wi++) {
+              const sg = walkSegs[wi];
+              const rx = p.x - sg.x1, rz = p.z - sg.z1;
+              const tt = (rx * sg.ux + rz * sg.uz) / sg.len;
+              if (tt < 0.06 || tt > 0.94) continue;
+              const lat = rx * (-sg.uz) + rz * sg.ux;
+              const d = Math.abs(lat - 4.2 * Math.sign(lat || 1)); // distance from a typical footpath lane
+              if (d < bd) { bd = d; bs = sg; bt = tt; bl = lat; }
+            }
+            if (bs) {
+              p.seg = bs; p.t = bt; p.kerbOff = bl;
+              p.kerbTarget = computeFootpathOffset(bs, bl >= 0 ? 1 : -1, p.id);
+            } else { continue; } // no walk segment around yet: stay lying where it landed (never teleport in view)
             p.kn = null; p.ky = 0;
             continue;
           }
@@ -699,6 +719,10 @@ export function createCrowd({
       }
       const seg = p.seg;
 
+      if (p.kerbTarget !== undefined) { // walking back to the footpath lane after being struck
+        const dk = p.kerbTarget - p.kerbOff, stp = 1.4 * safeDt;
+        if (Math.abs(dk) <= stp) { p.kerbOff = p.kerbTarget; p.kerbTarget = undefined; } else p.kerbOff += Math.sign(dk) * stp;
+      }
       // Advance along footpath
       const nextT = p.t + (p.dir * p.speed * safeDt) / seg.len;
       const candPt = evalFootpathPoint(seg, nextT, p.kerbOff);
@@ -823,5 +847,5 @@ export function createCrowd({
     return false;
   }
 
-  return { group, update, solid, peds, kickAt };
+  return { group, update, solid, peds, kickAt, vendorSpots, vendorInst: vendorInstRef, vendorPersonInst: vendorPersonInstRef };
 }

@@ -21,6 +21,7 @@ import { createParkedVehicles } from './vehicles.js';
 import { createCrowd } from './people.js';
 import { upgradeBuildingFacades } from './buildingsHQ.js';
 import { createHazards } from './hazards.js';
+import { createKnockProps } from './props.js';
 import { buildBrandStore, updateBrandStores } from './brands.js';
 import { STOP_LIST, STOP_PLACES, LEELA_ACCESS_ROAD } from './stopsdata.js';
 import { createAmbientOcclusion, tuneShadows } from './ao.js';
@@ -467,7 +468,7 @@ function drawMini() {
 }
 
 // ---------- loop ----------
-let hazards = null, streetRef = null;
+let hazards = null, streetRef = null, props = null;
 let last = performance.now(), cardT = 0, frame = 0, started = false, camRoll = 0;
 function showCard(kind, name, text) {
   if ($('cardKind')) $('cardKind').textContent = kind;
@@ -512,7 +513,7 @@ function step(dt, now) {
     const s = Math.sin(a), c = Math.cos(a);
     for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
-      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
+      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (props && props.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
     }
     return false;
   };
@@ -522,7 +523,7 @@ function step(dt, now) {
     const s = Math.sin(a), c = Math.cos(a); let dyn = 0;
     for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
-      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (parkedVehicles && parkedVehicles.solid(px, pz))) return 1;
+      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (props && props.solid(px, pz))) return 1;
       if ((life && life.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) dyn = 2;
     }
     return dyn;
@@ -558,6 +559,11 @@ function step(dt, now) {
     if (!moved) auto.v = thr > 0 ? Math.min(auto.v, 0) * 0.2 : Math.max(auto.v, 0) * 0.2;
   }
   // impact feedback: if we drove into traffic or a parked vehicle, shove it a little
+  if (props && Math.abs(preV) > 2.0) {
+    const dS = preV > 0 ? 1 : -1, fx1 = Math.sin(auto.a) * dS, fz1 = Math.cos(auto.a) * dS;
+    const sA = Math.sin(auto.a), cA = Math.cos(auto.a);
+    for (const [lx, lz] of [[0, 1.95], [0.85, 1.8], [-0.85, 1.8], [0, 2.6], [0.85, 2.5], [-0.85, 2.5], [0.85, -1.3], [-0.85, -1.3], [0, -2.0]]) { const qx = auto.x + cA * lx + sA * lz, qz = auto.z - sA * lx + cA * lz; if (props.solid(qx, qz)) { props.kickAt(qx, qz, fx1, fz1, Math.min(6, Math.abs(preV) * 0.55)); break; } }
+  }
   if (Math.abs(preV) > 2.4) {
     const dirS = preV > 0 ? 1 : -1;
     const fx0 = Math.sin(auto.a) * dirS, fz0 = Math.cos(auto.a) * dirS;
@@ -641,6 +647,7 @@ function step(dt, now) {
   if (hazards) { const sh = hazards.update(dt, auto); if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); clampCam(); camera.position.y += sh; }
   else { if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); clampCam(); }
   if (trees) trees.update(dt);
+  if (props) props.update(dt);
   if (parkedVehicles && parkedVehicles.update) parkedVehicles.update(dt);
   if (traffic) traffic.update(dt, state.hour);
   if (crowd) crowd.update(dt, state.hour);
@@ -861,6 +868,7 @@ try {
     solid,
     auto,
     npcsRef: npcs,
+    obstacleFn: (x, z) => inDivider(x, z) || pierHit(x, z),
     ui: {
       say: () => {},
       fare: (txt) => { if ($('streetName')) $('streetName').textContent = txt; },
@@ -877,11 +885,29 @@ try {
 
   try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
   shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
-  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); return q ? Math.max(0, Math.min(220, parseInt(q) || 150)) : 150; })() });
+  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn: (x, z) => inDivider(x, z) || pierHit(x, z), nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); return q ? Math.max(0, Math.min(220, parseInt(q) || 150)) : 150; })() });
   parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
   crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z }), nightUniform, count: 120 });
   bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   hazards = createHazards({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid });
+  {
+    // knockable props: lamp poles and trees topple away from the driving line, then no longer block
+    const items = [];
+    const lm = street.lampMeshes;
+    if (lm) street.lampSpots.forEach((sp, i) => {
+      const parts = [lm.pole, lm.arm, lm.head].map(inst => { const b = new THREE.Matrix4(); inst.getMatrixAt(i, b); return { inst, idx: i, base: b }; });
+      items.push({ x: sp.poleX, z: sp.poleZ, r: 0.4, mass: 1, max: 1.5, parts });
+    });
+    if (trees && trees.treeParts) trees.treeSpots.forEach((sp, i) => items.push({ x: sp.x, z: sp.z, r: 0.45 + 0.3 * (sp.scaleXZ || 1), mass: 2.2, max: 1.25, len: 5.5 * (sp.scaleY || 1), parts: trees.treeParts[i] }));
+    // vendor cart and vendor are separate instanced meshes: the cart tips as a rigid body, the vendor is knocked down on his own spot
+    if (crowd && crowd.vendorInst && crowd.vendorPersonInst) crowd.vendorSpots.forEach((vp, i) => {
+      const mk = (inst) => { const b = new THREE.Matrix4(); inst.getMatrixAt(i, b); return b; };
+      items.push({ x: vp.x, z: vp.z, r: 0.9, mass: 1.5, max: 1.45, len: 1.5, parts: [{ inst: crowd.vendorInst, idx: i, base: mk(crowd.vendorInst) }] });
+      const vxw = vp.x + Math.cos(vp.yaw) * -0.82, vzw = vp.z - Math.sin(vp.yaw) * -0.82;
+      items.push({ x: vxw, z: vzw, r: 0.4, mass: 0.8, max: 1.5, len: 1.6, parts: [{ inst: crowd.vendorPersonInst, idx: i, base: mk(crowd.vendorPersonInst) }] });
+    });
+    props = createKnockProps({ THREE, items, roadSegs: street.roadSegs, blockedFn: (x, z) => solid(x, z) || inDivider(x, z) || pierHit(x, z) || (parkedVehicles && parkedVehicles.solid(x, z)) });
+  }
   buildMini();
 
   function placeOnRoad(x, z) {
@@ -992,6 +1018,6 @@ try {
   chg.style.cssText = 'position:fixed;left:20px;top:64px;z-index:60;font:600 13px Bricolage Grotesque,sans-serif;padding:8px 14px;border-radius:20px;border:1px solid #ffffff55;background:#10151cdd;color:#fff;cursor:pointer';
   chg.addEventListener('click', () => { const sp = $('startpick'); $('start').classList.add('on'); if (sp) sp.focus(); });
   document.body.appendChild(chg);
-  window.__game = { get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
+  window.__game = { get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get props() { return props; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();

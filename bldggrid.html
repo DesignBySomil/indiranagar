@@ -1,0 +1,29 @@
+<!doctype html><html><body style="margin:0">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/examples/jsm/utils/BufferGeometryUtils.js":"./node_modules/three/examples/jsm/utils/BufferGeometryUtils.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { BUILDING_STYLES, buildBuilding } from './src/gembldgs.js';
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(1280,760); renderer.setClearColor(0x2a2430);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.add(new THREE.AmbientLight(0xffffff,0.6));
+const sun = new THREE.DirectionalLight(0xffe0b0,1.7); sun.position.set(6,10,7); scene.add(sun);
+const cam = new THREE.PerspectiveCamera(42,1280/760,0.1,300);
+cam.position.set(0,9,34); cam.lookAt(0,5,0);
+let x = 0;
+for (const s of BUILDING_STYLES) {
+  const b = buildBuilding(s, { seed: 42 });
+  const box = new THREE.Box3().setFromObject(b);
+  const w = box.max.x - box.min.x;
+  b.position.set(x + w/2 - box.min.x - w/2, 0, 0);
+  b.position.x = x;
+  x += w + 1.5;
+  scene.add(b);
+}
+cam.position.set(x/2 - 1, 9, 34); cam.lookAt(x/2 - 1, 5, 0);
+renderer.render(scene,cam);
+window.__ready = true;
+console.log('styles:', BUILDING_STYLES.length, 'totalWidth:', x.toFixed(1));
+</script></body></html>
