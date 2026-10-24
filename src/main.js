@@ -1001,18 +1001,19 @@ try {
     started = true;
     startAudio();
     // TEST-ONLY camera harness for pedestrian evidence (throwaway branch, never merged)
-    setTimeout(() => {
+    setInterval(() => {
       try {
         const pl = (crowd && crowd.peds) || [];
         const k = pl.find(p => p.tkey === 'kurta') || pl[0];
         if (k) {
-          auto.x = k.x; auto.z = k.z + 5.0;
+          auto.x = k.x - Math.sin(k.yaw) * 3.5;
+          auto.z = k.z - Math.cos(k.yaw) * 3.5;
           if ('vx' in auto) auto.vx = 0; if ('vz' in auto) auto.vz = 0;
           if ('v' in auto) auto.v = 0; if ('speed' in auto) auto.speed = 0;
-          auto.heading = Math.PI;
+          auto.heading = k.yaw;
         }
       } catch (e) {}
-    }, 1500);
+    }, 400);
   };
   $('go').addEventListener('click', go);
   const chg = document.createElement('button'); chg.id = 'chgloc'; chg.textContent = 'Change location';
