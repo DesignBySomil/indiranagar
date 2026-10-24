@@ -37,7 +37,7 @@ export function setupLighting(scene, renderer) {
   // Tight 4096 shadow camera with texel-grid snapping to eliminate shadow acne and moire banding
   const sun = new THREE.DirectionalLight(0xffe6c2, 2.2);
   sun.castShadow = true;
-  const mapSz = Math.min(4096, renderer.capabilities.maxTextureSize || 4096);
+  const mapSz = Math.min(2048,renderer.capabilities.maxTextureSize||4096);
   sun.shadow.mapSize.set(mapSz, mapSz);
   const frustumHalf = 68;
   Object.assign(sun.shadow.camera, {

@@ -28,7 +28,8 @@ import { createAmbientOcclusion, tuneShadows } from './ao.js';
 const $ = (id) => document.getElementById(id);
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const balancedPreview=true;
+renderer.setPixelRatio(Math.min(devicePixelRatio,balancedPreview?1.5:2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.98;
 

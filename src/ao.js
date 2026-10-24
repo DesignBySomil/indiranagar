@@ -84,7 +84,7 @@ export function tuneShadows({ THREE: T = THREE, renderer, sun, getAuto }) {
   }
 
   const mapSz = (renderer && renderer.capabilities)
-    ? Math.min(4096, renderer.capabilities.maxTextureSize || 4096)
+    ? Math.min(2048,renderer.capabilities.maxTextureSize||4096)
     : 4096;
 
   const frustumHalf = 68;
