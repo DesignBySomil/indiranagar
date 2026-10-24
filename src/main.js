@@ -340,23 +340,16 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => keys[e.code] = false);
 
-const joy = { x: 0, y: 0, on: false };
-const stick = $('stick');
-let sid = null;
-if (stick) {
-  stick.addEventListener('pointerdown', e => { sid = e.pointerId; joy.on = true; stick.setPointerCapture(sid); upd(e); });
-  stick.addEventListener('pointermove', e => { if (e.pointerId === sid) upd(e); });
-  const releaseStick=()=>{joy.on=false;joy.x=joy.y=0;sid=null;stick.firstElementChild.style.transform='';};
-  stick.addEventListener('pointerup',releaseStick);stick.addEventListener('pointercancel',releaseStick);stick.addEventListener('lostpointercapture',releaseStick);
-}
-function upd(e) {
-  const r = stick.getBoundingClientRect();
-  let x = (e.clientX - r.left - r.width / 2) / 45, y = (e.clientY - r.top - r.height / 2) / 45;
-  const m = Math.hypot(x, y);
-  if (m > 1) { x /= m; y /= m; }
-  joy.x = x; joy.y = y;
-  stick.firstElementChild.style.transform = `translate(${x * 35}px,${y * 35}px)`;
-}
+let tiltEnabled=false,tiltValue=0,tiltNeutral=null,tiltTimer;
+const mobileInput={left:new Set(),right:new Set(),pedal:new Set(),reverse:new Set()};
+function releaseMobile(){for(const ids of Object.values(mobileInput))ids.clear();tiltValue=0;document.querySelectorAll('#mobile-drive button').forEach(e=>e.classList.remove('held'));}
+const mobileDrive=document.createElement('div');mobileDrive.id='mobile-drive';mobileDrive.innerHTML='<div class="steer-pair"><button id="steer-left" aria-label="Steer left"><svg viewBox="0 0 24 24"><path d="m14 5-7 7 7 7"/></svg></button><button id="steer-right" aria-label="Steer right"><svg viewBox="0 0 24 24"><path d="m10 5 7 7-7 7"/></svg></button></div><button id="tilt-toggle" aria-label="Enable tilt steering">Enable tilt</button><div class="pedal-pair"><button id="reverse" aria-label="Reverse pedal"><span>R</span><svg viewBox="0 0 32 48"><rect x="5" y="2" width="22" height="44" rx="5"/><path d="M11 10v23m5-23v23m5-23v23"/></svg></button><button id="accelerator" aria-label="Forward pedal"><span>F</span><svg viewBox="0 0 32 48"><rect x="5" y="2" width="22" height="44" rx="5"/><path d="M11 10v23m5-23v23m5-23v23"/></svg></button></div>';document.body.appendChild(mobileDrive);
+for(const [id,key]of [['steer-left','left'],['steer-right','right'],['accelerator','pedal'],['reverse','reverse']]){const el=$(id),ids=mobileInput[key];el.addEventListener('pointerdown',e=>{e.preventDefault();ids.add(e.pointerId);el.setPointerCapture(e.pointerId);el.classList.add('held');});const release=e=>{ids.delete(e.pointerId);el.classList.toggle('held',ids.size>0);};for(const event of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(event,release);}
+const tiltButton=$('tilt-toggle');
+function stopTilt(message='Enable tilt'){tiltEnabled=false;tiltValue=0;tiltNeutral=null;clearTimeout(tiltTimer);tiltButton.textContent=message;tiltButton.setAttribute('aria-pressed','false');}
+tiltButton.addEventListener('click',async()=>{if(tiltEnabled){stopTilt();return;}try{if(!window.DeviceOrientationEvent){stopTilt('Tilt unavailable');return;}if(typeof DeviceOrientationEvent.requestPermission==='function'&&await DeviceOrientationEvent.requestPermission()!=='granted'){stopTilt('Tilt denied - use arrows');return;}tiltEnabled=true;tiltNeutral=null;tiltButton.textContent='Hold level...';tiltButton.setAttribute('aria-pressed','true');tiltTimer=setTimeout(()=>{if(tiltNeutral===null)stopTilt('No sensor - use arrows');},2500);}catch{stopTilt('Tilt unavailable');}});
+addEventListener('deviceorientation',e=>{if(!tiltEnabled||typeof e.beta!=='number'||typeof e.gamma!=='number')return;const angle=(screen.orientation?.angle??window.orientation??0)*Math.PI/180;const value=e.gamma*Math.cos(angle)+e.beta*Math.sin(angle);if(tiltNeutral===null){tiltNeutral=value;clearTimeout(tiltTimer);tiltButton.textContent='Tilt on · tap to stop';}const delta=value-tiltNeutral;tiltValue=Math.abs(delta)<3?0:-Math.max(-1,Math.min(1,(delta-Math.sign(delta)*3)/22));});
+addEventListener('blur',()=>{releaseMobile();tiltNeutral=null;});document.addEventListener('visibilitychange',()=>{if(document.hidden){releaseMobile();tiltNeutral=null;}});
 
 // ---------- audio ----------
 let AC, engine, eg, amb;
@@ -520,7 +513,8 @@ function step(dt, now, sliced = false) {
   const startX = auto.x, startZ = auto.z;
   let thr = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   let str = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
-  if (joy.on) { thr = -joy.y; str = -joy.x; }
+  if(mobileInput.pedal.size||mobileInput.reverse.size)thr=(mobileInput.pedal.size?1:0)-(mobileInput.reverse.size?1:0);
+  str+=mobileInput.left.size||mobileInput.right.size?(mobileInput.left.size?1:0)-(mobileInput.right.size?1:0):(tiltEnabled?tiltValue:0);
   const input = { thr, str };
   if (destination) destination.update(dt, input);
   thr = input.thr;
@@ -749,15 +743,15 @@ function step(dt, now, sliced = false) {
   }
 
   if (cardT > 0) { cardT -= dt; if (cardT <= 0 && $('card')) $('card').classList.remove('on'); }
-  drawMini();
+  if(!matchMedia('(pointer:coarse)').matches)drawMini();
   if ($('clock')) $('clock').textContent = String(Math.floor(state.hour)).padStart(2, '0') + ':' + String(Math.floor((state.hour % 1) * 60)).padStart(2, '0');
 }
 
 function loop(now) {
   const dt = Math.min(window.__dtCap || 0.05, (now - last) / 1000);
   last = now;
-  try { if (started && !window.__paused) step(dt, now); } catch (e) { if (!window.__stepErr) { window.__stepErr = String(e && e.stack || e); console.error(e); } }
-  try { if (!window.__noRender) post.render(dt); } catch (e) { if (!window.__renderErr) { window.__renderErr = String(e); console.error(e); } }
+  try { if (started && !window.__paused && !(matchMedia('(pointer:coarse)').matches&&innerHeight>innerWidth)) step(dt, now); } catch (e) { if (!window.__stepErr) { window.__stepErr = String(e && e.stack || e); console.error(e); } }
+  try { if (!window.__noRender && !(matchMedia('(pointer:coarse)').matches&&innerHeight>innerWidth)) post.render(dt); } catch (e) { if (!window.__renderErr) { window.__renderErr = String(e); console.error(e); } }
   requestAnimationFrame(loop);
 }
 
@@ -1068,13 +1062,15 @@ try {
     pick.addEventListener('change', () => { const s = stops[+pick.value]; spawnAt(s.p.x, s.p.z); });
   }
   const go = () => {
+    if(matchMedia('(pointer:coarse)').matches && innerHeight>innerWidth){document.getElementById('rotate-entry')?.classList.add('required');return;}
     $('start').classList.remove('on');
     $('hud').classList.add('on');
     started = true;
     startAudio();
   };
   $('go').addEventListener('click', go);
-  const rotateHint=document.createElement('div');rotateHint.id='rotate-hint';rotateHint.setAttribute('role','status');rotateHint.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="7" y="3" width="10" height="18" rx="2" transform="rotate(30 12 12)"/><path d="M3 9V4h5M21 15v5h-5"/></svg>Turn your phone for a wider view';document.body.appendChild(rotateHint);
+  const rotateEntry=document.createElement('div');rotateEntry.id='rotate-entry';rotateEntry.innerHTML='<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="5" y="7" width="14" height="10" rx="2"/><path d="M3 9V4h5M21 15v5h-5"/></svg><h2>Turn your phone to play</h2><p>Indiranagar is built for landscape.<br>Rotate your phone sideways to start driving.</p></div>';document.body.appendChild(rotateEntry);
+  const syncOrientation=()=>{const portrait=matchMedia('(pointer:coarse)').matches&&innerHeight>innerWidth;rotateEntry.classList.toggle('required',portrait);if(portrait){for(const k of Object.keys(keys))keys[k]=false;releaseMobile();tiltNeutral=null;}};addEventListener('resize',syncOrientation);screen.orientation?.addEventListener('change',()=>{tiltNeutral=null;tiltValue=0;syncOrientation();});syncOrientation();
   const streetEl=$('street');
   const locationControl=document.createElement('div');locationControl.id='location-control';
   locationControl.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 9 6 6 6-6"/></svg>';
