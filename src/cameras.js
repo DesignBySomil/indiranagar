@@ -45,7 +45,7 @@ export const CAMERA_CSS = `
 const CAM_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="14" height="12" rx="2.5"/><path d="M16 10.5l5.5-3v9l-5.5-3z"/></svg>';
 const MODES = ['chase', 'driver', 'passenger'];
 const MODE_LABELS = {
-  chase: 'Chase Cam',
+  chase: '3rd-Person Chase',
   driver: 'Driver Cockpit',
   passenger: 'Back Seat'
 };
@@ -65,6 +65,20 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     camBtn.id = 'btn-cam';
     document.body.appendChild(camBtn);
   }
+
+  const speedPanel = document.createElement('section');
+  speedPanel.id = 'drive-panel';
+  speedPanel.innerHTML = '<div class="drive-body"><div class="drive-title">AUTO RICKSHAW</div><div class="drive-reading"><span id="drive-speed">0</span><span class="drive-unit">MPH</span></div><div class="drive-track"><div id="drive-fill"></div></div></div><div class="drive-views"><button id="drive-prev" aria-label="Previous camera">‹</button><div id="drive-current"></div><button id="drive-next" aria-label="Next camera">›</button></div>';
+  document.body.appendChild(speedPanel);
+  speedPanel.querySelector('#drive-current').appendChild(camBtn);
+  const panelStyle=document.createElement('style');
+  panelStyle.textContent=`
+#drive-panel{position:fixed;right:18px;bottom:18px;z-index:42;width:290px;background:rgba(17,23,27,.94);border:1px solid #41484b;border-radius:22px;color:#f4f5f5;font-family:system-ui,sans-serif;box-shadow:0 10px 30px #0008;overflow:hidden;backdrop-filter:blur(10px)}
+.drive-body{padding:17px 20px 15px}.drive-title{color:#939a9c;letter-spacing:2px;font-size:12px;font-weight:700}.drive-reading{display:flex;align-items:baseline;gap:9px;margin:6px 0 13px}#drive-speed{font-size:46px;line-height:1.1;font-weight:500;font-variant-numeric:tabular-nums}.drive-unit{font-size:15px;font-weight:700;color:#90989b;letter-spacing:1px}.drive-track{height:4px;background:#3d4549;border-radius:4px;overflow:hidden}#drive-fill{height:100%;width:0;background:#dde6e9;transition:width .15s}.drive-views{display:flex;align-items:center;border-top:1px solid #42494c;padding:12px 9px;gap:3px}.drive-views>button{background:none;color:#a6afb2;border:0;font-size:28px;cursor:pointer;width:27px}#drive-current{flex:1;min-width:0}#drive-panel #btn-cam{position:static;display:flex;width:100%;justify-content:center;border:0;border-radius:0;background:none;padding:0;box-shadow:none;font-size:13px;font-weight:600;letter-spacing:0;gap:6px;backdrop-filter:none;transform:none}#drive-panel #btn-cam span{white-space:nowrap}#drive-panel #btn-cam span,#drive-panel #btn-cam svg{color:#edf0f1}#drive-panel #btn-cam .kbd{background:#343c40;border:1px solid #495053;border-radius:5px;padding:3px;font-size:11px}#drive-panel #btn-cam b{display:none}
+@media(max-width:600px){#drive-panel{width:220px;right:10px;bottom:12px;border-radius:17px}.drive-body{padding:12px 15px 11px}#drive-speed{font-size:36px}.drive-title{font-size:10px}.drive-reading{margin:4px 0 9px}.drive-views{padding:9px 5px}#drive-panel #btn-cam{font-size:10px}#drive-panel #btn-cam svg{width:15px}#drive-panel #btn-cam .kbd{display:inline}.drive-views>button{font-size:22px;width:22px}}
+@media(max-height:440px){#drive-panel{width:240px;bottom:10px}.drive-body{padding:9px 13px}#drive-speed{font-size:31px}.drive-reading{margin:3px 0 7px}.drive-views{padding:7px 5px}}
+`;
+  document.head.appendChild(panelStyle);
 
   // Build detailed First-Person Cockpit + Back-Seat Driver Avatar attached to carGroup
   const cockpitGroup = new T.Group();
@@ -332,6 +346,8 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     return nextMode;
   }
 
+  speedPanel.querySelector('#drive-prev').addEventListener('click', () => set(MODES[(currentIdx + MODES.length - 1) % MODES.length]));
+  speedPanel.querySelector('#drive-next').addEventListener('click', () => next());
   if (camBtn) camBtn.addEventListener('click', () => next());
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyV' && (!document.activeElement || document.activeElement.tagName !== 'INPUT')) {
@@ -361,6 +377,9 @@ export function createCameraRig({ THREE: T = THREE, camera, auto, carGroup, scen
     if (Math.abs(look.yaw) > 0.001 || Math.abs(look.pitch) > 0.001) { camera.rotateOnWorldAxis(new T.Vector3(0, 1, 0), -look.yaw); camera.rotateX(-look.pitch); }
   }
   function update(dt = 0.016, snap = false) {
+    const mph=Math.round(Math.abs(auto.v)*2.2369362921);
+    speedPanel.querySelector('#drive-speed').textContent=String(mph);
+    speedPanel.querySelector('#drive-fill').style.width=(100*Math.abs(auto.v)/(Math.abs(auto.v)+25))+'%';
     bobPhase += dt * (10 + Math.abs(auto.v || 0) * 1.6);
     cockpitBar.rotation.y = (auto.steer || 0) * 0.48;
     driverAvatar.rotation.z = -(auto.steer || 0) * 0.12;
