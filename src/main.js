@@ -512,6 +512,19 @@ function step(dt, now) {
     const want = Math.atan2(ex, ez) + (R.gear < 0 ? Math.PI : 0);
     if (opposing || dist < 1.3 || R.t > 3.5 || (R.t > 0.5 && R.stall > 0.5)) { (window.__recLog = window.__recLog || []).push(['end', opposing ? 'input' : dist < 1.3 ? 'reached' : R.t > 3.5 ? 'timeout' : 'stalled', +dist.toFixed(2), +R.t.toFixed(2), +auto.x.toFixed(1), +auto.z.toFixed(1)]); auto.rec = null; }
     else { thr = R.gear; str = Math.max(-1, Math.min(1, wrap(want - auto.a) * 2)) * R.gear; }
+    if (auto.rec) {
+      // yield to moving bodies (traffic, pedestrians) in the travel direction: stop pushing, keep the heading, resume when clear
+      const sA = Math.sin(auto.a), cA = Math.cos(auto.a), look = Math.max(2, Math.abs(auto.v)), near = R.gear > 0 ? 1.95 : 1.3;
+      let bodyAhead = false;
+      for (let d = 0.5; d <= near + look && !bodyAhead; d += 0.5) for (let lx = -0.85; lx <= 0.86; lx += 0.85) {
+        const fz = R.gear * d, px = auto.x + cA * lx + sA * fz, pz = auto.z - sA * lx + cA * fz;
+        if ((traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) { bodyAhead = true; break; }
+      }
+      if (bodyAhead && (R.yield || 0) < 2.5) {
+        R.yield = (R.yield || 0) + dt; R.t -= dt * 0.75; R.stall = 0;
+        thr = auto.v * R.gear > 0.3 ? -R.gear * 0.5 : 0; str = 0;
+      }
+    }
   }
   const input = { thr, str };
   if (destination) destination.update(dt, input);
