@@ -665,6 +665,48 @@ function buildTempoSet(T) {
 
 function normalizeRoadSegs(roadSegs, solidFn, minLen = 5) {
   const valid = [];
+  const emit = (x1, z1, x2, z2, width, oneway, name) => {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.2) return;
+    const ux = dx / len;
+    const uz = dz / len;
+    const mx = (x1 + x2) * 0.5;
+    const mz = (z1 + z2) * 0.5;
+    if (solidFn && solidFn(mx, mz)) return;
+    valid.push({
+      x1, z1, x2, z2,
+      mx, mz,
+      width,
+      len,
+      ux, uz,
+      oneway,
+      name
+    });
+  };
+  // Runs of connected sub-minLen pieces within one road are merged into chord
+  // segments so dense polylines stay connected in the traffic/parked graph
+  // (previously they were silently dropped, trapping findConnectedSegment into
+  // distant direction-matched segments). Chords are emitted greedily once a run
+  // reaches minLen, guarded by polyline deviation so corners are not cut wide.
+  let chain = null; // { rid, pts: [[x,z]...], len, width, oneway, name }
+  const emitChain = () => {
+    if (!chain || chain.pts.length < 2 || chain.len < minLen) { chain = null; return; }
+    const [ax, az] = chain.pts[0];
+    const [bx, bz] = chain.pts[chain.pts.length - 1];
+    const dx = bx - ax, dz = bz - az;
+    const L2 = dx * dx + dz * dz || 1;
+    let maxDev = 0;
+    for (let i = 1; i < chain.pts.length - 1; i++) {
+      const [px, pz] = chain.pts[i];
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / L2));
+      const dev = Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
+      if (dev > maxDev) maxDev = dev;
+    }
+    if (maxDev <= 2.0) emit(ax, az, bx, bz, chain.width, chain.oneway, chain.name);
+    chain = null;
+  };
   for (let i = 0; i < roadSegs.length; i++) {
     const s = roadSegs[i];
     if (!s) continue;
@@ -673,25 +715,28 @@ function normalizeRoadSegs(roadSegs, solidFn, minLen = 5) {
     const x2 = s.x2 ?? s[2] ?? 0;
     const z2 = s.z2 ?? s[3] ?? 0;
     const width = s.width ?? s[6] ?? 8.2;
+    const oneway = !!s.oneway;
+    const name = s.name || '';
+    const rid = s.rid;
     const dx = x2 - x1;
     const dz = z2 - z1;
     const len = Math.hypot(dx, dz);
-    if (len < minLen) continue;
-    const ux = dx / len;
-    const uz = dz / len;
-    const mx = (x1 + x2) * 0.5;
-    const mz = (z1 + z2) * 0.5;
-    if (solidFn && solidFn(mx, mz)) continue;
-    valid.push({
-      x1, z1, x2, z2,
-      mx, mz,
-      width,
-      len,
-      ux, uz,
-      oneway: !!s.oneway,
-      name: s.name || ''
-    });
+    const connected = !!(chain && rid !== undefined && chain.rid === rid &&
+      Math.hypot(chain.pts[chain.pts.length - 1][0] - x1, chain.pts[chain.pts.length - 1][1] - z1) < 0.05);
+    if (len < minLen && rid !== undefined && (connected || !chain)) {
+      if (!connected) chain = { rid, pts: [[x1, z1]], len: 0, width, oneway, name };
+      chain.pts.push([x2, z2]);
+      chain.len += len;
+      if (chain.len >= minLen) {
+        emitChain();
+        chain = { rid, pts: [[x2, z2]], len: 0, width, oneway, name };
+      }
+      continue;
+    }
+    if (chain) emitChain(); // drops an unfinished short run, same as before
+    if (len >= minLen) emit(x1, z1, x2, z2, width, oneway, name);
   }
+  if (chain) emitChain();
   if (valid.length === 0) {
     valid.push({
       x1: -133, z1: -440, x2: -133, z2: -180,
