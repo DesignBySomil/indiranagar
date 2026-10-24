@@ -1,0 +1,24 @@
+<!doctype html><html><body style="margin:0">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/examples/jsm/utils/BufferGeometryUtils.js":"./node_modules/three/examples/jsm/utils/BufferGeometryUtils.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { PEDESTRIAN_VARIANTS, buildPedestrianMerged, tickWalk } from './src/gempeds.js';
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(1280,760); renderer.setClearColor(0x2a2430);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.add(new THREE.AmbientLight(0xffffff,0.75));
+const sun = new THREE.DirectionalLight(0xffe0b0,1.6); sun.position.set(3,6,4); scene.add(sun);
+const cam = new THREE.PerspectiveCamera(40,1280/760,0.1,100);
+cam.position.set(0,1.35,4.4); cam.lookAt(0,0.95,0);
+const groups = PEDESTRIAN_VARIANTS.map((v,i)=>{
+  const g = buildPedestrianMerged(v);
+  g.position.set((i-2.5)*0.9, 0, 0);
+  scene.add(g); return {g,v};
+});
+window.__t = 0;
+window.__render = ()=>{ for(const {g,v} of groups) tickWalk(g, window.__t, 0.9); renderer.render(scene,cam); };
+window.__render();
+window.__ready = true;
+console.log('variants:', PEDESTRIAN_VARIANTS.length, PEDESTRIAN_VARIANTS.join(','));
+</script></body></html>

@@ -1,0 +1,14 @@
+import puppeteer from 'puppeteer-core';
+const b = await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=1280,760']});
+const p = await b.newPage();
+await p.setViewport({width:1280,height:760});
+p.on('console',m=>{if(m.type()==='error')console.log('ERR',m.text())});
+p.on('pageerror',e=>console.log('PAGEERR',String(e).slice(0,200)));
+await p.goto('http://localhost:4280/pedgrid.html');
+await new Promise(r=>setTimeout(r,3500));
+await p.screenshot({path:'/downloads/pedgrid-t0.png'});
+await p.evaluate(()=>{window.__t=0.35;window.__render();});
+await new Promise(r=>setTimeout(r,300));
+await p.screenshot({path:'/downloads/pedgrid-midstride.png'});
+await b.close();
+console.log('done');
