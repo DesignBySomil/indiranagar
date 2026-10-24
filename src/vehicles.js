@@ -1154,7 +1154,7 @@ export function createTraffic({
       if (wantsRecycle && dist <= 200 && tu.lastSeg) {
         // never pop a vehicle in or out where the player can see it: hold at the last good spot until the player is far
         tu.__held = (tu.__held || 0) + 1; tu.__why = forceRecycle ? 'force' : (dist > 320 ? 'dist' : 'solid');
-        tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir; tu.__site = 'hold'; tu.bx = 0; tu.bz = 0; tu.byaw = 0; tu.__transCd = 0;
+        tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir; tu.__site = 'hold'; tu.ox = (tu.ox || 0) + tu.bx; tu.oz = (tu.oz || 0) + tu.bz; tu.oyaw = (tu.oyaw || 0) + (tu.byaw || 0); tu.bx = 0; tu.bz = 0; tu.byaw = 0; tu.__transCd = 0;
         pos = computeLanePos(tu.seg, tu.t, tu.dir);
       } else if (wantsRecycle) {
         const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 210, 300, true, i + tu.t * 100);
@@ -1167,7 +1167,7 @@ export function createTraffic({
           if (typeof window !== 'undefined') { const R = window.__rcLog = window.__rcLog || []; if (R.length < 300) R.push({ i, d: +Math.hypot(cand.x - player.x, cand.z - player.z).toFixed(0) }); } // DEBUG strip
           tu.ox = tu.oz = tu.oyaw = 0; tu.bx = tu.bz = tu.byaw = 0; tu.__transCd = 0;
           pos = computeLanePos(tu.seg, tu.t, tu.dir);
-        } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; tu.__site = 'revert'; tu.bx = 0; tu.bz = 0; tu.byaw = 0; tu.__transCd = 0; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
+        } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; tu.__site = 'revert'; tu.ox = (tu.ox || 0) + tu.bx; tu.oz = (tu.oz || 0) + tu.bz; tu.oyaw = (tu.oyaw || 0) + (tu.byaw || 0); tu.bx = 0; tu.bz = 0; tu.byaw = 0; tu.__transCd = 0; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
       }
 
       if (typeof window !== 'undefined' && typeof tu.x === 'number') { const J = window.__jumpLog = window.__jumpLog || []; const jdx = pos.x - tu.x, jdz = pos.z - tu.z; if (Math.hypot(jdx, jdz) > 40 && J.length < 200) J.push({ i, site: tu.__site || 'none', tseg: tu.seg && tu.seg.name || '', from: [+tu.x.toFixed(0), +tu.z.toFixed(0)], to: [+pos.x.toFixed(0), +pos.z.toFixed(0)] }); } // DEBUG strip
@@ -1188,7 +1188,7 @@ export function createTraffic({
       }
       // impact state owns the unit's displacement: cancel any transition blend so the
       // collision sweep's lane-space tests and the rendered/knocked position never diverge
-      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0 || tu.wreck) { tu.bx = 0; tu.bz = 0; tu.byaw = 0; }
+      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0 || tu.wreck) { if (tu.bx || tu.bz || tu.byaw) { if (typeof window !== 'undefined' && window.__trc) { window.__trc.foldEv = (window.__trc.foldEv || 0) + 1; const fm = Math.hypot(tu.bx, tu.bz); window.__trc.foldMax = Math.max(window.__trc.foldMax || 0, fm); } tu.ox = (tu.ox || 0) + tu.bx; tu.oz = (tu.oz || 0) + tu.bz; tu.oyaw = (tu.oyaw || 0) + (tu.byaw || 0); tu.bx = 0; tu.bz = 0; tu.byaw = 0; } }
       if (tu.bx || tu.bz) { const bl = Math.hypot(tu.bx, tu.bz), dd = 6.5 * safeDt; if (bl <= dd) { tu.bx = 0; tu.bz = 0; } else { tu.bx *= (bl - dd) / bl; tu.bz *= (bl - dd) / bl; } }
       if (tu.byaw) { const ay = Math.abs(tu.byaw), dy2 = 2.2 * safeDt; tu.byaw = ay <= dy2 ? 0 : tu.byaw * (ay - dy2) / ay; }
       tu.x = pos.x + (tu.ox || 0) + (tu.kx || 0) + (tu.bx || 0);
