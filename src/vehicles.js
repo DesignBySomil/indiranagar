@@ -1082,7 +1082,7 @@ export function createTraffic({
       if (tu.__transCd > 0 && (tu.t > 0.995 || tu.t < 0.005)) { tu.t = T.MathUtils.clamp(tu.t, 0.005, 0.995); tu.__transCd = 0; }
 
       // Segment boundary transition
-      if (!(tu.__transCd > 0) && (tu.t > 0.97 || tu.t < 0.03)) {
+      if (!(tu.__transCd > 0) && (tu.dir === 1 ? tu.t > 0.97 : tu.t < 0.03)) {
         const exitX = tu.t > 0.5 ? tu.seg.x2 : tu.seg.x1;
         const exitZ = tu.t > 0.5 ? tu.seg.z2 : tu.seg.z1;
         const fUx = tu.seg.ux * tu.dir;
