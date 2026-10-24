@@ -665,46 +665,104 @@ function buildTempoSet(T) {
 
 function normalizeRoadSegs(roadSegs, solidFn, minLen = 5) {
   const valid = [];
-  const emit = (x1, z1, x2, z2, width, oneway, name) => {
+  const laneOff = (width) => Math.min(2.05, Math.max(1.35, width * 0.22));
+  // Raster-aware chord guard: march both lane-center offsets plus a 0.9m
+  // vehicle half-width margin along the chord (incl. endpoints); reject if any
+  // sample lands inside the collision raster (Argon review 2026-10-24).
+  const chordClear = (x1, z1, x2, z2, width) => {
+    if (!solidFn) return true;
+    const dx = x2 - x1, dz = z2 - z1;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return true;
+    const ux = dx / len, uz = dz / len;
+    const lo = laneOff(width);
+    const offs = [lo, -lo, lo + 0.9, -(lo + 0.9)];
+    const steps = Math.max(1, Math.ceil(len));
+    for (let k = 0; k <= steps; k++) {
+      const cx = x1 + ux * len * (k / steps);
+      const cz = z1 + uz * len * (k / steps);
+      for (const o of offs) {
+        if (solidFn(cx + uz * o, cz - ux * o)) return false;
+      }
+    }
+    return true;
+  };
+  const emit = (x1, z1, x2, z2, width, oneway, name, rid, tanS, tanE) => {
     const dx = x2 - x1;
     const dz = z2 - z1;
     const len = Math.hypot(dx, dz);
-    if (len < 0.2) return;
-    const ux = dx / len;
-    const uz = dz / len;
+    if (len < 0.2) return null;
+    const ux = dx / len, uz = dz / len;
     const mx = (x1 + x2) * 0.5;
     const mz = (z1 + z2) * 0.5;
-    if (solidFn && solidFn(mx, mz)) return;
-    valid.push({
+    if (solidFn && solidFn(mx, mz)) return null;
+    const seg = {
       x1, z1, x2, z2,
       mx, mz,
       width,
       len,
       ux, uz,
       oneway,
-      name
-    });
+      name,
+      rid,
+      tanSx: tanS ? tanS[0] : ux, tanSz: tanS ? tanS[1] : uz,
+      tanEx: tanE ? tanE[0] : ux, tanEz: tanE ? tanE[1] : uz
+    };
+    valid.push(seg);
+    return seg;
   };
-  // Runs of connected sub-minLen pieces within one road are merged into chord
-  // segments so dense polylines stay connected in the traffic/parked graph
-  // (previously they were silently dropped, trapping findConnectedSegment into
-  // distant direction-matched segments). Chords are emitted greedily once a run
-  // reaches minLen, guarded by polyline deviation so corners are not cut wide.
+  // Merge runs of connected sub-minLen pieces within one road into chord
+  // segments so dense polylines stay connected in the traffic/parked graph.
+  // Guards per Argon review: chord deviation <=0.35m (hugs true curves),
+  // raster-aware emission (lane offsets + hull margin must clear solidFn),
+  // sub-minLen tails fold backward into the preceding emitted segment when
+  // safe instead of being dropped. Original entry/exit tangents are kept on
+  // each merged chord for direction scoring.
   let chain = null; // { rid, pts: [[x,z]...], len, width, oneway, name }
-  const emitChain = () => {
-    if (!chain || chain.pts.length < 2 || chain.len < minLen) { chain = null; return; }
-    const [ax, az] = chain.pts[0];
-    const [bx, bz] = chain.pts[chain.pts.length - 1];
+  const chainDevOk = (pts) => {
+    const [ax, az] = pts[0];
+    const [bx, bz] = pts[pts.length - 1];
     const dx = bx - ax, dz = bz - az;
     const L2 = dx * dx + dz * dz || 1;
-    let maxDev = 0;
-    for (let i = 1; i < chain.pts.length - 1; i++) {
-      const [px, pz] = chain.pts[i];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [px, pz] = pts[i];
       const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / L2));
-      const dev = Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
-      if (dev > maxDev) maxDev = dev;
+      if (Math.hypot(px - (ax + dx * t), pz - (az + dz * t)) > 0.35) return false;
     }
-    if (maxDev <= 2.0) emit(ax, az, bx, bz, chain.width, chain.oneway, chain.name);
+    return true;
+  };
+  const tangentAt = (pts, fromEnd) => {
+    const i = fromEnd ? pts.length - 1 : 0;
+    const j = fromEnd ? Math.max(0, pts.length - 2) : Math.min(1, pts.length - 1);
+    const dx = pts[i][0] - pts[j][0], dz = pts[i][1] - pts[j][1];
+    const L = Math.hypot(dx, dz) || 1;
+    return [dx / L, dz / L];
+  };
+  const flushChain = (emitIfShort) => {
+    if (!chain || chain.pts.length < 2) { chain = null; return; }
+    const [ax, az] = chain.pts[0];
+    const [bx, bz] = chain.pts[chain.pts.length - 1];
+    if (chain.len >= minLen && chainDevOk(chain.pts) && chordClear(ax, az, bx, bz, chain.width)) {
+      emit(ax, az, bx, bz, chain.width, chain.oneway, chain.name, chain.rid,
+        tangentAt(chain.pts, false), tangentAt(chain.pts, true));
+    } else if (emitIfShort) {
+      // Tail folding: extend the previous same-road segment to swallow the
+      // short tail when the extension stays clear; otherwise drop as before.
+      const prev = valid[valid.length - 1];
+      if (prev && prev.rid !== undefined && prev.rid === chain.rid &&
+          Math.hypot(prev.x2 - ax, prev.z2 - az) < 0.05 &&
+          chordClear(prev.x1, prev.z1, bx, bz, prev.width)) {
+        const tanE = tangentAt(chain.pts, true);
+        const ex = prev.x1, ez = prev.z1;
+        const dx = bx - ex, dz = bz - ez;
+        const len = Math.hypot(dx, dz);
+        prev.x2 = bx; prev.z2 = bz;
+        prev.len = len;
+        prev.ux = dx / len; prev.uz = dz / len;
+        prev.mx = (ex + bx) * 0.5; prev.mz = (ez + bz) * 0.5;
+        prev.tanEx = tanE[0]; prev.tanEz = tanE[1];
+      }
+    }
     chain = null;
   };
   for (let i = 0; i < roadSegs.length; i++) {
@@ -728,15 +786,22 @@ function normalizeRoadSegs(roadSegs, solidFn, minLen = 5) {
       chain.pts.push([x2, z2]);
       chain.len += len;
       if (chain.len >= minLen) {
-        emitChain();
-        chain = { rid, pts: [[x2, z2]], len: 0, width, oneway, name };
+        const c = chain;
+        if (chainDevOk(c.pts) && chordClear(c.pts[0][0], c.pts[0][1], c.pts[c.pts.length - 1][0], c.pts[c.pts.length - 1][1], c.width)) {
+          flushChain();
+          chain = { rid, pts: [[x2, z2]], len: 0, width, oneway, name };
+        }
+        // else: keep accumulating; deviation/clearance may recover or the run
+        // ends and flushes/drops as below.
       }
       continue;
     }
-    if (chain) emitChain(); // drops an unfinished short run, same as before
-    if (len >= minLen) emit(x1, z1, x2, z2, width, oneway, name);
+    if (chain) flushChain(true);
+    if (len >= minLen) {
+      emit(x1, z1, x2, z2, width, oneway, name, rid, null, null);
+    }
   }
-  if (chain) emitChain();
+  if (chain) flushChain(true);
   if (valid.length === 0) {
     valid.push({
       x1: -133, z1: -440, x2: -133, z2: -180,

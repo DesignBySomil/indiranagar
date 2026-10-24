@@ -1,28 +1,28 @@
 import puppeteer from 'puppeteer-core';
-const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:200000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader']});
-const p=await b.newPage(); p.on('console',m=>console.log('[pg]',m.text().slice(0,900)));
-await p.goto('http://localhost:4180/',{waitUntil:'domcontentloaded',timeout:60000});
-await p.waitForFunction(()=>window.__game&&window.__game.auto&&window.__step,{timeout:120000});
-await p.evaluate(async()=>{
-  const g=window.__game; g.go(0); g.state.hour=10; if(g.applyTime)g.applyTime(10);
-  window.__spawnAt(-108,-85,0); window.__noRender=true;
-  const K=window.__keys; K.KeyW=true; let t0=90000;
-  for(let k=0;k<900;k++){ t0+=33; window.__step(0.033,t0); }
-  K.KeyW=false;
-  for(let k=0;k<600;k++){t0+=33;window.__step(0.033,t0);}
-  const t=window.__traffic();
-  const frozen=t.units.filter(u=>u.speed===0&&u.t>0.9&&u.seg);
-  console.log('FROZEN',frozen.length);
-  for(const u of frozen.slice(0,4)){
-    const s=u.seg, ex=s.x2, ez=s.z2;
-    const nx=t.__findNext(s,ex,ez,s.ux,s.uz);
-    let line='seg '+s.name+' exit('+ex.toFixed(1)+','+ez.toFixed(1)+') oneway='+(s.oneway?1:0)+' NEXT='+(nx?nx.seg.name+' d'+nx.dir:'NULL');
-    // candidates within 25m of exit
-    const cands=t.__segs.filter(q=>q!==s&&(Math.hypot(q.x1-ex,q.z1-ez)<25||Math.hypot(q.x2-ex,q.z2-ez)<25))
-      .map(q=>{const d1=Math.hypot(q.x1-ex,q.z1-ez),d2=Math.hypot(q.x2-ex,q.z2-ez);
-        const use1=d1<d2; const al=use1?(q.ux*s.ux+q.uz*s.uz):(-q.ux*s.ux-q.uz*s.uz);
-        return q.name+'@'+Math.min(d1,d2).toFixed(1)+'m al='+al.toFixed(2)+(q.oneway?' ow':'');});
-    console.log(line+' | cands: '+cands.slice(0,5).join(' ; '));
+const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',protocolTimeout:900000,args:['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader','--window-size=320,180']});
+const p=await b.newPage();
+await p.evaluateOnNewDocument(()=>{let s=12345;Math.random=()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};});
+await p.goto(process.env.URL||'http://localhost:4180/',{waitUntil:'domcontentloaded',timeout:60000});
+await p.waitForFunction(()=>window.__game&&window.__game.auto&&window.__step,{timeout:180000});
+const r=await p.evaluate(()=>{
+  const g=window.__game; g.go(0); g.state.hour=10; window.__noRender=true; window.__noCardUntil=performance.now()+600000;
+  const segs=window.__traffic().__validSegs;
+  const seg=segs.find(s=>Math.abs(s.x1+361)<1&&Math.abs(s.z1+699.5)<1&&Math.abs(s.x2+310.1)<1);
+  if(!seg) return {err:'seg not found'};
+  const out={};
+  for (const dir of [1,-1]){
+    const exitX=dir===1?seg.x2:seg.x1, exitZ=dir===1?seg.z2:seg.z1;
+    const ux=dir===1?seg.ux:-seg.ux, uz=dir===1?seg.uz:-seg.uz;
+    const cands=[];
+    for (const s of segs){ if(s===seg) continue;
+      const d1=Math.hypot(s.x1-exitX,s.z1-exitZ), d2=Math.hypot(s.x2-exitX,s.z2-exitZ);
+      if(d1<22) cands.push({sc:+(30-d1+(s.ux*ux+s.uz*uz)*8).toFixed(1),gap:+d1.toFixed(1),dir:1,align:+(s.ux*ux+s.uz*uz).toFixed(2),ends:[[+s.x1.toFixed(1),+s.z1.toFixed(1)],[+s.x2.toFixed(1),+s.z2.toFixed(1)]],name:s.name,len:+s.len.toFixed(1)});
+      if(d2<22) cands.push({sc:+(30-d2+((-s.ux)*ux+(-s.uz)*uz)*8).toFixed(1),gap:+d2.toFixed(1),dir:-1,align:+((-s.ux)*ux+(-s.uz)*uz).toFixed(2),ends:[[+s.x1.toFixed(1),+s.z1.toFixed(1)],[+s.x2.toFixed(1),+s.z2.toFixed(1)]],name:s.name,len:+s.len.toFixed(1)});
+    }
+    cands.sort((a,b)=>b.sc-a.sc);
+    out['exit_dir'+dir]=[exitX,exitZ]; out['cands_dir'+dir]=cands.slice(0,4);
   }
+  return out;
 });
+console.log('NEXT',JSON.stringify(r,null,1));
 await b.close(); process.exit(0);
