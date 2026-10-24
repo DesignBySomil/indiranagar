@@ -156,6 +156,7 @@ export function createStreetLife({
   speedBreakers = [],
   vendorSpots = [],
   solid = () => 0,
+  obstacleFn = () => false,
   auto,
   npcsRef = null,
   ui = {}
@@ -289,13 +290,40 @@ export function createStreetLife({
   const bubblePool = [];
   for (let i = 0; i < 8; i++) {
     const bData = makeBubbleTexture('Turn on the meter, friend!');
-    const mat = new T.SpriteMaterial({ map: bData.tex, transparent: true, depthWrite: false, fog: false });
+    const mat = new T.SpriteMaterial({ map: bData.tex, transparent: true, depthWrite: false, depthTest: false, fog: false, color: new T.Color(0.8, 0.8, 0.8) });
     const sp = new T.Sprite(mat);
     sp.scale.set(9.2, 2.9, 1);
+    sp.renderOrder = 999;
     sp.visible = false;
     root.add(sp);
     bubblePool.push({ sprite: sp, c: bData.c, ctx: bData.ctx, tex: bData.tex, text: '', isBurst: false, timer: 0, target: null, yOff: 3.3 });
   }
+
+  // Size and place a bubble from the camera used for THIS render (the camera moves after the life update, so a size
+  // computed in the update lagged behind and the panel overflowed the screen). A bubble is at most 30% of the screen
+  // width, is kept fully inside the viewport with a small margin, and is hidden when closer than 1.5 m.
+  const _bR = new THREE.Vector3(), _bU = new THREE.Vector3(), _bV = new THREE.Vector3();
+  function fitBubble(b, cam) {
+    if (!b.target || !cam || !cam.matrixWorldInverse) return;
+    const sp = b.sprite;
+    sp.position.set(b.target.position.x, b.yOff, b.target.position.z);
+    _bV.copy(sp.position).applyMatrix4(cam.matrixWorldInverse);
+    const depth = -_bV.z;
+    const base = Math.min(1, Math.max(0, b.timer) * 1.5);
+    if (_bV.length() < 1.5 || depth < 0.3) { sp.material.opacity = 0; return; }
+    sp.material.opacity = base;
+    const halfH = depth * Math.tan((cam.fov || 60) * Math.PI / 360), halfW = halfH * (cam.aspect || 1.6);
+    const w = Math.min(9.2, (cam.aspect < 1 ? 0.72 : 0.3) * 2 * halfW), h = w * (2.9 / 9.2);
+    sp.scale.set(w, h, 1);
+    const bw = w / 2 + 0.04 * halfW, bh = h / 2 + 0.04 * halfH;
+    const nx = Math.max(-halfW + bw, Math.min(halfW - bw, _bV.x)), ny = Math.max(-halfH + bh, Math.min(halfH - bh, _bV.y));
+    if (nx !== _bV.x || ny !== _bV.y) {
+      _bR.set(1, 0, 0).transformDirection(cam.matrixWorld); _bU.set(0, 1, 0).transformDirection(cam.matrixWorld);
+      sp.position.addScaledVector(_bR, nx - _bV.x).addScaledVector(_bU, ny - _bV.y);
+    }
+    sp.updateMatrixWorld(true);
+  }
+  for (const pb of bubblePool) pb.sprite.onBeforeRender = (r, sc, cam) => { if (pb.timer > 0) fitBubble(pb, cam); };
 
   function spawnBubble(targetObj, text, dur = 3.2, yOff = 3.3, isBurst = false) {
     let slot = bubblePool.find(b => b.timer <= 0) || bubblePool[0];
@@ -591,7 +619,8 @@ export function createStreetLife({
     }
     for (let i = 0; i < npcAutos.length; i++) {
       const na = npcAutos[i];
-      if (Math.hypot(x - na.x, z - na.z) < 1.35) {
+      const nax = na.x + (na.kn ? na.kn.ox : 0), naz = na.z + (na.kn ? na.kn.oz : 0);
+      if (Math.hypot(x - nax, z - naz) < 1.35) {
         if (na.cooldown <= 0) triggerArgument(na, 'What is this, are you blind?! You hit my bumper!');
         return true;
       }
@@ -643,6 +672,29 @@ export function createStreetLife({
       if (na.cooldown > 0) na.cooldown -= dt;
 
       const distToPlayer = Math.hypot(na.x - playerAuto.x, na.z - playerAuto.z);
+      // struck auto: slide/spin/hop with friction, collision-checked, then stays exactly where it lands (released only when the player is far away)
+      if (na.kn) {
+        const k = na.kn;
+        if (distToPlayer > 160 && !inCameraView(na.x + k.ox, na.z + k.oz)) { na.kn = null; na.wreck = false; na.mesh.position.y = 0; }
+        else {
+          const fr = Math.exp(-3.2 * dt), frs = Math.exp(-4.5 * dt);
+          const n = Math.max(1, Math.min(10, Math.ceil(Math.hypot(k.vx, k.vz) * dt / 0.15)));
+          for (let q = 0; q < n; q++) {
+            const nx = k.ox + k.vx * dt / n, nz = k.oz + k.vz * dt / n;
+            if (!autoBlockedAt(na, na.x + nx, na.z + nz, na.yaw + k.oyaw)) { k.ox = nx; k.oz = nz; }
+            else { k.vx = 0; k.vz = 0; break; }
+          }
+          const ny = k.oyaw + k.vsv * dt; if (!autoBlockedAt(na, na.x + k.ox, na.z + k.oz, na.yaw + ny)) k.oyaw = ny; else k.vsv = 0;
+          k.vx *= fr; k.vz *= fr; k.vsv *= frs;
+          if (k.ky > 0 || k.vy > 0) { k.vy -= 26 * dt; k.ky += k.vy * dt; if (k.ky < 0) { k.ky = 0; k.vy = 0; } }
+          if (Math.abs(k.vx) + Math.abs(k.vz) < 0.05) { k.vx = 0; k.vz = 0; }
+          if (Math.abs(k.vsv) < 0.05) k.vsv = 0;
+          na.mesh.position.set(na.x + k.ox, k.ky, na.z + k.oz);
+          na.mesh.rotation.y = na.yaw + k.oyaw;
+          const useHi2 = distToPlayer < 95; na.hiDetail.visible = useHi2; na.loDetail.visible = !useHi2;
+          continue;
+        }
+      }
       // Switch between full buildAuto() mesh (<95m) and cheap LOD mesh (>=95m)
       const useHi = distToPlayer < 95;
       na.hiDetail.visible = useHi;
@@ -748,6 +800,15 @@ export function createStreetLife({
       const c = cows[i];
       if (c.cooldown > 0) c.cooldown -= dt;
       c.head.rotation.z = Math.sin(clock * 1.8 + i) * 0.08;
+      if (c.kn) { // struck cow: slides sideways out of the path, collision-checked, stays where it lands
+        const k = c.kn, fr = Math.exp(-3.2 * dt);
+        const nx = c.x + k.vx * dt, nz = c.z + k.vz * dt;
+        if (!solid(nx, nz)) { c.x = nx; c.z = nz; } else { k.vx = 0; k.vz = 0; }
+        k.vx *= fr; k.vz *= fr;
+        if (k.ky > 0 || k.vy > 0) { k.vy -= 26 * dt; k.ky += k.vy * dt; if (k.ky < 0) { k.ky = 0; k.vy = 0; } }
+        c.mesh.position.set(c.x, k.ky, c.z); c.mesh.rotation.y += k.vsv * dt; k.vsv *= Math.exp(-4.5 * dt);
+        if (Math.abs(k.vx) + Math.abs(k.vz) < 0.05) { k.vx = 0; k.vz = 0; }
+      }
     }
 
     // 4. Update Speech Bubbles
@@ -757,6 +818,7 @@ export function createStreetLife({
         b.timer -= dt;
         b.sprite.position.set(b.target.position.x, b.yOff, b.target.position.z);
         b.sprite.material.opacity = Math.min(1, b.timer * 1.5);
+        if (camera && camera.matrixWorldInverse) fitBubble(b, camera);
         if (b.timer <= 0) b.sprite.visible = false;
       }
     }
@@ -801,8 +863,79 @@ export function createStreetLife({
     if (AC) AC.close().catch(() => {});
   }
 
+  // footprint test for a struck npc auto (centre + 4 corners): solid world geometry only, so it may land on the footpath
+  function autoBlockedAt(na, x, z, yaw) {
+    const c = Math.cos(yaw), sn = Math.sin(yaw);
+    for (const [lx, lz] of [[0, 0], [0.85, 1.55], [-0.85, 1.55], [0.85, -1.55], [-0.85, -1.55]]) {
+      const px = x + lx * c + lz * sn, pz = z - lx * sn + lz * c;
+      if (solid(px, pz)) return true;
+      if (obstacleFn(px, pz)) return true;
+    }
+    return false;
+  }
+
+  // true when a world point projects inside (a margin around) the camera view; used so a released auto never re-appears in view
+  const _fr = new T.Frustum(), _pm = new T.Matrix4(), _sp = new T.Sphere(new T.Vector3(), 6);
+  function inCameraView(x, z) {
+    if (!camera || !camera.matrixWorldInverse || !camera.projectionMatrix) return true; // unknown camera: treat as visible, never release
+    _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    _fr.setFromProjectionMatrix(_pm);
+    _sp.center.set(x, 1, z);
+    return _fr.intersectsSphere(_sp);
+  }
+
+  // player impact on the autos/cows handled here (main.js calls life.kickAt): launch OUT of the carriageway, never reset
+  function kickAt(x, z, dx, dz, power) {
+    let best = null, bd = 2.7 * 2.7;
+    for (let i = 0; i < npcAutos.length; i++) {
+      const na = npcAutos[i]; if (na.kn && (Math.abs(na.kn.vx) + Math.abs(na.kn.vz) > 1.2 || na.kn.cool > 0)) continue;
+      const ex = na.x + (na.kn ? na.kn.ox : 0) - x, ez = na.z + (na.kn ? na.kn.oz : 0) - z, d2 = ex * ex + ez * ez;
+      if (d2 < bd) { bd = d2; best = na; }
+    }
+    if (best) {
+      const na = best, seg = navSegs[na.segIdx];
+      const k = na.kn || (na.kn = { ox: 0, oz: 0, oyaw: 0, vx: 0, vz: 0, vsv: 0, ky: 0, vy: 0, cool: 0 });
+      na.wreck = true;
+      const p = power * 1.0;
+      if (seg) {
+        const nx = -seg.uz, nz = seg.ux;
+        const lat = (na.x + k.ox - seg.x1) * nx + (na.z + k.oz - seg.z1) * nz;
+        const yEst = Math.min(1.5, p * 0.6 / 4.5);
+        const ext = Math.abs(Math.sin(yEst)) * 1.6 + Math.abs(Math.cos(yEst)) * 0.9;
+        const need = seg.width * 0.5 + ext + 0.4;
+        let pick = 0, D = 0;
+        const pref = lat >= 0 ? 1 : -1;
+        for (const sd of [pref, -pref]) {
+          const Dn = Math.max(1.5, need - sd * lat);
+          if (!autoBlockedAt(na, na.x + k.ox + nx * sd * Dn, na.z + k.oz + nz * sd * Dn, na.yaw + k.oyaw)) { pick = sd; D = Dn; break; }
+        }
+        if (!pick) { pick = pref; D = Math.max(1.5, need - pick * lat); }
+        const vl = Math.min(26, D * 3.3);
+        k.vx = dx * p * 0.5 + nx * pick * vl; k.vz = dz * p * 0.5 + nz * pick * vl;
+      } else { k.vx = dx * p; k.vz = dz * p; }
+      const side = (na.x - x) * dz - (na.z - z) * dx;
+      k.vsv += (side >= 0 ? 1 : -1) * p * 0.6;
+      if (!(k.ky > 0.02)) k.vy = Math.min(12, 4.5 + p * 1.15);
+      k.ky = 0.02; k.cool = 0.9;
+      return true;
+    }
+    let cb = null, cd = 2.4 * 2.4;
+    for (let i = 0; i < cows.length; i++) {
+      const c = cows[i]; if (c.kn && Math.abs(c.kn.vx) + Math.abs(c.kn.vz) > 1.0) continue;
+      const ex = c.x - x, ez = c.z - z, d2 = ex * ex + ez * ez; if (d2 < cd) { cd = d2; cb = c; }
+    }
+    if (cb) {
+      const side = (cb.x - x) * dz - (cb.z - z) * dx, sg = side >= 0 ? 1 : -1;
+      const sp = Math.min(14, 6 + power * 1.2);
+      cb.kn = { vx: dz * sg * sp + dx * power * 0.4, vz: -dx * sg * sp + dz * power * 0.4, vy: 3.5 + power * 0.5, ky: 0.02, vsv: sg * 2.5 };
+      return true;
+    }
+    return false;
+  }
+
   return {
     update,
+    kickAt,
     onHorn,
     solid: checkNpcSolid,
     setMuted,

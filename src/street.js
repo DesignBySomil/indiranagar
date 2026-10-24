@@ -1071,6 +1071,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     medianQuads,
     roadSegs,
     lampHead: headInst,
+    lampMeshes: { pole: poleInst, arm: armInst, head: headInst },
     lampSpots,
     vendorSpots,
     parkedSpots,
