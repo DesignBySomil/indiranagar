@@ -647,7 +647,7 @@ export function createStreetLife({
   // Compute India Left-Hand Drive lane offset
   // Forward vector is (ux * dir, uz * dir); Left-hand normal is (uz * dir, -ux * dir)
   function computeLeftLanePos(seg, t, dir, extraOffset = 0) {
-    const laneCenter = seg.divided ? seg.width * 0.24 : seg.width * 0.23;
+    const laneCenter = Math.min(2.15, Math.max(1.45, seg.width * 0.14));
     const offsetLeft = laneCenter + extraOffset;
     const lx = seg.uz * dir * offsetLeft;
     const lz = -seg.ux * dir * offsetLeft;

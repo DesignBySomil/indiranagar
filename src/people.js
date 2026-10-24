@@ -474,16 +474,16 @@ export function createCrowd({
     return { x: px, z: pz, hx: Math.sin(pyaw), hz: Math.cos(pyaw) };
   }
 
-  // Compute valid footpath/verge offset strictly between 3.4m and 6.0m from road centreline
   function pointOnAnyCarriageway(x, z) {
     for (let i = 0; i < roadSegs.length; i++) {
       const r = roadSegs[i];
       const x1 = r.x1 ?? r[0], z1 = r.z1 ?? r[1], x2 = r.x2 ?? r[2], z2 = r.z2 ?? r[3];
-      if (x < Math.min(x1, x2) - 9 || x > Math.max(x1, x2) + 9 || z < Math.min(z1, z2) - 9 || z > Math.max(z1, z2) + 9) continue;
+      const w = r.width ?? r[6] ?? 14.0;
+      const bound = w * 0.5 + 2.0;
+      if (x < Math.min(x1, x2) - bound || x > Math.max(x1, x2) + bound || z < Math.min(z1, z2) - bound || z > Math.max(z1, z2) + bound) continue;
       const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
       const t = T.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / L2, 0, 1);
       const d = Math.hypot(x - (x1 + dx * t), z - (z1 + dz * t));
-      const w = r.width ?? r[6] ?? 7;
       if (d < w * 0.5 + 0.4) return true;
     }
     return false;
@@ -496,9 +496,9 @@ export function createCrowd({
     return true;
   }
   function computeFootpathOffset(seg, side, seedVal) {
-    const minOff = Math.max(3.4, seg.width * 0.5 + 0.65);
-    const maxOff = Math.min(6.0, Math.max(minOff + 0.4, seg.width * 0.5 + 1.85));
-    const mag = T.MathUtils.clamp(minOff + hash(seedVal, seg.mx, 19) * (maxOff - minOff), 3.4, 6.0);
+    const minOff = seg.width * 0.5 + 0.65;
+    const maxOff = seg.width * 0.5 + 1.85;
+    const mag = minOff + hash(seedVal, seg.mx, 19) * (maxOff - minOff);
     if (offsetClear(seg, mag * side)) return mag * side;
     if (offsetClear(seg, -mag * side)) return -mag * side;
     return mag * side;
@@ -630,12 +630,13 @@ export function createCrowd({
     for (const frac of [0.28, 0.72]) {
       if (vendorSpots.length >= 14) break;
       const side = (i % 2 === 0) ? 1 : -1;
-      const vOff = Math.min(5.8, Math.max(4.1, s.width * 0.5 + 1.45)) * side;
+      const vOff = (s.width * 0.5 + 1.45) * side;
       const vx = s.x1 + s.ux * s.len * frac - s.uz * vOff;
       const vz = s.z1 + s.uz * s.len * frac + s.ux * vOff;
       if (Math.hypot(vx - (-133), vz - (-345)) < 16) continue;
+      if (pointOnAnyCarriageway(vx, vz)) continue;
       if (!isSolidSafe(vx, vz) || !isSolidSafe(vx + 0.9, vz + 0.9) || !isSolidSafe(vx - 0.9, vz - 0.9)) continue;
-      if (avoidFn(vx, vz, 1.1)) continue; // keep vendor carts out of parked-vehicle footprints (cart 1.15x1.65 -> r1.1)
+      if (avoidFn(vx, vz, 1.1)) continue;
       vendorSpots.push({ x: vx, z: vz, yaw: Math.atan2(s.ux, s.uz) });
     }
   }

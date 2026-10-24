@@ -7,7 +7,7 @@ import { createLampLights, attachHeadlightsToNearest } from './lamps.js';
 import { buildAuto, updateAuto } from './auto.js';
 import { buildLandmark, nightUniform } from './landmarks.js';
 import { buildCity } from './city.js';
-import { buildStreet } from './street.js';
+import { buildStreet, prepareRoadCorridors, getRoadWidth } from './street.js';
 import { createStopsGame } from './stops.js';
 import { createStreetLife } from './life.js';
 import { createMapEdge } from './edge.js';
@@ -121,20 +121,21 @@ function nearestRoadInfo(x, z) {
 const brandGroup = new THREE.Group();
 scene.add(brandGroup);
 
-// push a brand plot off the carriageway and face it at the nearest road
+// push a brand/landmark plot off the doubled carriageway + footpath and face it at the nearest road
 function plotBesideRoad(x, z) {
-  let best = 1e9, nx = x, nz = z;
+  let best = 1e9, nx = x, nz = z, bestW = 14.0;
   for (const r of world.roads) {
     if (r.k < 2) continue;
+    const rw = getRoadWidth(r);
     for (let i = 0; i < r.p.length - 1; i++) {
       const [x1, z1] = r.p[i], [x2, z2] = r.p[i + 1];
       const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
       const t = THREE.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / L2, 0, 1);
       const px = x1 + dx * t, pz = z1 + dz * t, d = Math.hypot(x - px, z - pz);
-      if (d < best) { best = d; nx = px; nz = pz; }
+      if (d < best) { best = d; nx = px; nz = pz; bestW = rw; }
     }
   }
-  const want = 15;
+  const want = Math.max(17.5, bestW * 0.5 + 8.5);
   let ox = x, oz = z;
   if (best < want) {
     let vx = x - nx, vz = z - nz; const vl = Math.hypot(vx, vz);
@@ -171,14 +172,17 @@ function setupLandmarks() {
     if (!p && lmExact) p = { n: name, t: lmExact.type, x: lmExact.x, z: lmExact.z };
     if (!p) continue;
     used.add(p);
-    const rInfo = nearestRoadInfo(p.x, p.z);
+    const pl = plotBesideRoad(p.x, p.z);
+    const lx = pl.x, lz = pl.z;
+    if (lmExact) { lmExact.x = lx; lmExact.z = lz; }
+    const rInfo = nearestRoadInfo(lx, lz);
     const road = lmExact ? lmExact.nearestRoad : rInfo.name;
     const yaw = lmExact ? lmExact.faceYaw : rInfo.yaw;
     const model = buildLandmark(searchName, THREE);
-    model.position.set(p.x, 0, p.z);
+    model.position.set(lx, 0, lz);
     model.rotation.y = yaw;
     scene.add(model);
-    stops.push({ p: { n: name, t: p.t, x: p.x, z: p.z }, tag, road, brand: false });
+    stops.push({ p: { n: name, t: p.t, x: lx, z: lz }, tag, road, brand: false });
   }
 }
 
@@ -716,12 +720,17 @@ async function boot() {
   applyAlleyFix(world.roads);
   applyBldgFix(world.buildings);
   world.roads.push({ k: 3, n: 'Old Airport Road', p: LEELA_ACCESS_ROAD });
+  prepareRoadCorridors(world);
+  for (const lm of LANDMARKS_DATA) {
+    const adj = plotBesideRoad(lm.x, lm.z);
+    lm.x = adj.x; lm.z = adj.z;
+  }
   (function infill() {
-    const WM = { 5: 14.5, 4: 10.5, 3: 8.2, 2: 7, 1: 5.5 };
     const segs = [];
     for (const r of world.roads) {
       if (!r.p || r.p.length < 2) continue;
-      const hw = ((r.n || '').includes('100 Feet') ? 10 : (WM[r.k] || 7)) / 2 + 3.2;
+      const fw = r.k >= 4 ? 2.3 : 1.5;
+      const hw = getRoadWidth(r) * 0.5 + fw + 2.8;
       for (let i = 0; i < r.p.length - 1; i++) segs.push([r.p[i][0], r.p[i][1], r.p[i + 1][0], r.p[i + 1][1], hw]);
     }
     const G = 24, grid = new Map();

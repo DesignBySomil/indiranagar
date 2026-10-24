@@ -55,7 +55,228 @@ function makeSpeedBreakerTexture() {
   return tex;
 }
 
+export const ROAD_WIDTH_MAP = { 5: 15.2, 4: 14.4, 3: 14.0, 2: 13.2, 1: 11.0 };
+export const W100 = 10.4; // 2x 5.2m per carriageway (1 lane each way = 2 lanes total)
+export const GAP100 = W100 + 1.4; // 10.4m carriageway + 1.4m raised concrete divider
+export const WCMH = 9.6;  // 2x 4.8m per carriageway
+export const GAPCMH = WCMH + 3.2; // 9.6m carriageway + 3.2m Namma Metro pier median
+
+export function getRoadWidth(r) {
+  const n = (r && r.n) || '';
+  if (n.includes('100 Feet')) return W100;
+  if (n.includes('Chinmaya') || n.includes('CMH') || n.includes('Old Madras')) return WCMH;
+  return ROAD_WIDTH_MAP[r && r.k] || 14.0;
+}
+
+export function prepareRoadCorridors(world) {
+  if (!world || world.__corridorsPrepared) return world;
+  world.__corridorsPrepared = true;
+
+  // 1. Align 100 Feet Road and CMH Road paired carriageways BEFORE infill/city/street
+  const alignPairedCorridor = (matchFn, targetGap, minPerp, maxPerp) => {
+    const segs = [];
+    world.roads.forEach((r, ri) => {
+      if (!matchFn(r)) return;
+      for (let i = 0; i < r.p.length - 1; i++) {
+        const [ax, az] = r.p[i], [bx, bz] = r.p[i + 1];
+        const L = Math.hypot(bx - ax, bz - az);
+        if (L < 0.2) continue;
+        segs.push({ ri, i, x1: ax, z1: az, x2: bx, z2: bz, ux: (bx - ax) / L, uz: (bz - az) / L, L });
+      }
+    });
+
+    const nbrPerp = new Map();
+    for (const a of segs) {
+      const nx = -a.uz, nz = a.ux;
+      const mx = (a.x1 + a.x2) * 0.5, mz = (a.z1 + a.z2) * 0.5;
+      let best = null;
+      for (const b of segs) {
+        if (b.ri === a.ri) continue;
+        if (Math.abs(a.ux * b.ux + a.uz * b.uz) < 0.88) continue;
+        const rx = (b.x1 + b.x2) * 0.5 - mx, rz = (b.z1 + b.z2) * 0.5 - mz;
+        const along = rx * a.ux + rz * a.uz, perp = rx * nx + rz * nz;
+        if (Math.abs(perp) < minPerp || Math.abs(perp) > maxPerp || Math.abs(along) > (a.L + b.L) * 0.55) continue;
+        if (!best || Math.abs(perp) < Math.abs(best.perp)) best = { b, perp };
+      }
+      if (best) nbrPerp.set(a.ri + ':' + a.i, best.perp);
+    }
+
+    const done = new Set();
+    for (const a of segs) {
+      const perp = nbrPerp.get(a.ri + ':' + a.i);
+      if (perp === undefined) continue;
+      const sh = (Math.abs(perp) - targetGap) * 0.5;
+      if (Math.abs(sh) < 0.05) continue;
+      const sgn = Math.sign(perp);
+      const sx = -a.uz * sgn * sh, sz = a.ux * sgn * sh;
+      const rp = world.roads[a.ri].p;
+      for (const pi of [a.i, a.i + 1]) {
+        const k2 = a.ri + ':' + pi;
+        if (done.has(k2)) continue;
+        done.add(k2);
+        rp[pi][0] += sx;
+        rp[pi][1] += sz;
+      }
+    }
+  };
+
+  alignPairedCorridor(r => Boolean(r.n && r.n.includes('100 Feet')), GAP100, 4, 34);
+  alignPairedCorridor(r => Boolean(r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))), GAPCMH, 4, 26);
+
+  // 2. Build spatial index of final widened road segments
+  const G = 28;
+  const segGrid = new Map();
+  for (let ri = 0; ri < world.roads.length; ri++) {
+    const r = world.roads[ri];
+    if (!r.p || r.p.length < 2) continue;
+    const w = getRoadWidth(r);
+    const fw = r.k >= 4 ? 2.3 : (r.k >= 2 ? 1.5 : 0.8);
+    const clearHalf = w * 0.5 + fw + 0.55;
+    for (let i = 0; i < r.p.length - 1; i++) {
+      const [x1, z1] = r.p[i], [x2, z2] = r.p[i + 1];
+      const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz);
+      if (L < 0.2) continue;
+      const seg = { x1, z1, x2, z2, dx, dz, L, L2: L * L, ux: dx / L, uz: dz / L, w, clearHalf, k: r.k || 2 };
+      const mnx = Math.min(x1, x2) - clearHalf - 8;
+      const mxx = Math.max(x1, x2) + clearHalf + 8;
+      const mnz = Math.min(z1, z2) - clearHalf - 8;
+      const mxz = Math.max(z1, z2) + clearHalf + 8;
+      for (let gx = Math.floor(mnx / G); gx <= Math.floor(mxx / G); gx++) {
+        for (let gz = Math.floor(mnz / G); gz <= Math.floor(mxz / G); gz++) {
+          const key = gx + ',' + gz;
+          let cell = segGrid.get(key);
+          if (!cell) segGrid.set(key, cell = []);
+          cell.push(seg);
+        }
+      }
+    }
+  }
+
+  const inPoly = (pts, x, z) => {
+    let c = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+    }
+    return c;
+  };
+
+  // 3. Coherent rigid setback of existing building footprints out of widened carriageways + footpaths
+  const keptBuildings = [];
+  for (const b of world.buildings) {
+    if (!b.p || b.p.length < 4) continue;
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, cx = 0, cz = 0;
+    const nPts = b.p.length - 1;
+    for (let i = 0; i < nPts; i++) {
+      const q = b.p[i];
+      x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]);
+      z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]);
+      cx += q[0]; cz += q[1];
+    }
+    cx /= nPts; cz /= nPts;
+
+    const near = new Set();
+    for (let gx = Math.floor(x0 / G); gx <= Math.floor(x1 / G); gx++) {
+      for (let gz = Math.floor(z0 / G); gz <= Math.floor(z1 / G); gz++) {
+        const cell = segGrid.get(gx + ',' + gz);
+        if (cell) for (let k = 0; k < cell.length; k++) near.add(cell[k]);
+      }
+    }
+    if (near.size === 0) {
+      keptBuildings.push(b);
+      continue;
+    }
+
+    const diag = Math.hypot(x1 - x0, z1 - z0);
+    if (diag > 36) {
+      let insideLen = 0;
+      for (const s of near) {
+        if (s.L >= 16 && inPoly(b.p, (s.x1 + s.x2) * 0.5, (s.z1 + s.z2) * 0.5)) insideLen += s.L;
+      }
+      if (insideLen >= 30) {
+        keptBuildings.push(b);
+        continue;
+      }
+    }
+
+    let shiftX = 0, shiftZ = 0;
+    for (let pass = 0; pass < 2; pass++) {
+      const curCx = cx + shiftX, curCz = cz + shiftZ;
+      for (const s of near) {
+        const tc = Math.max(0, Math.min(1, ((curCx - s.x1) * s.dx + (curCz - s.z1) * s.dz) / s.L2));
+        const rcx = s.x1 + s.dx * tc, rcz = s.z1 + s.dz * tc;
+        let nx = curCx - rcx, nz = curCz - rcz;
+        const nd = Math.hypot(nx, nz);
+        if (nd < 0.001) {
+          nx = -s.uz; nz = s.ux;
+        } else {
+          nx /= nd; nz /= nd;
+        }
+
+        let maxPen = 0;
+        for (let i = 0; i < nPts; i++) {
+          const vx = b.p[i][0] + shiftX, vz = b.p[i][1] + shiftZ;
+          const tv = Math.max(0, Math.min(1, ((vx - s.x1) * s.dx + (vz - s.z1) * s.dz) / s.L2));
+          const px = s.x1 + s.dx * tv, pz = s.z1 + s.dz * tv;
+          const d = Math.hypot(vx - px, vz - pz);
+          const sideDot = (vx - px) * nx + (vz - pz) * nz;
+          const signedD = sideDot >= 0 ? d : -d;
+          const pen = s.clearHalf - signedD;
+          if (pen > maxPen) maxPen = pen;
+        }
+        if (maxPen > 0 && maxPen < 14.5) {
+          shiftX += nx * maxPen;
+          shiftZ += nz * maxPen;
+        }
+      }
+    }
+
+    if (shiftX !== 0 || shiftZ !== 0) {
+      for (let i = 0; i < nPts; i++) {
+        b.p[i][0] += shiftX;
+        b.p[i][1] += shiftZ;
+      }
+      b.p[nPts][0] = b.p[0][0];
+      b.p[nPts][1] = b.p[0][1];
+    }
+
+    let stillInsideCarriageway = false;
+    for (let i = 0; i < nPts; i++) {
+      const vx = b.p[i][0], vz = b.p[i][1];
+      for (const s of near) {
+        const tv = Math.max(0, Math.min(1, ((vx - s.x1) * s.dx + (vz - s.z1) * s.dz) / s.L2));
+        const px = s.x1 + s.dx * tv, pz = s.z1 + s.dz * tv;
+        const d = Math.hypot(vx - px, vz - pz);
+        if (d < s.w * 0.5 + 0.8) {
+          let ox = vx - px, oz = vz - pz;
+          const ol = Math.hypot(ox, oz) || 1;
+          ox /= ol; oz /= ol;
+          b.p[i][0] = px + ox * s.clearHalf;
+          b.p[i][1] = pz + oz * s.clearHalf;
+        }
+      }
+    }
+    b.p[nPts][0] = b.p[0][0];
+    b.p[nPts][1] = b.p[0][1];
+
+    let ncx = 0, ncz = 0;
+    for (let i = 0; i < nPts; i++) { ncx += b.p[i][0]; ncz += b.p[i][1]; }
+    ncx /= nPts; ncz /= nPts;
+    for (const s of near) {
+      const tc = Math.max(0, Math.min(1, ((ncx - s.x1) * s.dx + (ncz - s.z1) * s.dz) / s.L2));
+      if (Math.hypot(ncx - (s.x1 + s.dx * tc), ncz - (s.z1 + s.dz * tc)) < s.w * 0.5 + 0.6) {
+        stillInsideCarriageway = true;
+        break;
+      }
+    }
+    if (!stillInsideCarriageway) keptBuildings.push(b);
+  }
+  world.buildings = keptBuildings;
+  return world;
+}
+
 export function buildStreet(world, scene, nightUniform, solidFn, extras = null) {
+  prepareRoadCorridors(world);
   const roadSegs = [];
   const lampSpots = [];
   const vendorSpots = [];
@@ -71,10 +292,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // Real Bangalore road widths: single carriageway 1-lane each way (~7m residential, ~10.5m 12th Main/CMH),
-  // 100 Feet Road as two separated one-way carriageways (2 lanes each, pale concrete) with narrow 0.5m concrete divider
-  // User rule (2026-10-23): ONLY 2-lane roads - one lane each way, no 3/4-lane roads.
-  const widthMap = { 5: 7.6, 4: 7.2, 3: 7.0, 2: 6.6, 1: 5.5 };
+  const widthMap = ROAD_WIDTH_MAP;
 
   const pos = [], col = [], uvs = [], idx = [];
   const fpPos = [], fpCol = [], fpUvs = [], fpIdx = [];
@@ -89,12 +307,6 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
 
   let v = 0, fpV = 0, kbV = 0, dv = 0, divV = 0, patV = 0;
 
-  // 100 Feet Road: two OSM one-way carriageways. Pre-pass finds the opposite carriageway so the gap becomes a narrow median.
-  // User rule (2-lane roads, one lane each way): the raw OSM pair sits 10-30m apart, which reads as a
-  // 4-lane-wide corridor from driver height. Narrow the corridor at the source polyline so the two
-  // carriageways sit GAP100 apart (5.2m each + 1.2m median) - one divided 2-lane road.
-  const W100 = 5.2; // 100 Feet Road: one-way carriageway pair, 1 lane each = 2 lanes total (user rule)
-  const GAP100 = W100 + 1.2;
   const medianQuads = [];
   const medianKerbs = [], medianStrips = [];
   let hundredSegs = [];
@@ -111,7 +323,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       }
     });
   };
-  const pairHundred = (emit) => {
+  const pairHundred = () => {
     for (const a of hundredSegs) {
       const nx = -a.uz, nz = a.ux;
       const mx = (a.x1 + a.x2) / 2, mz = (a.z1 + a.z2) / 2;
@@ -121,18 +333,16 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
         if (Math.abs(a.ux * b.ux + a.uz * b.uz) < 0.9) continue;
         const rx = (b.x1 + b.x2) / 2 - mx, rz = (b.z1 + b.z2) / 2 - mz;
         const along = rx * a.ux + rz * a.uz, perp = rx * nx + rz * nz;
-        if (Math.abs(perp) < 5 || Math.abs(perp) > 30 || Math.abs(along) > (a.L + b.L) / 2) continue;
+        if (Math.abs(perp) < 5 || Math.abs(perp) > 34 || Math.abs(along) > (a.L + b.L) / 2) continue;
         if (!best || Math.abs(perp) < Math.abs(best.perp)) best = { b, perp };
       }
       if (!best) continue;
       const sg = Math.sign(best.perp);
       nbrSide.set(a.ri + ':' + a.i, sg);
-      if (!emit) { nbrPerp.set(a.ri + ':' + a.i, best.perp); continue; }
       if (a.ri < best.b.ri) {
         const o1 = sg * W100 / 2, o2 = best.perp - sg * W100 / 2;
         if (Math.abs(o2) > Math.abs(o1)) {
           medianQuads.push([a.x1 + nx * o1, a.z1 + nz * o1, a.x1 + nx * o2, a.z1 + nz * o2, a.x2 + nx * o1, a.z2 + nz * o1, a.x2 + nx * o2, a.z2 + nz * o2]);
-          // kerb edges at each carriageway + raised central divider strip, so the narrow median reads as a divider
           const oM = (o1 + o2) / 2;
           medianKerbs.push([a.x1 + nx * o1, a.z1 + nz * o1, a.x2 + nx * o1, a.z2 + nz * o1]);
           medianKerbs.push([a.x1 + nx * o2, a.z1 + nz * o2, a.x2 + nx * o2, a.z2 + nz * o2]);
@@ -141,30 +351,8 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       }
     }
   };
-  const nbrPerp = new Map();
   collectHundred();
-  pairHundred(false); // measure original pair separation
-  {
-    const done = new Set();
-    for (const a of hundredSegs) {
-      const perp = nbrPerp.get(a.ri + ':' + a.i);
-      if (perp === undefined) continue;
-      const sh = Math.max(0, (Math.abs(perp) - GAP100) / 2);
-      if (sh <= 0) continue;
-      const sgn = Math.sign(perp);
-      const sx = -a.uz * sgn * sh, sz = a.ux * sgn * sh;
-      const rp = world.roads[a.ri].p;
-      for (const pi of [a.i, a.i + 1]) {
-        const k2 = a.ri + ':' + pi;
-        if (done.has(k2)) continue;
-        done.add(k2);
-        rp[pi][0] += sx; rp[pi][1] += sz;
-      }
-    }
-  }
-  nbrSide.clear();
-  collectHundred();
-  pairHundred(true); // rebuild pairs + median quads on the narrowed corridor
+  pairHundred();
 
   // Overhead signal gantries across 100 Feet Road carriageways (depth cue, Bangalore-style)
   {
@@ -223,9 +411,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     ri++;
     const is100Ft = Boolean(r.n && r.n.includes('100 Feet'));
     const isCMH = Boolean(r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras')));
-    // User rule (2026-10-23): 2 lanes TOTAL per road, one each way. Divided corridors
-    // (100 Ft, CMH/metro) are one-way single-lane carriageway pairs around the median.
-    const w = is100Ft ? W100 : (isCMH ? 4.8 : (widthMap[r.k] || 7.0)); // CMH: carriageway pair with a median that holds the metro piers
+    const w = getRoadWidth(r);
     // 100 Feet Road is pale white-topped concrete slabs with patches; other roads are worn mid-grey asphalt
     const baseCol = is100Ft
       ? [0.40, 0.40, 0.39]
@@ -663,22 +849,15 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       const px = x1 + dx * t, pz = z1 + dz * t, d = Math.hypot(cx - px, cz - pz);
       if (d < bd) { bd = d; bx = px; bz = pz; bRi = rk; }
     }
-    if (bd < 4 || bd > 22) continue; // no opposite carriageway nearby: no viaduct here
+    if (bd < 6 || bd > 28) continue;
     const mx = (cx + bx) / 2, mz = (cz + bz) / 2;
     if (metroDecks.some(p => Math.hypot(p[0] - mx, p[1] - mz) < 20)) continue;
     metroDecks.push([mx, mz, yaw]);
-    // direction from this carriageway to its opposite = across the median
-    let px = bx - cx, pz = bz - cz; const pl = Math.hypot(px, pz) || 1; px /= pl; pz /= pl;
-    const HWC = 2.4; // carriageway half-width for the CMH/100 Ft class roads (1 lane each)
-    const medianGap = bd - 2 * HWC; // physical clear strip between the carriageway edges
-    if (medianGap >= 2.4) {
-      // genuine median: single slim central column wholly inside the median strip (>=0.3m clear of both carriageway edges)
-      // - unless a third drivable way passes too close
-      if (distToRoads(mx, mz, [cx, cz], [bx, bz]) >= 4.95) metroPiers.push([mx, mz, yaw, medianGap]);
+    const HWC = WCMH * 0.5;
+    const medianGap = bd - 2 * HWC;
+    if (medianGap >= 2.2) {
+      if (distToRoads(mx, mz, [cx, cz], [bx, bz]) >= HWC + 2.2) metroPiers.push([mx, mz, yaw, medianGap]);
       else metroDecks.pop();
-    } else {
-      // no real median: long-span the viaduct - no ground piers at all beside the lanes.
-      // (portal columns hugging the carriageway edges were rejected as lane-side obstacles)
     }
   }
 
@@ -752,7 +931,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       pier.position.set(px, 3.7, 0);
       stGroup.add(pier);
     }
-    for (const sz of [-11, 11]) {
+    for (const sz of [-14.5, 14.5]) {
       const stair = new THREE.Mesh(new THREE.BoxGeometry(7.5, 7.4, 3.2), new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7 }));
       stair.position.set(-10, 3.7, sz);
       stair.rotation.z = 0;
@@ -861,9 +1040,9 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       rbg.rotation.y = yaw;
       for (const s of [-1, 1]) {
         const wall = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.95, len), culvMat);
-        wall.position.set(s * 4.4, 0.48, 0);
+        wall.position.set(s * 7.6, 0.48, 0);
         const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, len), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
-        stripe.position.set(s * 4.4, 0.82, 0);
+        stripe.position.set(s * 7.6, 0.82, 0);
         rbg.add(wall, stripe);
       }
       scene.add(rbg);
@@ -951,7 +1130,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const treeGrid = new Set();
 
   for (const r of world.roads) {
-    const rw = (r.n && r.n.includes('100 Feet')) ? W100 : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? 4.8 : (widthMap[r.k] || 7.0));
+    const rw = getRoadWidth(r);
     const fw = r.k >= 4 ? 2.3 : 1.5;
     const vergeOffset = rw * 0.5 + fw + 0.55;
 
@@ -1035,12 +1214,15 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   // Street Lamps
   for (const r of world.roads) {
     if (r.k < 3) continue;
-    const rw = (r.n && r.n.includes('100 Feet')) ? W100 : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? 4.8 : (widthMap[r.k] || 7.0));
+    const is100 = Boolean(r.n && r.n.includes('100 Feet'));
+    const rw = getRoadWidth(r);
+    const riLamp = world.roads.indexOf(r);
     for (let i = 0; i < r.p.length - 1; i++) {
       const [x1, z1] = r.p[i], [x2, z2] = r.p[i + 1];
       const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz);
+      const medS = is100 ? (nbrSide.get(riLamp + ':' + i) || 0) : 0;
       for (let s = 6; s < L; s += 32) {
-        const side = i % 2 ? 1 : -1;
+        const side = medS !== 0 ? (medS > 0 ? -1 : 1) : (i % 2 ? 1 : -1);
         const off = (rw / 2 + 1.1) * side;
         const lx = x1 + (dx * s) / L - (dz / L) * off;
         const lz = z1 + (dz * s) / L + (dx / L) * off;

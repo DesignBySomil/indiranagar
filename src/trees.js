@@ -181,19 +181,17 @@ export function createRainTrees({
     treeSpots.push(spot);
   }
 
-  // Check if (x, z) is within 14m of another road segment's centreline (junction zone) or inside ANY carriageway
   function checkJunctionOrCarriageway(x, z, ownSegIdx) {
     const ownSeg = roadSegs[ownSegIdx];
     const ownName = ownSeg ? (ownSeg.name ?? ownSeg[4] ?? '') : '';
 
     for (let i = 0; i < roadSegs.length; i++) {
-      if (i === ownSegIdx) continue;
       const s = roadSegs[i];
       const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
-      const rw = s.width ?? s[6] ?? 7.5;
+      const rw = s.width ?? s[6] ?? 14.0;
       const sName = s.name ?? s[4] ?? '';
 
-      const margin = 14.5;
+      const margin = rw * 0.5 + 8.5;
       if (x < Math.min(x1, x2) - margin || x > Math.max(x1, x2) + margin) continue;
       if (z < Math.min(z1, z2) - margin || z > Math.max(z1, z2) + margin) continue;
 
@@ -202,10 +200,9 @@ export function createRainTrees({
       const t = T.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / L2, 0, 1);
       const d = Math.hypot(x - (x1 + dx * t), z - (z1 + dz * t));
 
-      // Never place inside any road's carriageway + kerb buffer
-      if (d < rw * 0.5 + 1.8) return true;
+      if (d < rw * 0.5 + 1.65) return true;
+      if (i === ownSegIdx) continue;
 
-      // Skip junction zones within 14m of a cross-road centreline
       const sharesEndpoint =
         Math.hypot(x1 - (ownSeg.x1 ?? ownSeg[0]), z1 - (ownSeg.z1 ?? ownSeg[1])) < 1.5 ||
         Math.hypot(x1 - (ownSeg.x2 ?? ownSeg[2]), z1 - (ownSeg.z2 ?? ownSeg[3])) < 1.5 ||
@@ -213,7 +210,7 @@ export function createRainTrees({
         Math.hypot(x2 - (ownSeg.x2 ?? ownSeg[2]), z2 - (ownSeg.z2 ?? ownSeg[3])) < 1.5;
 
       if (!sharesEndpoint || (sName !== ownName)) {
-        if (d < 14.0) return true;
+        if (d < rw * 0.5 + 5.5) return true;
       }
     }
     return false;
@@ -227,7 +224,6 @@ export function createRainTrees({
     return false;
   }
 
-  // True when parallel roads lie on BOTH sides within 20 m (i.e. the strip between two carriageways)
   function isBetweenCarriageways(x, z) {
     let best = null, bd = 1e9;
     for (let i = 0; i < roadSegs.length; i++) {
@@ -244,23 +240,22 @@ export function createRainTrees({
       const s = roadSegs[i];
       const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
       const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
-      if (Math.abs(ux * best.ux + uz * best.uz) < 0.9) continue;
+      if (Math.abs(ux * best.ux + uz * best.uz) < 0.88) continue;
       const tt = T.MathUtils.clamp(((x - x1) * ux + (z - z1) * uz) / L, 0, 1);
       const d = Math.hypot(x - (x1 + dx * tt), z - (z1 + dz * tt));
-      if (d > 20) continue;
+      if (d > 28) continue;
       const cr = (x - x1) * uz - (z - z1) * ux;
-      if (cr > 2.5) left = true; else if (cr < -2.5) right = true;
+      if (cr > 2.2) left = true; else if (cr < -2.2) right = true;
     }
     return left && right;
   }
 
-  // Place roadside trees along both sides of roads: dense on 100 Feet Road, CMH Road, 12th Main, sparser on side streets
   for (let idx = 0; idx < roadSegs.length; idx++) {
     const s = roadSegs[idx];
     const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
     const name = s.name ?? s[4] ?? '';
     const kind = s.kind ?? s[5] ?? 2;
-    const width = s.width ?? s[6] ?? 7.0;
+    const width = s.width ?? s[6] ?? 14.0;
 
     const dx = x2 - x1, dz = z2 - z1;
     const L = Math.hypot(dx, dz);
@@ -277,39 +272,38 @@ export function createRainTrees({
 
     const baseStep = isPrimeAvenue ? 9.5 : 13.5;
     const minSpacing = isPrimeAvenue ? 8.2 : 11.2;
+    const fw = kind >= 4 ? 2.3 : 1.5;
 
     for (let dist = 5.5; dist < L - 4.5; dist += baseStep + hash(x1 + dist, z1, seed) * 5.2) {
       for (const side of [-1, 1]) {
         const hVal = hash(x1 * side + dist, z1 - dist, seed);
         if (!isPrimeAvenue && hVal < 0.36) continue;
 
-        // Verge offset: width/2 + 2.2m to 4.5m from road centreline
-        const vergeOff = width * 0.5 + 3.9 + hash(z1 + dist, x1 * side, seed) * 1.6;
-        const tx = x1 + ux * dist - uz * vergeOff * side;
-        const tz = z1 + uz * dist + ux * vergeOff * side;
+        let tx = 0, tz = 0, placed = false;
+        const jitter = hash(z1 + dist, x1 * side, seed) * 0.9;
+        for (const extraOff of [fw + 0.55 + jitter, fw * 0.72 + 0.35, fw + 1.45]) {
+          const vergeOff = width * 0.5 + extraOff;
+          const cx = x1 + ux * dist - uz * vergeOff * side;
+          const cz = z1 + uz * dist + ux * vergeOff * side;
+          if (Math.hypot(cx - (-133), cz - (-345)) < 34) break;
+          if (
+            solidFn(cx, cz) ||
+            solidFn(cx + 1.1, cz) ||
+            solidFn(cx - 1.1, cz) ||
+            solidFn(cx, cz + 1.1) ||
+            solidFn(cx, cz - 1.1)
+          ) continue;
+          if (isUnderBridge(cx, cz)) continue;
+          if (isBetweenCarriageways(cx, cz)) continue;
+          if (isTooCloseToOtherTree(cx, cz, minSpacing)) continue;
+          if (checkJunctionOrCarriageway(cx, cz, idx)) continue;
+          tx = cx; tz = cz; placed = true;
+          break;
+        }
+        if (!placed) continue;
 
-        // Keep player spawn (-133, -345) clear
-        if (Math.hypot(tx - (-133), tz - (-345)) < 34) continue;
-
-        // Check building footprints (solidFn) with a small clearance buffer
-        if (
-          solidFn(tx, tz) ||
-          solidFn(tx + 1.4, tz) ||
-          solidFn(tx - 1.4, tz) ||
-          solidFn(tx, tz + 1.4) ||
-          solidFn(tx, tz - 1.4)
-        ) continue;
-
-        if (isUnderBridge(tx, tz)) continue;
-        if (isBetweenCarriageways(tx, tz)) continue;
-        if (isTooCloseToOtherTree(tx, tz, minSpacing)) continue;
-        if (checkJunctionOrCarriageway(tx, tz, idx)) continue;
-
-        // Yaw pointing inward from the kerb toward the road centreline
         const roadInwardYaw = Math.atan2(uz * side, -ux * side);
-        const overhangsRoad = hVal > 0.62; // ~38% of crowns lean out over the kerb/carriageway
-
-        // Species selection: 0 = Samanea saman (Rain Tree), 1 = Gulmohar (Flame red-orange), 2 = Ficus/Copper-pod
+        const overhangsRoad = hVal > 0.62;
         const spRand = hash(tx, tz, seed + 7);
         const species = spRand < 0.72 ? 0 : (spRand < 0.88 ? 1 : 2);
 
@@ -319,8 +313,8 @@ export function createRainTrees({
           roadInwardYaw,
           overhangsRoad,
           species,
-          scaleXZ: 0.75 + hash(tz, tx, seed) * 0.42, // Crown radius ~5m to 8m
-          scaleY: 0.82 + hash(tx + 9, tz, seed) * 0.38, // Total height ~9m to 13m
+          scaleXZ: 0.75 + hash(tz, tx, seed) * 0.42,
+          scaleY: 0.82 + hash(tx + 9, tz, seed) * 0.38,
           hasBand: hVal > 0.42,
           hasGuard: isPrimeAvenue && hVal < 0.52
         });

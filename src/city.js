@@ -154,7 +154,7 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
 
     if (area > 32) {
       const comm = commEarly;
-      if (comm.dist < 30 && comm.dist > 7) {
+      if (comm.dist < 36 && comm.dist > 10.5) {
         shopFronts.push({ x: cx, z: cz, rx: comm.rx, rz: comm.rz, dist: comm.dist, h, yaw: comm.yaw, r });
       }
     }
@@ -284,9 +284,13 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
   const awningGeo = new THREE.BoxGeometry(5.0, 0.18, 1.45);
   awningGeo.rotateX(0.26);
 
-  const nearRoad = (px, pz, lim) => {
+  const nearRoad = (px, pz) => {
     for (const r of world.roads) {
       const p = r.p;
+      const rw = (r.n && r.n.includes('100 Feet')) ? 10.4
+        : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? 9.6
+        : ({ 5: 15.2, 4: 14.4, 3: 14.0, 2: 13.2, 1: 11.0 }[r.k] || 14.0));
+      const lim = rw * 0.5 + 2.4;
       for (let j = 0; j < p.length - 1; j++) {
         const ax = p[j][0], az = p[j][1], bx = p[j + 1][0], bz = p[j + 1][1];
         const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
@@ -299,12 +303,11 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
   const maxSigns = Math.min(shopFronts.length, 320);
   for (let i = 0; i < maxSigns; i++) {
     const sf = shopFronts[i];
-    // Position signboard just outside the building wall along the vector from building centre to nearest road point
-    const wallPush = Math.max(3.5, sf.dist - 8.2);
+    const wallPush = Math.max(3.2, sf.dist - 10.8);
     const sx = sf.x + Math.sin(sf.yaw) * wallPush;
     const sz = sf.z + Math.cos(sf.yaw) * wallPush;
 
-    if (nearRoad(sx, sz, 9.5)) continue;
+    if (nearRoad(sx, sz)) continue;
     const sm = new THREE.Mesh(boardGeo, signPool[i % signPool.length]);
     sm.position.set(sx, 3.85, sz);
     sm.rotation.y = sf.yaw;

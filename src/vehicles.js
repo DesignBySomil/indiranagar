@@ -857,8 +857,8 @@ export function createTraffic({
 
   // Compute left-hand traffic lane offset (India keep-left rule)
   function computeLanePos(seg, t, dir) {
-    // Keep strictly on the road carriageway, well clear of footpaths
-    const laneOffset = Math.min(2.05, Math.max(1.35, seg.width * 0.22));
+    // Preserve stable inner lane offset on doubled roads so junctions never jump 4.2m
+    const laneOffset = Math.min(2.05, Math.max(1.35, seg.width * 0.14));
     // Forward vector is (ux * dir, uz * dir). Left-hand side normal in XZ (where +Z is South/North and yaw=atan2(x,z)):
     // Right of (+ux, +uz) is (-uz, ux), Left is (+uz, -ux)
     const x = seg.x1 + seg.ux * seg.len * t + seg.uz * laneOffset * dir;
@@ -1296,20 +1296,25 @@ export function createParkedVehicles({
   // Helper checks
   function isOnAnyRoad(px, pz, ignoreSeg) {
     const obsList = (typeof obstructionSegs !== 'undefined') ? obstructionSegs : validSegs;
+    let leftPar = false, rightPar = false;
     for (let i = 0; i < obsList.length; i++) {
       const s = obsList[i];
-      if (s === ignoreSeg) continue;
       const apx = px - s.x1;
       const apz = pz - s.z1;
       const proj = (apx * s.ux + apz * s.uz) / s.len;
-      if (proj < -0.05 || proj > 1.05) continue;
+      if (proj < -0.08 || proj > 1.08) continue;
       const clamped = T.MathUtils.clamp(proj, 0, 1);
       const cx = s.x1 + s.ux * s.len * clamped;
       const cz = s.z1 + s.uz * s.len * clamped;
       const d = Math.hypot(px - cx, pz - cz);
-      if (d < s.width * 0.5 + 1.8) return true;
+      if (s !== ignoreSeg && d < s.width * 0.5 + 1.8) return true;
+      if (ignoreSeg && Math.abs(s.ux * ignoreSeg.ux + s.uz * ignoreSeg.uz) > 0.88 && d < 26) {
+        const cr = (px - s.x1) * ignoreSeg.uz - (pz - s.z1) * ignoreSeg.ux;
+        if (cr > 1.5) leftPar = true;
+        else if (cr < -1.5) rightPar = true;
+      }
     }
-    return false;
+    return leftPar && rightPar;
   }
 
   function isClearOfSolids(px, pz, halfFootprint) {
