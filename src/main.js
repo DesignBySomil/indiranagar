@@ -628,7 +628,7 @@ function step(dt, now, sliced = false) {
 
   // A sustained accelerator with no actual progress recovers only onto a clear nearby road.
   const progress = Math.hypot(auto.x - startX, auto.z - startZ);
-  auto.noProgressT = thr > 0.3 && progress < dt * 0.15 ? (auto.noProgressT || 0) + dt : 0;
+  auto.noProgressT = thr > 0.3 && Math.abs(auto.v) < 3 && progress < dt * 2.5 ? (auto.noProgressT || 0) + dt : 0;
   if (auto.noProgressT > 2.0) {
     const candidates = [];
     for (const sg of (streetRef?.roadSegs || [])) {
