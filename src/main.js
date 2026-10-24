@@ -21,6 +21,7 @@ import { createParkedVehicles } from './vehicles.js';
 import { createCrowd } from './people.js';
 import { upgradeBuildingFacades } from './buildingsHQ.js';
 import { createHazards } from './hazards.js';
+import { createKnockProps } from './props.js';
 import { buildBrandStore, updateBrandStores } from './brands.js';
 import { STOP_LIST, STOP_PLACES, LEELA_ACCESS_ROAD } from './stopsdata.js';
 import { createAmbientOcclusion, tuneShadows } from './ao.js';
@@ -467,7 +468,7 @@ function drawMini() {
 }
 
 // ---------- loop ----------
-let hazards = null, streetRef = null;
+let hazards = null, streetRef = null, props = null;
 let last = performance.now(), cardT = 0, frame = 0, started = false, camRoll = 0;
 function showCard(kind, name, text) {
   if ($('cardKind')) $('cardKind').textContent = kind;
@@ -496,7 +497,21 @@ function pierHit(x, z) { const P = window.__piers; if (!P) return false; for (le
 function step(dt, now) {
   let thr = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   let str = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+  // stuck recovery drives the car through the normal physics (it cannot slide sideways or pass through anything): a small autopilot
+  // reverses or drives toward the target pose with throttle/steer. Any real steering, or throttle against the recovery direction, cancels it.
   if (joy.on) { thr = -joy.y; str = -joy.x; }
+  const thrIn = thr, strIn = str;
+  if (auto.rec) {
+    const R = auto.rec; R.t += dt;
+    const wrap = (q) => Math.atan2(Math.sin(q), Math.cos(q));
+    const ex = R.x - auto.x, ez = R.z - auto.z, dist = Math.hypot(ex, ez);
+    if (!R.gear) { const f0 = Math.sin(auto.a) * ex + Math.cos(auto.a) * ez; R.gear = f0 >= 0 ? 1 : -1; }
+    const opposing = (Math.abs(strIn) > 0.3 && (Math.abs(R.str) < 0.3 || Math.sign(strIn) !== Math.sign(R.str))) || (R.thr !== 0 && thrIn !== 0 && Math.sign(thrIn) !== Math.sign(R.thr)) || (R.thr === 0 && Math.abs(thrIn) > 0.1);
+    if (Math.abs(auto.v) < 0.25) R.stall += dt; else R.stall = Math.max(0, R.stall - dt);
+    const want = Math.atan2(ex, ez) + (R.gear < 0 ? Math.PI : 0);
+    if (opposing || dist < 1.3 || R.t > 3.5 || (R.t > 0.5 && R.stall > 0.5)) { (window.__recLog = window.__recLog || []).push(['end', opposing ? 'input' : dist < 1.3 ? 'reached' : R.t > 3.5 ? 'timeout' : 'stalled', +dist.toFixed(2), +R.t.toFixed(2), +auto.x.toFixed(1), +auto.z.toFixed(1)]); auto.rec = null; }
+    else { thr = R.gear; str = Math.max(-1, Math.min(1, wrap(want - auto.a) * 2)) * R.gear; }
+  }
   const input = { thr, str };
   if (destination) destination.update(dt, input);
   thr = input.thr;
@@ -505,6 +520,7 @@ function step(dt, now) {
   const max = 17;
   auto.v += (thr * (thr > 0 ? 9.5 : 12.5) - auto.v * 0.35 * (thr === 0 ? 1.8 : 1)) * dt;
   auto.v = THREE.MathUtils.clamp(auto.v, -6, max);
+  if (auto.rec) auto.v = THREE.MathUtils.clamp(auto.v, -3.5, 3.5);
   const preV = auto.v;
   auto.steer += (str - auto.steer) * Math.min(1, dt * 8.5);
   const dA = auto.steer * dt * 1.85 * THREE.MathUtils.clamp(auto.v / 5, -1, 1);
@@ -512,7 +528,7 @@ function step(dt, now) {
     const s = Math.sin(a), c = Math.cos(a);
     for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
-      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
+      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (life && life.solid(px, pz)) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (props && props.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) return true;
     }
     return false;
   };
@@ -522,7 +538,7 @@ function step(dt, now) {
     const s = Math.sin(a), c = Math.cos(a); let dyn = 0;
     for (const [lx, lz] of [[0.85, 1.8], [-0.85, 1.8], [0.85, -1.3], [-0.85, -1.3], [0, 1.95], [0, 0.3], [0, -1.3]]) {
       const px = x + c * lx + s * lz, pz = z - s * lx + c * lz;
-      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (parkedVehicles && parkedVehicles.solid(px, pz))) return 1;
+      if (inDivider(px, pz) || pierHit(px, pz) || solid(px, pz) || (parkedVehicles && parkedVehicles.solid(px, pz)) || (props && props.solid(px, pz))) return 1;
       if ((life && life.solid(px, pz)) || (traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) dyn = 2;
     }
     return dyn;
@@ -558,6 +574,11 @@ function step(dt, now) {
     if (!moved) auto.v = thr > 0 ? Math.min(auto.v, 0) * 0.2 : Math.max(auto.v, 0) * 0.2;
   }
   // impact feedback: if we drove into traffic or a parked vehicle, shove it a little
+  if (props && Math.abs(preV) > 2.0) {
+    const dS = preV > 0 ? 1 : -1, fx1 = Math.sin(auto.a) * dS, fz1 = Math.cos(auto.a) * dS;
+    const sA = Math.sin(auto.a), cA = Math.cos(auto.a);
+    for (const [lx, lz] of [[0, 1.95], [0.85, 1.8], [-0.85, 1.8], [0, 2.6], [0.85, 2.5], [-0.85, 2.5], [0.85, -1.3], [-0.85, -1.3], [0, -2.0]]) { const qx = auto.x + cA * lx + sA * lz, qz = auto.z - sA * lx + cA * lz; if (props.solid(qx, qz)) { props.kickAt(qx, qz, fx1, fz1, Math.min(6, Math.abs(preV) * 0.55)); break; } }
+  }
   if (Math.abs(preV) > 2.4) {
     const dirS = preV > 0 ? 1 : -1;
     const fx0 = Math.sin(auto.a) * dirS, fz0 = Math.cos(auto.a) * dirS;
@@ -584,37 +605,38 @@ function step(dt, now) {
   else auto.stuckT = Math.max(0, (auto.stuckT || 0) - dt * 2);
   if (staticBlock && Math.abs(thr) > 0.1) auto.blockT = (auto.blockT || 0) + dt; else auto.blockT = Math.max(0, (auto.blockT || 0) - dt * 3);
   // no relocation for moving obstructions at all: the player can wait, reverse or steer; they clear on their own
-  if (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow) {
+  // continuous stuck recovery: the old block moved the car instantly (3.5 m back plus up to 14 m to the road lane in one frame).
+  // Now it only chooses a target pose; a small autopilot (see the input override near the top of step) drives there through the normal collision physics, and the player's own input cancels it.
+  if (auto.rec) { auto.stuckT = 0; auto.blockT = 0; }
+  if (!auto.rec && (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow)) {
     auto.stuckT = 0; auto.blockT = 0; auto.unstickNow = false;
     auto.clk = auto.clk || 0;
     auto.unstickN = (auto.clk - (auto.unstickAt ?? -99) < 4) ? (auto.unstickN || 0) + 1 : 1;
     auto.unstickAt = auto.clk;
     let skipSnap = false;
+    let tx = auto.x, tz = auto.z, ta = auto.a, hopped = false, freed = false;
     if (auto.unstickN >= 3) {
       // repeatedly blocked (parked car / queue): hop past it along the heading, else sideways
       const fx = Math.sin(auto.a), fz = Math.cos(auto.a);
-      let hopped = false;
       for (const [f, l] of [[7, 0], [9, 2.2], [9, -2.2], [12, 0], [0, 3], [0, -3], [14, 3], [14, -3]]) {
         const nx = auto.x + fx * f + fz * l, nz = auto.z + fz * f - fx * l;
-        if (!hit(nx, nz) && !hit(nx + fx * 2, nz + fz * 2)) { auto.x = nx; auto.z = nz; auto.v = 0; hopped = true; break; }
+        if (!hit(nx, nz) && !hit(nx + fx * 2, nz + fz * 2)) { tx = nx; tz = nz; hopped = true; break; }
       }
       if (hopped) { auto.unstickN = 0; skipSnap = true; }
-      else if (auto.unstickN >= 4) { auto.a += Math.PI; auto.v = 0; auto.unstickN = 0; skipSnap = true; } // dead end: turn around
+      else if (auto.unstickN >= 4) { ta = auto.a + Math.PI; auto.unstickN = 0; skipSnap = true; } // dead end: turn around
     }
-    let freed = false;
     const sgn = thr >= 0 ? -1 : 1;
     for (const d of (skipSnap ? [] : [0.8, 1.6, 2.4, 3.5])) {
       const nx = auto.x + Math.sin(auto.a) * d * sgn, nz = auto.z + Math.cos(auto.a) * d * sgn;
-      if (!hit(nx, nz)) { auto.x = nx; auto.z = nz; auto.v = 0; freed = true; break; }
+      if (!hit(nx, nz)) { tx = nx; tz = nz; freed = true; break; }
     }
-    const pr = window.__placeOnRoad ? window.__placeOnRoad(auto.x, auto.z) : null;
-    if (!skipSnap && pr && Math.hypot(pr.x - auto.x, pr.z - auto.z) < 14 && !hit(pr.x, pr.z)) {
-      // nudge to the road lane and line up with the road so throttle drives along it, never back into the wall
+    const pr = window.__placeOnRoad ? window.__placeOnRoad(tx, tz) : null;
+    if (!skipSnap && pr && Math.hypot(pr.x - tx, pr.z - tz) < 14 && !hitA(pr.x, pr.z, auto.a)) {
       const d1 = Math.abs(Math.atan2(Math.sin(pr.a - auto.a), Math.cos(pr.a - auto.a)));
-      auto.x = pr.x; auto.z = pr.z; auto.a = d1 <= Math.PI / 2 ? pr.a : pr.a + Math.PI; auto.v = 0;
+      tx = pr.x; tz = pr.z; ta = d1 <= Math.PI / 2 ? pr.a : pr.a + Math.PI;
     }
+    if (Math.hypot(tx - auto.x, tz - auto.z) > 0.02 || Math.abs(ta - auto.a) > 0.02) { auto.rec = { x: tx, z: tz, a: ta, t: 0, thr: thrIn, str: strIn, gear: 0, stall: 0 }; (window.__recLog = window.__recLog || []).push([auto.x, auto.z, tx, tz, auto.clk]); }
   }
-
   if (auto.unstickAt === undefined) { auto.unstickAt = -99; auto.unstickN = 0; }
   auto.clk = (auto.clk || 0) + dt;
   if (auto._didUnstick) { auto._didUnstick = false; }
@@ -641,6 +663,7 @@ function step(dt, now) {
   if (hazards) { const sh = hazards.update(dt, auto); if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); clampCam(); camera.position.y += sh; }
   else { if (camRig) camRig.update(dt, Boolean(state.snap)); else syncCamera(dt, Boolean(state.snap)); clampCam(); }
   if (trees) trees.update(dt);
+  if (props) props.update(dt);
   if (parkedVehicles && parkedVehicles.update) parkedVehicles.update(dt);
   if (traffic) traffic.update(dt, state.hour);
   if (crowd) crowd.update(dt, state.hour);
@@ -861,6 +884,7 @@ try {
     solid,
     auto,
     npcsRef: npcs,
+    obstacleFn: (x, z) => inDivider(x, z) || pierHit(x, z),
     ui: {
       say: () => {},
       fare: (txt) => { if ($('streetName')) $('streetName').textContent = txt; },
@@ -877,11 +901,29 @@ try {
 
   try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
   shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
-  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); return q ? Math.max(0, Math.min(220, parseInt(q) || 150)) : 150; })() });
+  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn: (x, z) => inDivider(x, z) || pierHit(x, z), nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); return q ? Math.max(0, Math.min(220, parseInt(q) || 150)) : 150; })() });
   parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
-  crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z }), nightUniform, count: 120 });
+  crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, getAuto: () => ({ x: auto.x, z: auto.z }), nightUniform, count: 120, avoidFn: (x, z) => !!(parkedVehicles && parkedVehicles.overlaps && parkedVehicles.overlaps(x, z, 1.1)) });
   bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   hazards = createHazards({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid });
+  {
+    // knockable props: lamp poles and trees topple away from the driving line, then no longer block
+    const items = [];
+    const lm = street.lampMeshes;
+    if (lm) street.lampSpots.forEach((sp, i) => {
+      const parts = [lm.pole, lm.arm, lm.head].map(inst => { const b = new THREE.Matrix4(); inst.getMatrixAt(i, b); return { inst, idx: i, base: b }; });
+      items.push({ x: sp.poleX, z: sp.poleZ, r: 0.4, mass: 1, max: 1.5, parts });
+    });
+    if (trees && trees.treeParts) trees.treeSpots.forEach((sp, i) => items.push({ x: sp.x, z: sp.z, r: 0.45 + 0.3 * (sp.scaleXZ || 1), mass: 2.2, max: 1.25, len: 5.5 * (sp.scaleY || 1), parts: trees.treeParts[i] }));
+    // vendor cart and vendor are separate instanced meshes: the cart tips as a rigid body, the vendor is knocked down on his own spot
+    if (crowd && crowd.vendorInst && crowd.vendorPersonInst) crowd.vendorSpots.forEach((vp, i) => {
+      const mk = (inst) => { const b = new THREE.Matrix4(); inst.getMatrixAt(i, b); return b; };
+      items.push({ x: vp.x, z: vp.z, r: 0.9, mass: 1.5, max: 1.45, len: 1.5, parts: [{ inst: crowd.vendorInst, idx: i, base: mk(crowd.vendorInst) }] });
+      const vxw = vp.x + Math.cos(vp.yaw) * -0.82, vzw = vp.z - Math.sin(vp.yaw) * -0.82;
+      items.push({ x: vxw, z: vzw, r: 0.4, mass: 0.8, max: 1.5, len: 1.6, parts: [{ inst: crowd.vendorPersonInst, idx: i, base: mk(crowd.vendorPersonInst) }] });
+    });
+    props = createKnockProps({ THREE, items, roadSegs: street.roadSegs, blockedFn: (x, z) => solid(x, z) || inDivider(x, z) || pierHit(x, z) || (parkedVehicles && parkedVehicles.solid(x, z)) });
+  }
   buildMini();
 
   function placeOnRoad(x, z) {
@@ -992,6 +1034,6 @@ try {
   chg.style.cssText = 'position:fixed;left:20px;top:64px;z-index:60;font:600 13px Bricolage Grotesque,sans-serif;padding:8px 14px;border-radius:20px;border:1px solid #ffffff55;background:#10151cdd;color:#fff;cursor:pointer';
   chg.addEventListener('click', () => { const sp = $('startpick'); $('start').classList.add('on'); if (sp) sp.focus(); });
   document.body.appendChild(chg);
-  window.__game = { get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
+  window.__game = { get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get props() { return props; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();
