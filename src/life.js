@@ -1,3 +1,4 @@
+import {getAudioContext,createAudioOutput} from './audio.js';
 // src/life.js
 import * as THREE from 'three';
 import { nightUniform } from './materials.js';
@@ -179,12 +180,8 @@ export function createStreetLife({
   function ensureAudio() {
     if (muted) return null;
     if (!AC) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return null;
-      AC = new Ctx();
-      master = AC.createGain();
-      master.gain.value = 0.20;
-      master.connect(AC.destination);
+      AC=getAudioContext();if(!AC)return null;
+      master=createAudioOutput(.20);
     }
     if (AC.state === 'suspended') AC.resume().catch(() => {});
     return AC;

@@ -1,3 +1,4 @@
+import {getAudioContext,createAudioOutput,setAudioVolume} from './audio.js';
 import { applyAlleyFix, applyBldgFix } from './alleyfix.js';
 // src/main.js
 import * as THREE from 'three';
@@ -359,12 +360,18 @@ addEventListener('blur',()=>{releaseMobile();tiltNeutral=null;});document.addEve
 document.addEventListener('pointerdown',()=>{if(started)startAudio();},{passive:true});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&started&&AC&&AC.state!=='running')AC.resume().catch(()=>{});});
 // ---------- audio ----------
-let AC, engine, eg, amb;
+let AC, engine, eg, amb, masterGain;
+let soundVolume=1, soundMuted=false;
+function applySound(){setAudioVolume(soundVolume,soundMuted);}
+function prepareAudioSession(){try{if('audioSession' in navigator)navigator.audioSession.type='playback';}catch{}}
+
 function startAudio() {
+  prepareAudioSession();
   if (AC) { if(AC.state!=='running')AC.resume().catch(()=>{});return; }
-  AC = new (window.AudioContext || window.webkitAudioContext)();
+  AC = getAudioContext();
+  if(!AC)return;
   if(AC.state!=='running')AC.resume().catch(()=>{});
-  const master = AC.createGain(); master.gain.value = 0.5; master.connect(AC.destination);
+  const master = masterGain = createAudioOutput(.5);applySound();
   engine = AC.createOscillator(); engine.type = 'sawtooth';
   eg = AC.createGain(); eg.gain.value = 0.0;
   const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 280;
@@ -416,7 +423,7 @@ function honk(rep) {
   if (honkSrc) { try { honkGain.gain.cancelScheduledValues(t); honkGain.gain.setValueAtTime(honkGain.gain.value, t); honkGain.gain.linearRampToValueAtTime(0, t + 0.04); honkSrc.stop(t + 0.05); } catch (e) {} }
   const src = AC.createBufferSource(), g = AC.createGain();
   src.buffer = honkBuf; src.playbackRate.value = 1 + (Math.random() - 0.5) * 0.04;
-  g.gain.value = 0.9; src.connect(g); g.connect(AC.destination); src.start(t);
+  g.gain.value = 0.9; src.connect(g); g.connect(masterGain); src.start(t);
   honkSrc = src; honkGain = g; src.onended = () => { if (honkSrc === src) honkSrc = null; };
 }
 
@@ -1052,6 +1059,9 @@ try {
       const input=row.querySelector('input'),out=row.querySelector('output');
       const sync=()=>{out.textContent=format(+input.value);change(+input.value);};input.addEventListener('input',sync);panel.appendChild(row);sync();
     }
+    const soundButton=document.createElement('button');soundButton.id='sound-toggle';soundButton.type='button';soundButton.textContent='Sound on';soundButton.setAttribute('aria-pressed','true');panel.appendChild(soundButton);
+    soundButton.addEventListener('click',()=>{soundMuted=!soundMuted;if(!soundMuted)startAudio();applySound();soundButton.textContent=soundMuted?'Sound off':'Sound on';soundButton.setAttribute('aria-pressed',String(!soundMuted));});
+    slider('setting-volume','Sound volume',0,100,10,100,v=>v===0?'Off':v+'%',v=>{soundVolume=v/100;if(v>0&&started)startAudio();applySound();});
     slider('setting-time','Time of day',0,23.75,.25,state.hour,h=>`${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round((h%1)*60)).padStart(2,'0')}`,h=>{state.hour=h;applyTime(h);});
     const density=(id,name,entity,extra)=>slider(id,name,0,100,10,100,v=>v===0?'Off':v+'%',v=>{const f=v/100;entity.enabled=v>0;entity.group.visible=v>0;entity.setDensity?.(f);extra?.(f);});
     density('setting-traffic','Traffic',traffic,f=>{life.setTrafficEnabled(f>0);life.setTrafficDensity(f);});

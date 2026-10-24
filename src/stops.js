@@ -1,3 +1,4 @@
+import {getAudioContext,createAudioOutput} from './audio.js';
 // src/stops.js
 import * as THREE from 'three';
 import { STOP_LIST } from './stopsdata.js';
@@ -309,11 +310,10 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
   }
 
   // ---------- WebAudio Fanfare, Coin Ping, Combo Riser & Secret Jingle ----------
-  let AC = null;
+  let AC = null, audioOutput=null;
   function getAC() {
     if (!AC) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (Ctx) AC = new Ctx();
+      AC=getAudioContext();if(AC)audioOutput=createAudioOutput(1);
     }
     if (AC && AC.state === 'suspended') AC.resume().catch(() => {});
     return AC;
@@ -334,7 +334,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
       g.gain.linearRampToValueAtTime(0.16, t + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0008, t + 0.48);
       o.connect(g);
-      g.connect(ctx.destination);
+      g.connect(audioOutput);
       o.start(t);
       o.stop(t + 0.5);
     });
@@ -347,7 +347,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
     cg.gain.setValueAtTime(0.12, ct);
     cg.gain.exponentialRampToValueAtTime(0.001, ct + 0.35);
     co.connect(cg);
-    cg.connect(ctx.destination);
+    cg.connect(audioOutput);
     co.start(ct);
     co.stop(ct + 0.38);
   }
