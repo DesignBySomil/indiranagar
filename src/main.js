@@ -38,13 +38,17 @@ const post = createPost(renderer, scene, camera);
 
 let ao = null, shadowTuner = null, extras = null, traffic = null, parkedVehicles = null, crowd = null, bldgHQ = null;
 function resize() {
-  renderer.setSize(innerWidth, innerHeight, false);
-  post.setSize(innerWidth, innerHeight);
-  if (ao && ao.setSize) ao.setSize(innerWidth, innerHeight);
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
+  const rect=canvas.getBoundingClientRect();
+  const w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));
+  renderer.setSize(w,h,false);post.setSize(w,h);
+  if(ao&&ao.setSize)ao.setSize(w,h);
+  camera.aspect=w/h;camera.updateProjectionMatrix();
 }
-addEventListener('resize', resize);
+let resizeFrame=0;
+function queueResize(){cancelAnimationFrame(resizeFrame);resizeFrame=requestAnimationFrame(resize);}
+addEventListener('resize',queueResize);
+addEventListener('orientationchange',()=>{queueResize();setTimeout(queueResize,250);});
+window.visualViewport?.addEventListener('resize',queueResize);
 resize();
 
 const setLoad = (p, m) => {
@@ -351,11 +355,14 @@ tiltButton.addEventListener('click',async()=>{if(tiltEnabled){stopTilt();return;
 addEventListener('deviceorientation',e=>{if(!tiltEnabled||typeof e.beta!=='number'||typeof e.gamma!=='number')return;const angle=(screen.orientation?.angle??window.orientation??0)*Math.PI/180;const value=e.gamma*Math.cos(angle)+e.beta*Math.sin(angle);if(tiltNeutral===null){tiltNeutral=value;clearTimeout(tiltTimer);tiltButton.textContent='Tilt on · tap to stop';}const delta=value-tiltNeutral;tiltValue=Math.abs(delta)<3?0:-Math.max(-1,Math.min(1,(delta-Math.sign(delta)*3)/22));});
 addEventListener('blur',()=>{releaseMobile();tiltNeutral=null;});document.addEventListener('visibilitychange',()=>{if(document.hidden){releaseMobile();tiltNeutral=null;}});
 
+document.addEventListener('pointerdown',()=>{if(started)startAudio();},{passive:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&started&&AC&&AC.state!=='running')AC.resume().catch(()=>{});});
 // ---------- audio ----------
 let AC, engine, eg, amb;
 function startAudio() {
-  if (AC) return;
+  if (AC) { if(AC.state!=='running')AC.resume().catch(()=>{});return; }
   AC = new (window.AudioContext || window.webkitAudioContext)();
+  if(AC.state!=='running')AC.resume().catch(()=>{});
   const master = AC.createGain(); master.gain.value = 0.5; master.connect(AC.destination);
   engine = AC.createOscillator(); engine.type = 'sawtooth';
   eg = AC.createGain(); eg.gain.value = 0.0;
