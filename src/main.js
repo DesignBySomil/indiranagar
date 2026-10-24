@@ -506,7 +506,7 @@ function step(dt, now) {
     const wrap = (q) => Math.atan2(Math.sin(q), Math.cos(q));
     const ex = R.x - auto.x, ez = R.z - auto.z, dist = Math.hypot(ex, ez);
     if (!R.gear) { const f0 = Math.sin(auto.a) * ex + Math.cos(auto.a) * ez; R.gear = f0 >= 0 ? 1 : -1; }
-    const opposing = (Math.abs(strIn) > 0.3 && (Math.abs(R.str) < 0.3 || Math.sign(strIn) !== Math.sign(R.str))) || (R.thr !== 0 && thrIn !== 0 && Math.sign(thrIn) !== Math.sign(R.thr)) || (R.thr === 0 && Math.abs(thrIn) > 0.1);
+    const opposing = Math.abs(strIn) > 0.3 || (R.thr !== 0 && thrIn !== 0 && Math.sign(thrIn) !== Math.sign(R.thr)) || (R.thr === 0 && Math.abs(thrIn) > 0.1);
     if (Math.abs(auto.v) < 0.25) R.stall += dt; else R.stall = Math.max(0, R.stall - dt);
     const want = Math.atan2(ex, ez) + (R.gear < 0 ? Math.PI : 0);
     if (opposing || dist < 1.3 || R.t > 3.5 || (R.t > 0.5 && R.stall > 0.5)) { (window.__recLog = window.__recLog || []).push(['end', opposing ? 'input' : dist < 1.3 ? 'reached' : R.t > 3.5 ? 'timeout' : 'stalled', +dist.toFixed(2), +R.t.toFixed(2), +auto.x.toFixed(1), +auto.z.toFixed(1)]); auto.rec = null; }
@@ -608,7 +608,7 @@ function step(dt, now) {
   // continuous stuck recovery: the old block moved the car instantly (3.5 m back plus up to 14 m to the road lane in one frame).
   // Now it only chooses a target pose; a small autopilot (see the input override near the top of step) drives there through the normal collision physics, and the player's own input cancels it.
   if (auto.rec) { auto.stuckT = 0; auto.blockT = 0; }
-  if (!auto.rec && (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow)) {
+  if (!auto.rec && Math.abs(strIn) <= 0.3 && (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow)) {
     auto.stuckT = 0; auto.blockT = 0; auto.unstickNow = false;
     auto.clk = auto.clk || 0;
     auto.unstickN = (auto.clk - (auto.unstickAt ?? -99) < 4) ? (auto.unstickN || 0) + 1 : 1;
@@ -635,7 +635,7 @@ function step(dt, now) {
       const d1 = Math.abs(Math.atan2(Math.sin(pr.a - auto.a), Math.cos(pr.a - auto.a)));
       tx = pr.x; tz = pr.z; ta = d1 <= Math.PI / 2 ? pr.a : pr.a + Math.PI;
     }
-    if (Math.hypot(tx - auto.x, tz - auto.z) > 0.02 || Math.abs(ta - auto.a) > 0.02) { auto.rec = { x: tx, z: tz, a: ta, t: 0, thr: thrIn, str: strIn, gear: 0, stall: 0 }; (window.__recLog = window.__recLog || []).push([auto.x, auto.z, tx, tz, auto.clk]); }
+    if (Math.hypot(tx - auto.x, tz - auto.z) > 0.02 || Math.abs(ta - auto.a) > 0.02) { auto.rec = { x: tx, z: tz, a: ta, t: 0, thr: thrIn, gear: 0, stall: 0 }; (window.__recLog = window.__recLog || []).push([auto.x, auto.z, tx, tz, auto.clk]); }
   }
   if (auto.unstickAt === undefined) { auto.unstickAt = -99; auto.unstickN = 0; }
   auto.clk = (auto.clk || 0) + dt;
