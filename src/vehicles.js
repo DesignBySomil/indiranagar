@@ -1078,9 +1078,11 @@ export function createTraffic({
       if (tu.seg.oneway) tu.dir = 1;
       let forceRecycle = false;
       tu.t += (tu.dir * tu.speed * safeDt) / tu.seg.len;
+      tu.__transCd = (tu.__transCd || 0) - (tu.__transCd > 0 ? 1 : 0);
+      if (tu.__transCd > 0 && (tu.t > 0.995 || tu.t < 0.005)) { tu.t = T.MathUtils.clamp(tu.t, 0.005, 0.995); tu.__transCd = 0; }
 
       // Segment boundary transition
-      if (tu.t > 0.97 || tu.t < 0.03) {
+      if (!(tu.__transCd > 0) && (tu.t > 0.97 || tu.t < 0.03)) {
         const exitX = tu.t > 0.5 ? tu.seg.x2 : tu.seg.x1;
         const exitZ = tu.t > 0.5 ? tu.seg.z2 : tu.seg.z1;
         const fUx = tu.seg.ux * tu.dir;
@@ -1091,17 +1093,53 @@ export function createTraffic({
         if (nxt) { const cp = computeLanePos(tu.seg, T.MathUtils.clamp(tu.t, 0, 1), tu.dir); const np2 = computeLanePos(nxt.seg, nxt.dir === 1 ? 0 : 1, nxt.dir); const dxj = np2.x - cp.x, dzj = np2.z - cp.z; gapLon = dxj * fUx + dzj * fUz; const gapLat = -dxj * fUz + dzj * fUx; jumpD = Math.hypot(dxj, dzj); if (Math.abs(gapLat) > 3.5 || gapLon < -2 || gapLon > 18) jumpOk = false; }
         if (typeof window !== 'undefined') { const W = window.__trc = window.__trc || { trans: 0, failNext: 0, failJump: 0, held: 0, recycled: 0, log: [] }; if (nxt && jumpOk) W.trans++; else { if (!nxt) W.failNext++; else W.failJump++; if (W.log.length < 24) W.log.push({ seg: tu.seg.name, t: +tu.t.toFixed(3), dir: tu.dir, ow: tu.seg.oneway ? 1 : 0, nxt: nxt ? nxt.seg.name : null, jumpD: +jumpD.toFixed(2), exit: [ +exitX.toFixed(1), +exitZ.toFixed(1) ] }); } }
         if (nxt && jumpOk) {
-          const entryGap = Math.max(0.5, Math.min(gapLon, nxt.seg.len * 0.9));
-          tu.seg = nxt.seg;
-          tu.dir = nxt.dir;
-          tu.__site = 'trans';
-          // entry must land OUTSIDE the 0.03/0.97 boundary window or the unit instantly re-triggers the transition and one-ways forceRecycle-freeze at the entry point
-          tu.t = nxt.dir === 1 ? T.MathUtils.clamp(entryGap / nxt.seg.len, 0.05, 0.94) : T.MathUtils.clamp(1 - entryGap / nxt.seg.len, 0.06, 0.95);
-        } else if (tu.seg.oneway) {
-          forceRecycle = true;
-        } else {
-          tu.dir *= -1;
-          tu.t = T.MathUtils.clamp(tu.t, 0.04, 0.96);
+          // Continuity-first entry: project the CURRENT rendered position onto the new
+          // segment's axis (computeLanePos t is geometric along p1->p2 regardless of dir),
+          // then accept only if the ACTUAL clamped entry renders within 3.5m of where the
+          // unit was this frame. Otherwise fall through to the existing fail path so a
+          // discontinuous junction never produces a visible one-frame blink.
+          const cpT = T.MathUtils.clamp(tu.t, 0, 1);
+          const cp2 = computeLanePos(tu.seg, cpT, tu.dir);
+          const tProj = ((cp2.x - nxt.seg.x1) * nxt.seg.ux + (cp2.z - nxt.seg.z1) * nxt.seg.uz) / (nxt.seg.len || 1);
+          const tC = T.MathUtils.clamp(tProj, 0.005, 0.995);
+          const npA = computeLanePos(nxt.seg, tC, nxt.dir);
+          const realJump = Math.hypot(npA.x - cp2.x, npA.z - cp2.z);
+          if (realJump <= 9 && (nxt.dir === 1 ? tC <= 0.96 : tC >= 0.04)) {
+            const prevYaw = cp2.yaw;
+            tu.seg = nxt.seg;
+            tu.dir = nxt.dir;
+            tu.__site = 'trans';
+            // continuity blend: start the new lane exactly where the unit rendered this
+            // frame and decay the residual offset over ~1.5s, so the unit visibly DRIVES
+            // across the junction gap instead of blinking. Applied to tu.x/tu.z below,
+            // which solid() also reads, so collider and render stay in sync.
+            tu.bx = cp2.x - npA.x;
+            tu.bz = cp2.z - npA.z;
+            let dy = prevYaw - npA.yaw;
+            while (dy > Math.PI) dy -= 2 * Math.PI;
+            while (dy < -Math.PI) dy += 2 * Math.PI;
+            tu.byaw = dy;
+            // a short cooldown replaces the old positional clamp: entry lands at the true
+            // projected point for rendered continuity, and the boundary check is skipped
+            // for ~1.5s so the unit cannot instantly re-trigger a transition at the entry
+            // (previously avoided by clamping t, which introduced the visible blink)
+            tu.__transCd = 45;
+            tu.t = tC;
+          } else {
+            jumpOk = false;
+            if (typeof window !== 'undefined' && window.__trc) { window.__trc.trans--; window.__trc.failJump++; window.__trc.realFail = (window.__trc.realFail || 0) + 1;
+              const L2 = window.__trc.realLog = window.__trc.realLog || [];
+              if (L2.length < 30) L2.push({ seg: tu.seg.name, nxt: nxt.seg.name, d: +realJump.toFixed(2), tP: +tProj.toFixed(3), dir: tu.dir, ndir: nxt.dir, exit: [+cp2.x.toFixed(1), +cp2.z.toFixed(1)], land: [+npA.x.toFixed(1), +npA.z.toFixed(1)] });
+            }
+          }
+        }
+        if (!(nxt && jumpOk)) {
+          if (tu.seg.oneway) {
+            forceRecycle = true;
+          } else {
+            tu.dir *= -1;
+            tu.t = T.MathUtils.clamp(tu.t, 0.04, 0.96);
+          }
         }
       }
 
@@ -1116,7 +1154,7 @@ export function createTraffic({
       if (wantsRecycle && dist <= 200 && tu.lastSeg) {
         // never pop a vehicle in or out where the player can see it: hold at the last good spot until the player is far
         tu.__held = (tu.__held || 0) + 1; tu.__why = forceRecycle ? 'force' : (dist > 320 ? 'dist' : 'solid');
-        tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir; tu.__site = 'hold';
+        tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir; tu.__site = 'hold'; tu.bx = 0; tu.bz = 0; tu.byaw = 0; tu.__transCd = 0;
         pos = computeLanePos(tu.seg, tu.t, tu.dir);
       } else if (wantsRecycle) {
         const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 210, 300, true, i + tu.t * 100);
@@ -1127,9 +1165,9 @@ export function createTraffic({
           tu.dir = picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1);
           tu.speed = tu.maxSpeed * 0.8;
           if (typeof window !== 'undefined') { const R = window.__rcLog = window.__rcLog || []; if (R.length < 300) R.push({ i, d: +Math.hypot(cand.x - player.x, cand.z - player.z).toFixed(0) }); } // DEBUG strip
-          tu.ox = tu.oz = tu.oyaw = 0;
+          tu.ox = tu.oz = tu.oyaw = 0; tu.bx = tu.bz = tu.byaw = 0; tu.__transCd = 0;
           pos = computeLanePos(tu.seg, tu.t, tu.dir);
-        } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; tu.__site = 'revert'; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
+        } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; tu.__site = 'revert'; tu.bx = 0; tu.bz = 0; tu.byaw = 0; tu.__transCd = 0; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
       }
 
       if (typeof window !== 'undefined' && typeof tu.x === 'number') { const J = window.__jumpLog = window.__jumpLog || []; const jdx = pos.x - tu.x, jdz = pos.z - tu.z; if (Math.hypot(jdx, jdz) > 40 && J.length < 200) J.push({ i, site: tu.__site || 'none', tseg: tu.seg && tu.seg.name || '', from: [+tu.x.toFixed(0), +tu.z.toFixed(0)], to: [+pos.x.toFixed(0), +pos.z.toFixed(0)] }); } // DEBUG strip
@@ -1148,9 +1186,14 @@ export function createTraffic({
         if (Math.abs(tu.kvx) + Math.abs(tu.kvz) < 0.05) { tu.kvx = 0; tu.kvz = 0; }
         if (Math.abs(tu.ksv) < 0.05) tu.ksv = 0;
       }
-      tu.x = pos.x + (tu.ox || 0) + (tu.kx || 0);
-      tu.z = pos.z + (tu.oz || 0) + (tu.kz || 0);
-      tu.yaw = pos.yaw + (tu.oyaw || 0) + (tu.ks || 0);
+      // impact state owns the unit's displacement: cancel any transition blend so the
+      // collision sweep's lane-space tests and the rendered/knocked position never diverge
+      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0 || tu.wreck) { tu.bx = 0; tu.bz = 0; tu.byaw = 0; }
+      if (tu.bx || tu.bz) { const bl = Math.hypot(tu.bx, tu.bz), dd = 6.5 * safeDt; if (bl <= dd) { tu.bx = 0; tu.bz = 0; } else { tu.bx *= (bl - dd) / bl; tu.bz *= (bl - dd) / bl; } }
+      if (tu.byaw) { const ay = Math.abs(tu.byaw), dy2 = 2.2 * safeDt; tu.byaw = ay <= dy2 ? 0 : tu.byaw * (ay - dy2) / ay; }
+      tu.x = pos.x + (tu.ox || 0) + (tu.kx || 0) + (tu.bx || 0);
+      tu.z = pos.z + (tu.oz || 0) + (tu.kz || 0) + (tu.bz || 0);
+      tu.yaw = pos.yaw + (tu.oyaw || 0) + (tu.ks || 0) + (tu.byaw || 0);
 
       q4.setFromAxisAngle(yAxis, tu.yaw);
       v3.set(tu.x, tu.ky || 0, tu.z);
