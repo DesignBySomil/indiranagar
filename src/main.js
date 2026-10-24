@@ -501,6 +501,7 @@ function step(dt, now) {
   // reverses or drives toward the target pose with throttle/steer. Any real steering, or throttle against the recovery direction, cancels it.
   if (joy.on) { thr = -joy.y; str = -joy.x; }
   const thrIn = thr, strIn = str;
+  if (Math.abs(thrIn) < 0.1) { auto.recFail = 0; auto.recLock = 0; auto.recBurst = 0; }
   if (auto.rec) {
     const R = auto.rec; R.t += dt;
     const wrap = (q) => Math.atan2(Math.sin(q), Math.cos(q));
@@ -510,7 +511,10 @@ function step(dt, now) {
     const opposing = (R.rel && Math.abs(thrIn) > 0.2) || Math.abs(strIn) > 0.3 || (R.thr !== 0 && thrIn !== 0 && Math.sign(thrIn) !== Math.sign(R.thr)) || (R.thr === 0 && Math.abs(thrIn) > 0.1);
     if (Math.abs(auto.v) < 0.25) R.stall += dt; else R.stall = Math.max(0, R.stall - dt);
     const want = Math.atan2(ex, ez) + (R.gear < 0 ? Math.PI : 0);
-    if (opposing || dist < 1.3 || R.t > 3.5 || (R.t > 0.5 && R.stall > 0.5)) { (window.__recLog = window.__recLog || []).push(['end', opposing ? 'input' : dist < 1.3 ? 'reached' : R.t > 3.5 ? 'timeout' : 'stalled', +dist.toFixed(2), +R.t.toFixed(2), +auto.x.toFixed(1), +auto.z.toFixed(1)]); auto.rec = null; }
+    if (opposing || dist < 1.3 || R.t > 3.5 || (R.t > 0.5 && R.stall > 0.5)) {
+      // bounded retries: three recoveries in a row that neither reached the target nor were taken over lock the assist out for 4 s, doubling per burst up to 30 s
+      if (opposing || dist < 1.3) { auto.recFail = 0; auto.recBurst = 0; } else if ((auto.recFail = (auto.recFail || 0) + 1) >= 3) { auto.recBurst = (auto.recBurst || 0) + 1; auto.recLock = (auto.clk || 0) + Math.min(30, 4 * Math.pow(2, auto.recBurst - 1)); auto.recFail = 0; }
+      (window.__recLog = window.__recLog || []).push(['end', opposing ? 'input' : dist < 1.3 ? 'reached' : R.t > 3.5 ? 'timeout' : 'stalled', +dist.toFixed(2), +R.t.toFixed(2), +auto.x.toFixed(1), +auto.z.toFixed(1)]); auto.rec = null; }
     else { thr = R.gear; str = Math.max(-1, Math.min(1, wrap(want - auto.a) * 2)) * R.gear; }
   }
   const input = { thr, str };
@@ -609,7 +613,7 @@ function step(dt, now) {
   // continuous stuck recovery: the old block moved the car instantly (3.5 m back plus up to 14 m to the road lane in one frame).
   // Now it only chooses a target pose; a small autopilot (see the input override near the top of step) drives there through the normal collision physics, and the player's own input cancels it.
   if (auto.rec) { auto.stuckT = 0; auto.blockT = 0; }
-  if (!auto.rec && Math.abs(strIn) <= 0.3 && (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow)) {
+  if (!auto.rec && !((auto.recLock || 0) > (auto.clk || 0)) && Math.abs(strIn) <= 0.3 && (auto.stuckT > 0.6 || auto.blockT > 0.9 || auto.unstickNow)) {
     auto.stuckT = 0; auto.blockT = 0; auto.unstickNow = false;
     auto.clk = auto.clk || 0;
     auto.unstickN = (auto.clk - (auto.unstickAt ?? -99) < 4) ? (auto.unstickN || 0) + 1 : 1;
