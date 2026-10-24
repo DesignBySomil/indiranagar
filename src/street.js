@@ -253,6 +253,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       const segObj = [x1, z1, x2, z2, r.n || '', r.k, w];
       Object.assign(segObj, {
         x1, z1, x2, z2,
+        rid: ri,
         name: r.n || '',
         kind: r.k,
         width: w,
