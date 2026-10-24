@@ -144,7 +144,13 @@ export function createPost(renderer, scene, camera) {
     },
     render(dt = 0.016) {
       grainPass.uniforms.uTime.value = (grainPass.uniforms.uTime.value + dt) % 100.0;
-      composer.render(dt);
+      // A composite frame renders the scene twice (color and AO normals). Refresh
+      // dynamic shadows once, then reuse that same map for the remaining passes.
+      const autoUpdate = renderer.shadowMap.autoUpdate;
+      renderer.shadowMap.autoUpdate = false;
+      renderer.shadowMap.needsUpdate = true;
+      try { composer.render(dt); }
+      finally { renderer.shadowMap.autoUpdate = autoUpdate; }
     }
   };
 }
