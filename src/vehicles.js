@@ -1110,6 +1110,7 @@ export function createTraffic({
           const npA = computeLanePos(nxt.seg, tC, nxt.dir);
           const realJump = Math.hypot(npA.x - drawnX, npA.z - drawnZ);
           if (realJump <= 9 && (nxt.dir === 1 ? tC <= 0.96 : tC >= 0.04)) {
+            if (typeof window !== 'undefined' && window.__trc && (tu.bx || tu.bz || tu.byaw)) { window.__trc.chainEv = (window.__trc.chainEv || 0) + 1; window.__trc.chainMax = Math.max(window.__trc.chainMax || 0, Math.hypot(tu.bx, tu.bz)); } // DEBUG strip
             const prevYaw = drawnYaw;
             tu.seg = nxt.seg;
             tu.dir = nxt.dir;
