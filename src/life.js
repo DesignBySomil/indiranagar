@@ -289,14 +289,40 @@ export function createStreetLife({
   const bubblePool = [];
   for (let i = 0; i < 8; i++) {
     const bData = makeBubbleTexture('Turn on the meter, friend!');
-    const mat = new T.SpriteMaterial({ map: bData.tex, transparent: true, depthWrite: false, fog: false });
+    const mat = new T.SpriteMaterial({ map: bData.tex, transparent: true, depthWrite: false, depthTest: false, fog: false, color: new T.Color(0.8, 0.8, 0.8) });
     const sp = new T.Sprite(mat);
+    sp.renderOrder = 999;
     sp.scale.set(9.2, 2.9, 1);
     sp.visible = false;
     root.add(sp);
     bubblePool.push({ sprite: sp, c: bData.c, ctx: bData.ctx, tex: bData.tex, text: '', isBurst: false, timer: 0, target: null, yOff: 3.3 });
   }
 
+  // Size and place a bubble from the camera used for THIS render (the camera moves after the life update, so a size
+  // computed in the update lagged behind and the panel overflowed the screen). A bubble is at most 30% of the screen
+  // width, is kept fully inside the viewport with a small margin, and is hidden when closer than 1.5 m.
+  const _bR = new THREE.Vector3(), _bU = new THREE.Vector3(), _bV = new THREE.Vector3();
+  function fitBubble(b, cam) {
+    if (!b.target || !cam || !cam.matrixWorldInverse) return;
+    const sp = b.sprite;
+    sp.position.set(b.target.position.x, b.yOff, b.target.position.z);
+    _bV.copy(sp.position).applyMatrix4(cam.matrixWorldInverse);
+    const depth = -_bV.z;
+    const base = Math.min(1, Math.max(0, b.timer) * 1.5);
+    if (_bV.length() < 1.5 || depth < 0.3) { sp.material.opacity = 0; return; }
+    sp.material.opacity = base;
+    const halfH = depth * Math.tan((cam.fov || 60) * Math.PI / 360), halfW = halfH * (cam.aspect || 1.6);
+    const w = Math.min(9.2, (cam.aspect < 1 ? 0.72 : 0.3) * 2 * halfW), h = w * (2.9 / 9.2);
+    sp.scale.set(w, h, 1);
+    const bw = w / 2 + 0.04 * halfW, bh = h / 2 + 0.04 * halfH;
+    const nx = Math.max(-halfW + bw, Math.min(halfW - bw, _bV.x)), ny = Math.max(-halfH + bh, Math.min(halfH - bh, _bV.y));
+    if (nx !== _bV.x || ny !== _bV.y) {
+      _bR.set(1, 0, 0).transformDirection(cam.matrixWorld); _bU.set(0, 1, 0).transformDirection(cam.matrixWorld);
+      sp.position.addScaledVector(_bR, nx - _bV.x).addScaledVector(_bU, ny - _bV.y);
+    }
+    sp.updateMatrixWorld(true);
+  }
+  for (const pb of bubblePool) pb.sprite.onBeforeRender = (r, sc, cam) => { if (pb.timer > 0) fitBubble(pb, cam); };
   function spawnBubble(targetObj, text, dur = 3.2, yOff = 3.3, isBurst = false) {
     let slot = bubblePool.find(b => b.timer <= 0) || bubblePool[0];
     updateBubbleCanvas(slot, text, isBurst);
@@ -757,6 +783,7 @@ export function createStreetLife({
         b.timer -= dt;
         b.sprite.position.set(b.target.position.x, b.yOff, b.target.position.z);
         b.sprite.material.opacity = Math.min(1, b.timer * 1.5);
+        if (camera && camera.matrixWorldInverse) fitBubble(b, camera);
         if (b.timer <= 0) b.sprite.visible = false;
       }
     }
