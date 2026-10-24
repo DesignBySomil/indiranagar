@@ -1273,8 +1273,14 @@ export function createTraffic({
       const dist = Math.hypot(dx, dz);
       const wantsRecycle = forceRecycle || dist > 320 || (solidFn && solidFn(pos.x, pos.z));
       if (typeof window !== 'undefined' && wantsRecycle) { window.__trc = window.__trc || { trans:0,failNext:0,failJump:0,held:0,recycled:0,log:[] }; if (dist <= 200 && tu.lastSeg) window.__trc.held++; else window.__trc.recycled++; }
-      if (wantsRecycle && dist <= 200 && tu.lastSeg) {
-        // never pop a vehicle in or out where the player can see it: hold at the last good spot until the player is far
+      const sourceDx = (typeof tu.x === 'number' ? tu.x : pos.x) - player.x;
+      const sourceDz = (typeof tu.z === 'number' ? tu.z : pos.z) - player.z;
+      const sourceDist = Math.hypot(sourceDx, sourceDz);
+      const sourceInView = sourceDist > 0 && sourceDist < 350 &&
+        (sourceDx * player.hx + sourceDz * player.hz) / sourceDist > 0.5;
+      if (wantsRecycle && (dist <= 200 || sourceInView) && tu.lastSeg) {
+        // Protect both ends of a recycle: even an off-camera destination must not
+        // make a currently visible vehicle disappear from the street.
         tu.__held = (tu.__held || 0) + 1; tu.__why = forceRecycle ? 'force' : (dist > 320 ? 'dist' : 'solid');
         tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir; tu.__site = 'hold'; tu.ox = (tu.ox || 0) + tu.bx; tu.oz = (tu.oz || 0) + tu.bz; tu.oyaw = (tu.oyaw || 0) + (tu.byaw || 0); tu.bx = 0; tu.bz = 0; tu.byaw = 0; tu.__transCd = 0;
         pos = computeLanePos(tu.seg, tu.t, tu.dir);
