@@ -361,6 +361,30 @@ function clampCam() {
   }
 }
 
+// Keep accidental game gestures from zooming the mobile viewport. Text fields,
+// settings and cards keep their normal scrolling and native control behavior.
+const isGameGestureTarget = target => target instanceof Element &&
+  !!target.closest('#c,#mobile-drive,#hud') &&
+  !target.closest('input,select,textarea,a,#tgpanel,#passport-modal,#stop-card-v2');
+let previousGameTap=null;
+let multiTouchGesture=false;
+document.addEventListener('touchstart',e=>{
+  if(e.touches.length>1){multiTouchGesture=true;previousGameTap=null;}
+},{passive:true,capture:true});
+document.addEventListener('touchend',e=>{
+  if(multiTouchGesture){if(e.touches.length===0)multiTouchGesture=false;return;}
+  if(e.touches.length||e.changedTouches.length!==1||!isGameGestureTarget(e.target)){previousGameTap=null;return;}
+  const t=e.changedTouches[0],now=performance.now();
+  if(previousGameTap&&now-previousGameTap.time<350&&
+      Math.hypot(t.clientX-previousGameTap.x,t.clientY-previousGameTap.y)<28){
+    if(e.cancelable)e.preventDefault();previousGameTap=null;
+  }else previousGameTap={time:now,x:t.clientX,y:t.clientY};
+},{passive:false,capture:true});
+document.addEventListener('touchcancel',()=>{previousGameTap=null;multiTouchGesture=false;},{passive:true,capture:true});
+document.addEventListener('dblclick',e=>{if(isGameGestureTarget(e.target)&&e.cancelable)e.preventDefault();},{passive:false});
+// Safari exposes pinch gestures separately from pointer events.
+document.addEventListener('gesturestart',e=>{if(isGameGestureTarget(e.target)&&e.cancelable)e.preventDefault();},{passive:false});
+
 // ---------- input ----------
 const keys = {}; window.__keys = keys;
 addEventListener('keydown', e => {

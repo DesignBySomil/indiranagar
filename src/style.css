@@ -68,3 +68,6 @@ html,body{height:100%;background:#14181c;color:#f1f4f8;font-family:'Bricolage Gr
 /* Rotation readiness cover: visible until the resized view renders successfully. */
 #rotation-load{display:none;position:fixed;inset:0;z-index:99;background:#11181ff5;align-items:center;justify-content:center;padding:28px;text-align:center;color:#fff}
 #rotation-load.on{display:flex}#rotation-load>div{width:min(320px,100%)}#rotation-load h2{font-size:23px;line-height:1.25;margin:18px 0 10px}#rotation-load p{font-size:14px;line-height:1.6;color:#bdc8d0}#rotation-load button{margin-top:20px;padding:12px 22px;border:1px solid #ffffff66;border-radius:12px;background:#ffffff18;color:#fff;font:inherit;min-height:44px}.rotation-spinner{display:inline-block;width:30px;height:30px;border:2px solid #ffffff30;border-top-color:#fff;border-radius:50%;animation:rotation-spin 1s linear infinite}#rotation-load.error .rotation-spinner{display:none}@keyframes rotation-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.rotation-spinner{animation:none;border-style:dotted}}
+
+/* Native controls retain tap behavior without a double-tap zoom gesture. */
+button,select,input{touch-action:manipulation}#mobile-drive button,#c{touch-action:none}
