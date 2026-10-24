@@ -1100,12 +1100,17 @@ export function createTraffic({
           // discontinuous junction never produces a visible one-frame blink.
           const cpT = T.MathUtils.clamp(tu.t, 0, 1);
           const cp2 = computeLanePos(tu.seg, cpT, tu.dir);
-          const tProj = ((cp2.x - nxt.seg.x1) * nxt.seg.ux + (cp2.z - nxt.seg.z1) * nxt.seg.uz) / (nxt.seg.len || 1);
+          // chained handoff mid-blend: use the DRAWN pose (lane + residual blend), not the
+          // pure lane pose, so a second transition on a short segment carries the leftover
+          // offset instead of snapping it away, and the 9m accept test sees the true jump
+          const drawnX = cp2.x + (tu.bx || 0), drawnZ = cp2.z + (tu.bz || 0);
+          const drawnYaw = cp2.yaw + (tu.byaw || 0);
+          const tProj = ((drawnX - nxt.seg.x1) * nxt.seg.ux + (drawnZ - nxt.seg.z1) * nxt.seg.uz) / (nxt.seg.len || 1);
           const tC = T.MathUtils.clamp(tProj, 0.005, 0.995);
           const npA = computeLanePos(nxt.seg, tC, nxt.dir);
-          const realJump = Math.hypot(npA.x - cp2.x, npA.z - cp2.z);
+          const realJump = Math.hypot(npA.x - drawnX, npA.z - drawnZ);
           if (realJump <= 9 && (nxt.dir === 1 ? tC <= 0.96 : tC >= 0.04)) {
-            const prevYaw = cp2.yaw;
+            const prevYaw = drawnYaw;
             tu.seg = nxt.seg;
             tu.dir = nxt.dir;
             tu.__site = 'trans';
@@ -1113,8 +1118,8 @@ export function createTraffic({
             // frame and decay the residual offset over ~1.5s, so the unit visibly DRIVES
             // across the junction gap instead of blinking. Applied to tu.x/tu.z below,
             // which solid() also reads, so collider and render stay in sync.
-            tu.bx = cp2.x - npA.x;
-            tu.bz = cp2.z - npA.z;
+            tu.bx = drawnX - npA.x;
+            tu.bz = drawnZ - npA.z;
             let dy = prevYaw - npA.yaw;
             while (dy > Math.PI) dy -= 2 * Math.PI;
             while (dy < -Math.PI) dy += 2 * Math.PI;
