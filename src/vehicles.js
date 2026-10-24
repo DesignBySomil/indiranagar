@@ -858,7 +858,7 @@ export function createTraffic({
   // Compute left-hand traffic lane offset (India keep-left rule)
   function computeLanePos(seg, t, dir) {
     // Keep strictly on the road carriageway, well clear of footpaths
-    const laneOffset = Math.min(2.05, Math.max(1.35, seg.width * 0.22));
+    const laneOffset = Math.min(2.05, Math.max(1.35, seg.width * 0.11));
     // Forward vector is (ux * dir, uz * dir). Left-hand side normal in XZ (where +Z is South/North and yaw=atan2(x,z)):
     // Right of (+ux, +uz) is (-uz, ux), Left is (+uz, -ux)
     const x = seg.x1 + seg.ux * seg.len * t + seg.uz * laneOffset * dir;
