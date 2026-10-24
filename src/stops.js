@@ -397,7 +397,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
           <div style="font-size:12px;font-weight:800;color:#b45309;letter-spacing:0.08em">OFFICIAL BENGALURU AUTO UNION</div>
           <div style="font-size:24px;font-weight:900">Indiranagar Stamp Passport (Collect stamps!)</div>
         </div>
-        <button class="shud-btn" id="btn-pp-close">Close (P)</button>
+        <button class="shud-btn" id="btn-pp-close">Close</button>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:13px;font-weight:700;color:#475569">
         <span id="pp-progress">Stamps: 0 / 0</span>

@@ -1058,6 +1058,9 @@ try {
     density('setting-hazards','Potholes and puddles',hazards);
 
     box.querySelector('#tgbtn').addEventListener('click',()=>{box.classList.toggle('open');box.querySelector('#tgbtn').setAttribute('aria-expanded',box.classList.contains('open'));});
+    const closeSettings=()=>{box.classList.remove('open');box.querySelector('#tgbtn').setAttribute('aria-expanded','false');};
+    document.addEventListener('pointerdown',e=>{if(box.classList.contains('open')&&!box.contains(e.target))closeSettings();});
+    document.addEventListener('keydown',e=>{if(e.code==='Escape'){closeSettings();box.querySelector('#tgbtn').focus();}});
   })();
   const pick = document.getElementById('startpick');
   if (pick) {
@@ -1072,13 +1075,13 @@ try {
   };
   $('go').addEventListener('click', go);
   const rotateHint=document.createElement('div');rotateHint.id='rotate-hint';rotateHint.setAttribute('role','status');rotateHint.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="7" y="3" width="10" height="18" rx="2" transform="rotate(30 12 12)"/><path d="M3 9V4h5M21 15v5h-5"/></svg>Turn your phone for a wider view';document.body.appendChild(rotateHint);
-  const streetEl=$('street');const pickerWrap=document.createElement('div');pickerWrap.id='location-menu';
+  const streetEl=$('street');
+  const locationControl=document.createElement('div');locationControl.id='location-control';
+  locationControl.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 9 6 6 6-6"/></svg>';
   const locationSelect=document.createElement('select');locationSelect.id='location-select';locationSelect.setAttribute('aria-label','Change location');
-  locationSelect.innerHTML='<option value="">Change location...</option>'+stops.map((s,i)=>`<option value="${i}">${s.p.n}</option>`).join('');
-  locationSelect.addEventListener('change',()=>{if(locationSelect.value==='')return;const s=stops[+locationSelect.value];spawnAt(s.p.x,s.p.z);locationSelect.value='';pickerWrap.classList.remove('open');});
-  const chg=document.createElement('button');chg.id='location-dropdown';chg.setAttribute('aria-label','Choose location');chg.innerHTML='⌄';
-  chg.addEventListener('click',()=>{pickerWrap.classList.toggle('open');if(pickerWrap.classList.contains('open'))locationSelect.focus();});
-  streetEl.appendChild(chg);pickerWrap.appendChild(locationSelect);streetEl.appendChild(pickerWrap);
+  locationSelect.innerHTML='<option value="" disabled>Choose a place</option>'+stops.map((s,i)=>`<option value="${i}">${s.p.n}</option>`).join('');locationSelect.value='';
+  locationSelect.addEventListener('change',()=>{if(locationSelect.value==='')return;const s=stops[+locationSelect.value];spawnAt(s.p.x,s.p.z);locationSelect.value='';});
+  locationControl.appendChild(locationSelect);streetEl.appendChild(locationControl);
   window.__game = { get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();
