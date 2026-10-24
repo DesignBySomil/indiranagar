@@ -1110,7 +1110,7 @@ export function createTraffic({
           const npA = computeLanePos(nxt.seg, tC, nxt.dir);
           const realJump = Math.hypot(npA.x - drawnX, npA.z - drawnZ);
           if (realJump <= 9 && (nxt.dir === 1 ? tC <= 0.96 : tC >= 0.04)) {
-            if (typeof window !== 'undefined' && window.__trc && (tu.bx || tu.bz || tu.byaw)) { window.__trc.chainEv = (window.__trc.chainEv || 0) + 1; window.__trc.chainMax = Math.max(window.__trc.chainMax || 0, Math.hypot(tu.bx, tu.bz)); } // DEBUG strip
+            if (typeof window !== 'undefined' && window.__trc && (tu.bx || tu.bz || tu.byaw)) { window.__trc.chainEv = (window.__trc.chainEv || 0) + 1; window.__trc.chainMax = Math.max(window.__trc.chainMax || 0, Math.hypot(tu.bx, tu.bz)); const CL = window.__trc.chainLog = window.__trc.chainLog || []; if (CL.length < 400) CL.push({ k: window.__stepK || 0, i, m: +Math.hypot(tu.bx, tu.bz).toFixed(2), preX: +(drawnX).toFixed(3), preZ: +(drawnZ).toFixed(3), preYaw: +(drawnYaw).toFixed(4) }); } // DEBUG strip
             const prevYaw = drawnYaw;
             tu.seg = nxt.seg;
             tu.dir = nxt.dir;
@@ -1194,7 +1194,7 @@ export function createTraffic({
       }
       // impact state owns the unit's displacement: cancel any transition blend so the
       // collision sweep's lane-space tests and the rendered/knocked position never diverge
-      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0 || tu.wreck) { if (tu.bx || tu.bz || tu.byaw) { if (typeof window !== 'undefined' && window.__trc) { window.__trc.foldEv = (window.__trc.foldEv || 0) + 1; const fm = Math.hypot(tu.bx, tu.bz); window.__trc.foldMax = Math.max(window.__trc.foldMax || 0, fm); } tu.ox = (tu.ox || 0) + tu.bx; tu.oz = (tu.oz || 0) + tu.bz; tu.oyaw = (tu.oyaw || 0) + (tu.byaw || 0); tu.bx = 0; tu.bz = 0; tu.byaw = 0; } }
+      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0 || tu.wreck) { if (tu.bx || tu.bz || tu.byaw) { if (typeof window !== 'undefined' && window.__trc) { window.__trc.foldEv = (window.__trc.foldEv || 0) + 1; const fm = Math.hypot(tu.bx, tu.bz); window.__trc.foldMax = Math.max(window.__trc.foldMax || 0, fm); const FL = window.__trc.foldLog = window.__trc.foldLog || []; if (FL.length < 400) FL.push({ k: window.__stepK || 0, i, m: +fm.toFixed(2), preX: +(pos.x + (tu.ox || 0) + (tu.kx || 0) + tu.bx).toFixed(3), preZ: +(pos.z + (tu.oz || 0) + (tu.kz || 0) + tu.bz).toFixed(3), preYaw: +(pos.yaw + (tu.oyaw || 0) + (tu.ks || 0) + (tu.byaw || 0)).toFixed(4) }); } tu.ox = (tu.ox || 0) + tu.bx; tu.oz = (tu.oz || 0) + tu.bz; tu.oyaw = (tu.oyaw || 0) + (tu.byaw || 0); tu.bx = 0; tu.bz = 0; tu.byaw = 0; } }
       if (tu.bx || tu.bz) { const bl = Math.hypot(tu.bx, tu.bz), dd = 6.5 * safeDt; if (bl <= dd) { tu.bx = 0; tu.bz = 0; } else { tu.bx *= (bl - dd) / bl; tu.bz *= (bl - dd) / bl; } }
       if (tu.byaw) { const ay = Math.abs(tu.byaw), dy2 = 2.2 * safeDt; tu.byaw = ay <= dy2 ? 0 : tu.byaw * (ay - dy2) / ay; }
       tu.x = pos.x + (tu.ox || 0) + (tu.kx || 0) + (tu.bx || 0);
