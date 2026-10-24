@@ -842,16 +842,6 @@ export function createTraffic({
   function pickRoadPlacement(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal) {
     const r = pickRoadPlacementRaw(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal, false);
     const used = r.score > -1e8 ? r : pickRoadPlacementRaw(px, pz, hx, hz, minDist, maxDist, biasAhead, seedVal + 31.7, true);
-    if (typeof window !== 'undefined') { // DEBUG: pop-in investigation (strip before preview)
-      const L = window.__pickLog = window.__pickLog || [];
-      window.__pickN=(window.__pickN||0)+1;
-      if (true) {
-        const cx = used.seg.x1 + used.seg.ux * used.seg.len * used.t, cz = used.seg.z1 + used.seg.uz * used.seg.len * used.t;
-        const dx = cx - px, dz = cz - pz, dd = Math.hypot(dx, dz) || 1;
-        const BAD = dd2 => dd2 <= 350 && (dx * hx + dz * hz) / dd2 > 0.5;
-        const ent = { n: window.__pickN, band: minDist + '-' + maxDist, d: +dd.toFixed(0), dot: +((dx * hx + dz * hz) / dd).toFixed(2), fb: used !== r ? 1 : 0 }; if (BAD(dd)) ent.bad = 1; if (ent.bad || window.__pickN % 25 === 0) L.push(ent); if (L.length > 200) L.splice(0, L.length - 200);
-      }
-    }
     return used;
   }
 
@@ -1089,12 +1079,11 @@ export function createTraffic({
         const nxt = next && !(next.seg.oneway && next.dir !== 1) ? next : null;
         let jumpOk = !!nxt; let jumpD = -1; let gapLon = 0;
         if (nxt) { const cp = computeLanePos(tu.seg, T.MathUtils.clamp(tu.t, 0, 1), tu.dir); const np2 = computeLanePos(nxt.seg, nxt.dir === 1 ? 0 : 1, nxt.dir); const dxj = np2.x - cp.x, dzj = np2.z - cp.z; gapLon = dxj * fUx + dzj * fUz; const gapLat = -dxj * fUz + dzj * fUx; jumpD = Math.hypot(dxj, dzj); if (Math.abs(gapLat) > 3.5 || gapLon < -2 || gapLon > 18) jumpOk = false; }
-        if (typeof window !== 'undefined') { const W = window.__trc = window.__trc || { trans: 0, failNext: 0, failJump: 0, held: 0, recycled: 0, log: [] }; if (nxt && jumpOk) W.trans++; else { if (!nxt) W.failNext++; else W.failJump++; if (W.log.length < 24) W.log.push({ seg: tu.seg.name, t: +tu.t.toFixed(3), dir: tu.dir, ow: tu.seg.oneway ? 1 : 0, nxt: nxt ? nxt.seg.name : null, jumpD: +jumpD.toFixed(2), exit: [ +exitX.toFixed(1), +exitZ.toFixed(1) ] }); } }
         if (nxt && jumpOk) {
           const entryGap = Math.max(0.5, Math.min(gapLon, nxt.seg.len * 0.9));
           tu.seg = nxt.seg;
           tu.dir = nxt.dir;
-          tu.__site = 'trans';
+         
           // entry must land OUTSIDE the 0.03/0.97 boundary window or the unit instantly re-triggers the transition and one-ways forceRecycle-freeze at the entry point
           tu.t = nxt.dir === 1 ? T.MathUtils.clamp(entryGap / nxt.seg.len, 0.05, 0.94) : T.MathUtils.clamp(1 - entryGap / nxt.seg.len, 0.06, 0.95);
         } else if (tu.seg.oneway) {
@@ -1112,27 +1101,24 @@ export function createTraffic({
       const dz = pos.z - player.z;
       const dist = Math.hypot(dx, dz);
       const wantsRecycle = forceRecycle || dist > 320 || (solidFn && solidFn(pos.x, pos.z));
-      if (typeof window !== 'undefined' && wantsRecycle) { window.__trc = window.__trc || { trans:0,failNext:0,failJump:0,held:0,recycled:0,log:[] }; if (dist <= 200 && tu.lastSeg) window.__trc.held++; else window.__trc.recycled++; }
       if (wantsRecycle && dist <= 200 && tu.lastSeg) {
         // never pop a vehicle in or out where the player can see it: hold at the last good spot until the player is far
-        tu.__held = (tu.__held || 0) + 1; tu.__why = forceRecycle ? 'force' : (dist > 320 ? 'dist' : 'solid');
-        tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir; tu.__site = 'hold';
+
+        tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.speed = 0; tu.dir = tu.lastDir;
         pos = computeLanePos(tu.seg, tu.t, tu.dir);
       } else if (wantsRecycle) {
         const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 210, 300, true, i + tu.t * 100);
         const cand = computeLanePos(picked.seg, picked.t, picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1));
         if (Math.hypot(cand.x - player.x, cand.z - player.z) >= 190) {
-          tu.seg = picked.seg; tu.__site = 'pick';
+          tu.seg = picked.seg;
           tu.t = picked.t;
           tu.dir = picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1);
           tu.speed = tu.maxSpeed * 0.8;
-          if (typeof window !== 'undefined') { const R = window.__rcLog = window.__rcLog || []; if (R.length < 300) R.push({ i, d: +Math.hypot(cand.x - player.x, cand.z - player.z).toFixed(0) }); } // DEBUG strip
           tu.ox = tu.oz = tu.oyaw = 0;
           pos = computeLanePos(tu.seg, tu.t, tu.dir);
-        } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; tu.__site = 'revert'; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
+        } else if (tu.lastSeg) { tu.seg = tu.lastSeg; tu.t = tu.lastT; tu.dir = tu.lastDir; tu.speed = 0; pos = computeLanePos(tu.seg, tu.t, tu.dir); }
       }
 
-      if (typeof window !== 'undefined' && typeof tu.x === 'number') { const J = window.__jumpLog = window.__jumpLog || []; const jdx = pos.x - tu.x, jdz = pos.z - tu.z; if (Math.hypot(jdx, jdz) > 40 && J.length < 200) J.push({ i, site: tu.__site || 'none', tseg: tu.seg && tu.seg.name || '', from: [+tu.x.toFixed(0), +tu.z.toFixed(0)], to: [+pos.x.toFixed(0), +pos.z.toFixed(0)] }); } // DEBUG strip
       tu.lastSeg = tu.seg; tu.lastT = tu.t; tu.lastDir = tu.dir;
       // impact kick: damped spring, quick hop, spin decay. The offset is steadily
       // baked into a persistent displacement (ox/oz/oyaw) so a struck vehicle
@@ -1489,7 +1475,6 @@ export function createParkedVehicles({
 
   const instancedSpots = [];
   const activeParked = new Set();
-  if (typeof window !== 'undefined') window.__parkedSpots = () => instancedSpots.map(sp => ({ x: +sp.x.toFixed(1), z: +sp.z.toFixed(1), type: sp.type, yaw: +sp.yaw.toFixed(2) }));
 
   // Initial populate
   refreshStreaming(true);

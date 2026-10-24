@@ -607,7 +607,6 @@ function step(dt, now) {
       const nx = auto.x + Math.sin(auto.a) * d * sgn, nz = auto.z + Math.cos(auto.a) * d * sgn;
       if (!hit(nx, nz)) { auto.x = nx; auto.z = nz; auto.v = 0; freed = true; break; }
     }
-    const pr = window.__placeOnRoad ? window.__placeOnRoad(auto.x, auto.z) : null;
     if (!skipSnap && pr && Math.hypot(pr.x - auto.x, pr.z - auto.z) < 14 && !hit(pr.x, pr.z)) {
       // nudge to the road lane and line up with the road so throttle drives along it, never back into the wall
       const d1 = Math.abs(Math.atan2(Math.sin(pr.a - auto.a), Math.cos(pr.a - auto.a)));
@@ -956,7 +955,7 @@ try {
     if (camRig) camRig.update(0.016, true); else syncCamera(0.016, true);
     clampCam();
   }
-  window.__renderer = renderer; window.__scene = scene; window.__step = step; window.__pick = (nx, ny) => { const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(nx, ny), camera); return rc.intersectObjects(scene.children, true).slice(0, 6).map(h => ({ d: +h.distance.toFixed(1), pt: [+h.point.x.toFixed(1), +h.point.y.toFixed(1), +h.point.z.toFixed(1)], type: h.object.type, geo: h.object.geometry && h.object.geometry.type, inst: h.instanceId ?? null, mat: h.object.material && h.object.material.color ? h.object.material.color.getHexString() : (h.object.material && h.object.material.type) || '' })); }; window.__inDivider = inDivider; window.__spawnAt = spawnAt; Object.defineProperty(window, '__peds', { get: () => crowd && crowd.peds }); window.__placeOnRoad = placeOnRoad; window.__traffic = () => traffic; window.__solid = solid;
+  window.__renderer = renderer; window.__scene = scene; window.__step = step;
   spawnAt(stops[0].p.x, stops[0].p.z, Math.PI);
   auto.v = 0;
   auto.steer = 0;
