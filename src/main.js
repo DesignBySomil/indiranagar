@@ -47,10 +47,34 @@ function resize() {
   if(ao&&ao.setSize)ao.setSize(w,h);
   camera.aspect=w/h;camera.updateProjectionMatrix();
 }
-let resizeFrame=0;
-function queueResize(){cancelAnimationFrame(resizeFrame);resizeFrame=requestAnimationFrame(resize);}
+let resizeFrame=0, bootReady=false, rotationPending=false, rotationRevision=0, rotationRendered=-1, rotationApplied=-1;
+let rotationError=false, contextLost=false;
+const rotationLoad=document.createElement('div');rotationLoad.id='rotation-load';
+rotationLoad.setAttribute('role','status');rotationLoad.setAttribute('aria-live','polite');
+rotationLoad.innerHTML='<div><span class="rotation-spinner" aria-hidden="true"></span><h2>Getting the game ready</h2><p>Adjusting the view for your screen...</p><button type="button" hidden>Try again</button></div>';
+document.body.appendChild(rotationLoad);
+function showRotationLoading(error=false){
+  rotationPending=true;rotationError=error;rotationRendered=-1;rotationRevision++;
+  rotationLoad.classList.add('on');
+  rotationLoad.querySelector('h2').textContent=error?'The view could not finish loading':'Getting the game ready';
+  rotationLoad.querySelector('p').textContent=contextLost?'Waiting for graphics to reconnect...':error?'Tap Try again to reload the view.':'Adjusting the view for your screen...';
+  rotationLoad.querySelector('button').hidden=!error;
+  rotationLoad.classList.toggle('error',error);
+  if(bootReady)releaseAllInput();
+}
+function queueResize(){
+  if(bootReady&&matchMedia('(pointer:coarse)').matches){showRotationLoading(contextLost);}
+  cancelAnimationFrame(resizeFrame);
+  // Leave a paint opportunity for the loading state before reallocating targets.
+  resizeFrame=requestAnimationFrame(()=>{resizeFrame=requestAnimationFrame(()=>{
+    try{resize();rotationApplied=rotationRevision;}catch(e){showRotationLoading(true);console.error(e);}
+  });});
+}
+rotationLoad.querySelector('button').addEventListener('click',()=>{if(contextLost){location.reload();return;}showRotationLoading();queueResize();});
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;if(bootReady)showRotationLoading(true);});
+canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;queueResize();});
 addEventListener('resize',queueResize);
-addEventListener('orientationchange',()=>{queueResize();setTimeout(queueResize,250);});
+addEventListener('orientationchange',queueResize);
 window.visualViewport?.addEventListener('resize',queueResize);
 resize();
 
@@ -768,8 +792,19 @@ function step(dt, now, sliced = false) {
 function loop(now) {
   const dt = Math.min(window.__dtCap || 0.05, (now - last) / 1000);
   last = now;
-  try { if (started && !window.__paused && !(matchMedia('(pointer:coarse)').matches&&innerHeight>innerWidth)) step(dt, now); } catch (e) { if (!window.__stepErr) { window.__stepErr = String(e && e.stack || e); console.error(e); } }
-  try { if (!window.__noRender && !(matchMedia('(pointer:coarse)').matches&&innerHeight>innerWidth)) post.render(dt); } catch (e) { if (!window.__renderErr) { window.__renderErr = String(e); console.error(e); } }
+  try { if (started && !rotationPending && !window.__paused && !(matchMedia('(pointer:coarse)').matches&&innerHeight>innerWidth)) step(dt, now); } catch (e) { if (!window.__stepErr) { window.__stepErr = String(e && e.stack || e); console.error(e); } }
+  try {
+    if (!window.__noRender && !contextLost && !rotationError && (!rotationPending||rotationApplied===rotationRevision) && !(matchMedia('(pointer:coarse)').matches&&innerHeight>innerWidth)) {
+      post.render(dt);
+      if(rotationPending && rotationRendered!==rotationRevision){
+        const revision=rotationRevision;rotationRendered=revision;
+        requestAnimationFrame(()=>{
+          // Only a completed render of the latest viewport can release the cover.
+          if(rotationPending&&!rotationError&&!contextLost&&revision===rotationRevision){rotationPending=false;rotationLoad.classList.remove('on');}
+        });
+      }
+    }
+  } catch (e) { showRotationLoading(true);if (!window.__renderErr) { window.__renderErr = String(e); console.error(e); } }
   requestAnimationFrame(loop);
 }
 
@@ -1037,6 +1072,8 @@ try {
 
   applyTime(state.hour);
   post.setNight(nightUniform.value);
+  bootReady=true;
+  if(matchMedia('(pointer:coarse)').matches)queueResize();
   setLoad(100, 'Ready');
   $('loader').classList.add('off');
   $('start').classList.add('on');
