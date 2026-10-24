@@ -119,6 +119,14 @@ export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene
 
   const m4 = new T.Matrix4(), q4 = new T.Quaternion(), v3 = new T.Vector3(), s3 = new T.Vector3(1, 1, 1);
 
+  // Static road broad phase for facade edge tests. Exact 22m distance test stays unchanged.
+  const facadeRoadCells=new Map();
+  for(const seg of roadSegs){
+    const rx1=seg.x1??seg[0],rz1=seg.z1??seg[1],rx2=seg.x2??seg[2],rz2=seg.z2??seg[3];
+    for(let ix=Math.floor((Math.min(rx1,rx2)-22)/32);ix<=Math.floor((Math.max(rx1,rx2)+22)/32);ix++)for(let iz=Math.floor((Math.min(rz1,rz2)-22)/32);iz<=Math.floor((Math.max(rz1,rz2)+22)/32);iz++){
+      const key=ix+','+iz;let cell=facadeRoadCells.get(key);if(!cell)facadeRoadCells.set(key,cell=[]);cell.push(seg);
+    }
+  }
   function rebuildDecorations(px, pz) {
     let bCount = 0, aCount = 0, cCount = 0, tCount = 0, cornCount = 0;
     const sgC = new Array(NSIGN).fill(0); let shC = 0;
@@ -160,8 +168,9 @@ export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene
 
         // Check proximity to any road segment (within 22m)
         let nearRoad = false;
-        for (let k = 0; k < roadSegs.length; k++) {
-          const s = roadSegs[k];
+        const nearbyRoads=facadeRoadCells.get(Math.floor(mx/32)+','+Math.floor(mz/32))||[];
+        for (let k = 0; k < nearbyRoads.length; k++) {
+          const s = nearbyRoads[k];
           const rx1 = s.x1 ?? s[0], rz1 = s.z1 ?? s[1], rx2 = s.x2 ?? s[2], rz2 = s.z2 ?? s[3];
           const rdx = rx2 - rx1, rdz = rz2 - rz1;
           const rL2 = rdx * rdx + rdz * rdz || 1;
