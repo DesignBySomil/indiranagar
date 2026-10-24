@@ -1006,11 +1006,12 @@ try {
         const pl = (crowd && crowd.peds) || [];
         const k = pl.find(p => p.tkey === 'kurta') || pl[0];
         if (k) {
-          auto.x = k.x - Math.sin(k.yaw) * 3.5;
-          auto.z = k.z - Math.cos(k.yaw) * 3.5;
+          let dx = k.x - auto.x, dz = k.z - auto.z;
+          const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
+          auto.x = k.x - dx * 4.0; auto.z = k.z - dz * 4.0;
           if ('vx' in auto) auto.vx = 0; if ('vz' in auto) auto.vz = 0;
           if ('v' in auto) auto.v = 0; if ('speed' in auto) auto.speed = 0;
-          auto.heading = k.yaw;
+          auto.heading = Math.atan2(dx, dz);
         }
       } catch (e) {}
     }, 400);
