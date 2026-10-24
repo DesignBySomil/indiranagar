@@ -513,7 +513,8 @@ function step(dt, now, sliced = false) {
   str = input.str;
 
   const max = 17;
-  auto.v += (thr * (thr > 0 ? 9.5 : 12.5) - (thr === 0 ? auto.v * 0.63 : 0)) * dt;
+  const driveAccel = thr > 0 ? 9.5 * Math.max(0, 1 - Math.pow(Math.max(0, auto.v) / 26, 4)) : 12.5;
+  auto.v += (thr * driveAccel - (thr === 0 ? auto.v * 0.63 : 0)) * dt;
   auto.v = Math.max(-6, auto.v);
   const preV = auto.v;
   auto.steer += (str - auto.steer) * Math.min(1, dt * 8.5);
@@ -1015,18 +1016,28 @@ try {
   $('start').classList.add('on');
   requestAnimationFrame(loop);
 
+  // Disabled categories have no simulation, collision, avoidance or impact interactions.
+  for (const entity of [traffic, parkedVehicles, crowd, hazards]) {
+    if (!entity) continue;
+    entity.enabled = true;
+    for (const key of ['solid','kickAt','overlaps','update']) {
+      const original = entity[key];
+      if (typeof original !== 'function') continue;
+      entity[key] = (...args) => entity.enabled ? original(...args) : (key === 'update' ? 0 : false);
+    }
+  }
   (function togglesPanel() {
     const items = [
-      ['Traffic', () => traffic && traffic.group], ['Pedestrians', () => crowd && crowd.group], ['Parked vehicles', () => parkedVehicles && parkedVehicles.group],
-      ['Trees', () => trees && trees.group], ['Potholes and puddles', () => hazards && hazards.group]
+      ['Traffic', () => traffic && traffic.group, traffic], ['Pedestrians', () => crowd && crowd.group, crowd], ['Parked vehicles', () => parkedVehicles && parkedVehicles.group, parkedVehicles],
+      ['Trees', () => trees && trees.group, trees], ['Potholes and puddles', () => hazards && hazards.group, hazards]
     ];
     const box = document.createElement('div'); box.id = 'toggles';
     box.innerHTML = '<button id="tgbtn">Settings</button><div id="tgpanel"></div>';
     document.body.appendChild(box);
     const panel = box.querySelector('#tgpanel');
-    for (const [name, get] of items) {
+    for (const [name, get, entity] of items) {
       const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.checked = true;
-      c.addEventListener('change', () => { const o = get(); if (o) o.visible = c.checked; });
+      c.addEventListener('change', () => { const o = get(); if (o) o.visible = c.checked; if(entity)entity.enabled=c.checked; if(name==='Traffic' && life?.setTrafficEnabled)life.setTrafficEnabled(c.checked); });
       l.append(c, ' ' + name); panel.appendChild(l);
     }
     const nl = document.createElement('label'); const nc = document.createElement('input'); nc.type = 'checkbox';

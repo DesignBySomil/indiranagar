@@ -1,4 +1,4 @@
-// Potholes (dark patches, felt as a bump) and localised puddles (matte, splash, slow the auto).
+// Potholes give a camera bump; puddles splash with light, continuous rolling resistance.
 export function createHazards({ THREE: T, scene, roadSegs, solidFn = () => 0 }) {
   const group = new T.Group();
   let seed = 1337;
@@ -41,10 +41,11 @@ export function createHazards({ THREE: T, scene, roadSegs, solidFn = () => 0 }) 
     let pi = -1, ui = -1;
     for (let i = 0; i < potholes.length; i++) { const p = potholes[i]; const dx = auto.x - p.x, dz = auto.z - p.z; if (dx * dx + dz * dz < (p.r + 0.7) * (p.r + 0.7)) { pi = i; break; } }
     for (let i = 0; i < puddles.length; i++) { const p = puddles[i]; const dx = auto.x - p.x, dz = auto.z - p.z; if (dx * dx + dz * dz < (p.r + 0.5) * (p.r + 0.5)) { ui = i; break; } }
-    if (pi >= 0 && pi !== lastPot && Math.abs(auto.v) > 1.5) { auto.v *= 0.72; shake = 0.35; }
+    if (pi >= 0 && pi !== lastPot && Math.abs(auto.v) > 1.5) { shake = 0.22; }
     lastPot = pi;
     if (ui >= 0) {
-      auto.v *= Math.pow(0.2, dt);
+      // Fixed, mild resistance instead of multiplicative brake-jabs on every frame.
+      auto.v -= Math.sign(auto.v) * Math.min(Math.abs(auto.v), 0.35 * dt);
       if (ui !== lastPud && Math.abs(auto.v) > 1.5) {
         splashT = 0.8; splash.visible = true;
         for (let i = 0; i < N; i++) { pos[i * 3] = auto.x; pos[i * 3 + 1] = 0.2; pos[i * 3 + 2] = auto.z; vel[i].set((Math.random() - 0.5) * 4, 1.5 + Math.random() * 2.5, (Math.random() - 0.5) * 4); }

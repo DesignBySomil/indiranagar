@@ -589,6 +589,11 @@ export function createStreetLife({
     safeUI.toast(`Auto Lafda! "${line}"`);
   }
 
+  let trafficEnabled = true;
+  function setTrafficEnabled(enabled) {
+    trafficEnabled = Boolean(enabled);
+    for (const ent of [...npcAutos,...trafficUnits]) ent.mesh.visible = trafficEnabled;
+  }
   function onHorn() {
     stats.honks++;
     ensureAudio();
@@ -601,7 +606,7 @@ export function createStreetLife({
       safeUI.fare(`Bargain Won! Total Fare: Rs.${stats.fare}`);
     }
 
-    for (const na of npcAutos) {
+    for (const na of (trafficEnabled ? npcAutos : [])) {
       if (Math.hypot(na.x - auto.x, na.z - auto.z) < 15 && na.cooldown <= 0) {
         triggerArgument(na, 'Hey, why are you honking?! Stay in the left lane!');
         break;
@@ -695,8 +700,8 @@ export function createStreetLife({
     };
     scan(vendorCarts, 'cart');
     scan(cows, 'cow');
-    scan(npcAutos, 'auto');
-    scan(trafficUnits, 'traffic');
+    if (trafficEnabled) scan(npcAutos, 'auto');
+    if (trafficEnabled) scan(trafficUnits, 'traffic');
 
     if (!best || (best.cool && best.cool > 0)) return false;
 
@@ -807,7 +812,7 @@ export function createStreetLife({
       if (vc.sliding) continue;
       if (Math.hypot(x - vc.x, z - vc.z) < (vc.radius || 1.15)) return true;
     }
-    for (let i = 0; i < npcAutos.length; i++) {
+    for (let i = 0; i < (trafficEnabled ? npcAutos.length : 0); i++) {
       const na = npcAutos[i];
       if (na.sliding) continue;
       if (Math.hypot(x - na.x, z - na.z) < 1.35) {
@@ -815,7 +820,7 @@ export function createStreetLife({
         return true;
       }
     }
-    for (let i = 0; i < trafficUnits.length; i++) {
+    for (let i = 0; i < (trafficEnabled ? trafficUnits.length : 0); i++) {
       const tu = trafficUnits[i];
       if (tu.sliding) continue;
       if (Math.hypot(x - tu.x, z - tu.z) < tu.radius * 0.72) return true;
@@ -858,7 +863,7 @@ export function createStreetLife({
     clock += dt;
 
     // 1. Update 14 Detailed AI Autos (Left-hand drive, LOD switching, speed-breaker slowdowns, rare overtaking)
-    for (let i = 0; i < npcAutos.length; i++) {
+    for (let i = 0; i < (trafficEnabled ? npcAutos.length : 0); i++) {
       const na = npcAutos[i];
       if (na.cooldown > 0) na.cooldown -= dt;
       if (stepKnockedLifeEntity(na, dt, playerAuto, true)) continue;
@@ -928,7 +933,7 @@ export function createStreetLife({
     }
 
     // 2. Update BMTC Buses, Cars, Bikes & Yulu Riders on Left Lane
-    for (let i = 0; i < trafficUnits.length; i++) {
+    for (let i = 0; i < (trafficEnabled ? trafficUnits.length : 0); i++) {
       const tu = trafficUnits[i];
       if (stepKnockedLifeEntity(tu, dt, playerAuto, true)) continue;
       const seg = navSegs[tu.segIdx];
@@ -1033,6 +1038,7 @@ export function createStreetLife({
     onHorn,
     solid: checkNpcSolid,
     kickAt,
+    setTrafficEnabled,
     vendorCarts,
     cows,
     npcAutos,

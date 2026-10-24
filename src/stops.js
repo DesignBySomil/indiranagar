@@ -73,29 +73,36 @@ export const STOPS_CSS = `
 }
 #passport-modal.on { display: flex; }
 .pp-box {
-  background: #fdf6e3; color: #1e293b; width: min(760px, 95vw); max-height: 86vh;
-  border-radius: 20px; border: 4px solid #78350f; padding: 22px; overflow-y: auto;
+  background: rgba(17,23,27,.9); color: #edf1f3; backdrop-filter: blur(24px); width: min(760px, 95vw); max-height: 86vh;
+  border-radius: 24px; border: 1px solid rgba(220,235,242,.25); padding: 22px; overflow-y: auto;
   box-shadow: 0 25px 60px rgba(0,0,0,0.75);
 }
-.pp-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px dashed #b45309; padding-bottom: 12px; }
+.pp-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(220,235,242,.2); gap:16px; padding-bottom: 12px; }
 .pp-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 14px; margin-top: 16px;
 }
 .pp-stamp {
-  border: 2px dashed #cbd5e1; border-radius: 14px; padding: 12px; min-height: 105px;
+  border: 1px dashed rgba(190,207,215,.35); border-radius: 14px; padding: 12px; min-height: 105px;
   display: flex; flex-direction: column; justify-content: space-between;
-  background: rgba(255,255,255,0.55); position: relative;
+  background: rgba(255,255,255,.035); position: relative;
 }
 .pp-stamp.stamped {
-  border: 3px solid var(--ink, #b91c1c); background: #fffbeb;
+  border: 2px solid var(--ink, #f59e0b); background: rgba(255,255,255,.09);
   box-shadow: inset 0 0 0 2px rgba(185,28,28,0.12);
 }
 .pp-ink {
   font-weight: 900; font-size: 14px; color: var(--ink, #b91c1c);
   text-transform: uppercase; letter-spacing: 0.03em;
 }
-.pp-meta { font-size: 11px; color: #64748b; font-weight: 600; }
+.pp-meta { font-size: 11px; color: #b8c4cb; font-weight: 600; }
+#passport-modal .pp-top>div>div:first-child{color:#a6b5bc!important;font-size:10px!important;letter-spacing:2px!important}
+#passport-modal .pp-top>div>div:nth-child(2){font-size:22px!important;line-height:1.15;margin-top:5px}
+#passport-modal .pp-box>.pp-top+div{color:#bcc9cf!important;gap:12px;flex-wrap:wrap;font-size:12px!important}
+#passport-modal #btn-pp-close{background:rgba(255,255,255,.1);color:#f1f4f5;border:1px solid #56636a;white-space:nowrap}
+#passport-modal .pp-stamp{transform:none!important;gap:10px;min-width:0}
+#passport-modal .pp-ink{font-size:13px;line-height:1.25;filter:brightness(1.3)}
+@media(max-width:520px){#passport-modal{padding:10px}.pp-box{width:100%;padding:15px;max-height:94vh;border-radius:18px}.pp-top{align-items:flex-start;gap:8px}#passport-modal .pp-top>div>div:nth-child(2){font-size:18px!important}.pp-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.pp-stamp{padding:10px;min-height:112px}#passport-modal .pp-ink{font-size:11px}.pp-meta{font-size:10px}#btn-pp-close{font-size:10px;padding:6px 8px}}
 #polaroid-modal {
   position: fixed; inset: 0; background: rgba(255,255,255,0.92); z-index: 90;
   display: none; align-items: center; justify-content: center;
