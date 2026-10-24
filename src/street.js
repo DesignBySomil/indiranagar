@@ -195,7 +195,25 @@ export function prepareRoadCorridors(world) {
   };
 
   // Test if polygon ring (either its edges or its interior) encroaches within `pad` of segment `s`
+  const ringBounds = new WeakMap();
   const ringHitsSeg = (ring, s, pad) => {
+    let bounds = ringBounds.get(ring);
+    if (!bounds) {
+      let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+      for (const p of ring) {
+        minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]);
+        minZ = Math.min(minZ, p[1]); maxZ = Math.max(maxZ, p[1]);
+      }
+      bounds = { minX, minZ, maxX, maxZ };
+      ringBounds.set(ring, bounds);
+    }
+    // Neither edge samples nor segment-interior samples can hit disjoint bounds.
+    // Keep a tiny conservative slack at the boundary; exact tests follow below.
+    const margin = pad + 1e-6;
+    if (bounds.maxX < Math.min(s.x1, s.x1+s.dx)-margin ||
+        bounds.minX > Math.max(s.x1, s.x1+s.dx)+margin ||
+        bounds.maxZ < Math.min(s.z1, s.z1+s.dz)-margin ||
+        bounds.minZ > Math.max(s.z1, s.z1+s.dz)+margin) return false;
     const len = ring.length;
     for (let i = 0; i < len; i++) {
       const a = ring[i], b = ring[(i + 1) % len];
