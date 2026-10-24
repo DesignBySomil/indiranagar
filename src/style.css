@@ -11,7 +11,7 @@ html,body{height:100%;background:#14181c;color:#f1f4f8;font-family:'Bricolage Gr
 #street{position:absolute;left:20px;top:18px}
 #street small{display:block;font:10px 'DM Mono',monospace;letter-spacing:.14em;color:#8b95a1}
 #street b{font-size:22px;letter-spacing:-.01em;font-weight:600}
-#score{position:absolute;right:20px;top:18px;text-align:right;font:13px 'DM Mono',monospace;color:#8b95a1}
+#score{position:absolute;right:20px;top:18px;text-align:right;font:13px 'DM Mono',monospace;color:#c3ccd6;background:rgba(20,24,30,.55);backdrop-filter:blur(14px);padding:6px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14)}
 #score b{font:700 30px 'Bricolage Grotesque';color:#38e07b;margin-right:4px}
 #mini{position:absolute;left:20px;bottom:20px;width:150px;height:150px;border-radius:50%;border:1px solid #3a434d;background:#14181cdd}
 #clock{position:absolute;right:20px;bottom:20px;font:13px 'DM Mono',monospace;color:#8b95a1}
@@ -41,6 +41,6 @@ html,body{height:100%;background:#14181c;color:#f1f4f8;font-family:'Bricolage Gr
 #tgpanel{display:none;margin-top:8px;padding:12px 14px;border-radius:16px;background:rgba(20,24,30,.6);backdrop-filter:blur(18px) saturate(1.3);border:1px solid rgba(255,255,255,.16);flex-direction:column;gap:8px;font-size:13px}
 #toggles.open #tgpanel{display:flex}
 #tgpanel label{display:flex;gap:8px;align-items:center;cursor:pointer}
-@media (max-width:520px){#score{top:118px}#street{max-width:calc(100vw - 170px)}#street b{font-size:16px;line-height:1.2;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+@media (max-width:520px){#score{top:118px}#mini{width:104px;height:104px}#street{max-width:calc(100vw - 170px)}#street b{font-size:16px;line-height:1.2;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 
 .osmcredit{color:#8b95a1;font:11px/1.4 "Bricolage Grotesque",sans-serif;text-align:center}.osmcredit a{color:#8b95a1}
