@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createWallMaterial, makeSign, makeEmissiveSignMaterial } from './materials.js';
+import { buildBuilding as gemBuildBuilding, BUILDING_STYLES as GEM_STYLES } from './gembldgs.js';
 
 const hash = (x, z) => {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -72,6 +73,61 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     return { dist: bestD, yaw: bestYaw, rx: bestRoadX, rz: bestRoadZ, k: bestK };
   }
 
+  // --- gembldgs pilot: 100 Feet Road only ---
+  const pilotSegs = [];
+  for (const r of world.roads) {
+    if (r.n && r.n.includes('100 Feet')) {
+      for (let i = 0; i < r.p.length - 1; i++) pilotSegs.push([r.p[i][0], r.p[i][1], r.p[i + 1][0], r.p[i + 1][1]]);
+    }
+  }
+  function distToPilot(x, z) {
+    let best = 999;
+    for (const s of pilotSegs) {
+      const dx = s[2] - s[0], dz = s[3] - s[1];
+      const L2 = dx * dx + dz * dz || 1;
+      const t = THREE.MathUtils.clamp(((x - s[0]) * dx + (z - s[1]) * dz) / L2, 0, 1);
+      best = Math.min(best, Math.hypot(x - (s[0] + dx * t), z - (s[1] + dz * t)));
+    }
+    return best;
+  }
+  function inPolyPilot(px, pz, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i][0], zi = poly[i][1], xj = poly[j][0], zj = poly[j][1];
+      if (((zi > pz) !== (zj > pz)) && (px < (xj - xi) * (pz - zi) / (zj - zi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+  // Largest facade-aligned rect inside the actual (possibly concave/rotated) polygon, or null.
+  function fitRectInPoly(pts, cx, cz, yaw) {
+    const cs = Math.cos(-yaw), sn = Math.sin(-yaw);
+    const rp = pts.map(p => [cx + (p[0] - cx) * cs - (p[1] - cz) * sn, cz + (p[0] - cx) * sn + (p[1] - cz) * cs]);
+    let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
+    for (const p of rp) { minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]); minZ = Math.min(minZ, p[1]); maxZ = Math.max(maxZ, p[1]); }
+    const csB = Math.cos(yaw), snB = Math.sin(yaw);
+    for (let margin = 0.6; margin <= 3.0; margin += 0.6) {
+      const w = (maxX - minX) - 2 * margin, d = (maxZ - minZ) - 2 * margin;
+      if (w < 7 || d < 7) return null;
+      const rx = (minX + maxX) / 2, rz = (minZ + maxZ) / 2;
+      // rect corners + edge midpoints in the rotated frame, rotated BACK to world, tested against the real polygon
+      let ok = true;
+      for (let i = -1; i <= 1 && ok; i++) for (let j = -1; j <= 1 && ok; j++) {
+        if (i === 0 && j === 0) continue;
+        const lx = rx + i * w / 2, lz = rz + j * d / 2;
+        const wx = cx + (lx - cx) * csB - (lz - cz) * snB;
+        const wz = cz + (lx - cx) * snB + (lz - cz) * csB;
+        if (!inPolyPilot(wx, wz, pts)) ok = false;
+      }
+      if (ok) {
+        const wcx = cx + (rx - cx) * csB - (rz - cz) * snB;
+        const wcz = cz + (rx - cx) * snB + (rz - cz) * csB;
+        return { x: wcx, z: wcz, w, d };
+      }
+    }
+    return null;
+  }
+  let pilotPlaced = 0, pilotSkipped = 0;
+
   for (const b of world.buildings) {
     const pts = b.p.slice(0, -1);
     if (pts.length < 3) continue;
@@ -111,6 +167,21 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     }
     const h = b.h ? Math.max(6.8, b.h) : floors * 3.3;
 
+    // gembldgs pilot: 100 Feet Road corridor, <=4 floors only, must fit inside the real polygon
+    if (floors <= 4 && distToPilot(cx, cz) < 30) {
+      const comm0 = nearestCommRoad(cx, cz);
+      const fit = fitRectInPoly(pts, cx, cz, comm0.yaw);
+      if (fit) {
+        const seed = Math.abs(Math.floor(cx * 73856093 ^ cz * 19349663)) % 100000;
+        const gb = gemBuildBuilding(GEM_STYLES[seed % GEM_STYLES.length], { seed, width: +fit.w.toFixed(2), depth: +fit.d.toFixed(2), floors });
+        gb.position.set(fit.x, 0, fit.z);
+        gb.rotation.y = comm0.yaw;
+        scene.add(gb);
+        pilotPlaced++;
+        continue;
+      }
+      pilotSkipped++;
+    }
     const shape = new THREE.Shape(pts.map(p => new THREE.Vector2(p[0], -p[1])));
     let g;
     try {
@@ -398,5 +469,6 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     return i < 0 || j < 0 || i >= OCC.n || j >= OCC.n ? 1 : occ[j * OCC.n + i];
   };
 
+  try { console.log('[gembldgs-pilot] placed=' + pilotPlaced + ' skipped=' + pilotSkipped); } catch (e) {}
   return { solid, occ, OCC };
 }
