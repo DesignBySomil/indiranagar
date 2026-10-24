@@ -513,7 +513,7 @@ function step(dt, now) {
     const want = Math.atan2(ex, ez) + (R.gear < 0 ? Math.PI : 0);
     if (opposing || dist < 1.3 || R.t > 3.5 || (R.t > 0.5 && R.stall > 0.5)) {
       // bounded retries: three recoveries in a row that neither reached the target nor were taken over lock the assist out for 4 s, doubling per burst up to 30 s
-      if (opposing || dist < 1.3) { auto.recFail = 0; auto.recBurst = 0; } else if ((auto.recFail = (auto.recFail || 0) + 1) >= 3) { auto.recBurst = (auto.recBurst || 0) + 1; auto.recLock = (auto.clk || 0) + Math.min(30, 4 * Math.pow(2, auto.recBurst - 1)); auto.recFail = 0; }
+      if (opposing || (dist < 1.3 && Math.hypot(auto.x - R.x0, auto.z - R.z0) > 0.5)) { auto.recFail = 0; auto.recBurst = 0; } else if ((auto.recFail = (auto.recFail || 0) + 1) >= 3) { auto.recBurst = (auto.recBurst || 0) + 1; auto.recLock = (auto.clk || 0) + Math.min(30, 4 * Math.pow(2, auto.recBurst - 1)); auto.recFail = 0; }
       (window.__recLog = window.__recLog || []).push(['end', opposing ? 'input' : dist < 1.3 ? 'reached' : R.t > 3.5 ? 'timeout' : 'stalled', +dist.toFixed(2), +R.t.toFixed(2), +auto.x.toFixed(1), +auto.z.toFixed(1)]); auto.rec = null; }
     else { thr = R.gear; str = Math.max(-1, Math.min(1, wrap(want - auto.a) * 2)) * R.gear; }
   }
@@ -640,7 +640,7 @@ function step(dt, now) {
       const d1 = Math.abs(Math.atan2(Math.sin(pr.a - auto.a), Math.cos(pr.a - auto.a)));
       tx = pr.x; tz = pr.z; ta = d1 <= Math.PI / 2 ? pr.a : pr.a + Math.PI;
     }
-    if (Math.hypot(tx - auto.x, tz - auto.z) > 0.02 || Math.abs(ta - auto.a) > 0.02) { auto.rec = { x: tx, z: tz, a: ta, t: 0, thr: thrIn, gear: 0, stall: 0 }; (window.__recLog = window.__recLog || []).push([auto.x, auto.z, tx, tz, auto.clk]); }
+    if (Math.hypot(tx - auto.x, tz - auto.z) > 0.02 || Math.abs(ta - auto.a) > 0.02) { auto.rec = { x: tx, z: tz, a: ta, x0: auto.x, z0: auto.z, t: 0, thr: thrIn, gear: 0, stall: 0 }; (window.__recLog = window.__recLog || []).push([auto.x, auto.z, tx, tz, auto.clk]); }
   }
   if (auto.unstickAt === undefined) { auto.unstickAt = -99; auto.unstickN = 0; }
   auto.clk = (auto.clk || 0) + dt;
