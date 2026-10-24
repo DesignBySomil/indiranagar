@@ -424,6 +424,31 @@ export function createCrowd({
   const sOne = new T.Vector3(1, 1, 1);
   // Far LOD: each clothing variant baked to a static merged mesh set, instanced.
   // Far walkers render the SAME model as the near detailed mesh (no walk articulation) - the 60m swap no longer changes a walker's silhouette.
+  // Canonical pedestrian slot matrices stay stable; the GPU sees only nonzero
+  // instances. Zero-scaled hidden slots must not submit full detailed geometry.
+  const flushFar = [];
+  function compactHiddenInstances(im) {
+    const slots = new Float32Array(maxPeds * 16);
+    for (let k = 0; k < maxPeds; k++) slots.set(mZero.elements, k * 16);
+    // Simulation writes stable pedestrian IDs, independent of packed draw order.
+    im.setMatrixAt = (k, matrix) => slots.set(matrix.elements, k * 16);
+    const flush = () => {
+      let visible = 0;
+      const packed = im.instanceMatrix.array;
+      for (let k = 0; k < maxPeds; k++) {
+        const off = k * 16;
+        if (slots[off] === 0 && slots[off+1] === 0 && slots[off+2] === 0 &&
+            slots[off+4] === 0 && slots[off+5] === 0 && slots[off+6] === 0 &&
+            slots[off+8] === 0 && slots[off+9] === 0 && slots[off+10] === 0) continue;
+        const dst = visible++ * 16;
+        // No temporary arrays in this per-frame path.
+        for (let j = 0; j < 16; j++) packed[dst+j] = slots[off+j];
+      }
+      im.count = visible;
+      im.instanceMatrix.needsUpdate = true;
+    };
+    flushFar.push(flush);
+  }
   const farVariants = [];
   for (let v = 0; v < gemProto.length; v++) {
     const proto = buildPedestrianMerged(v);
@@ -442,7 +467,7 @@ export function createCrowd({
       if (!merged) continue;
       const im = new T.InstancedMesh(merged, mat, maxPeds);
       im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
-      for (let k = 0; k < maxPeds; k++) im.setMatrixAt(k, mZero);
+      compactHiddenInstances(im);
       group.add(im);
       sets.push(im);
     }
@@ -842,7 +867,7 @@ export function createCrowd({
       }
     }
 
-    for (const sets of farVariants) for (const im of sets) im.instanceMatrix.needsUpdate = true;
+    for (const flush of flushFar) flush();
   }
 
   // Populate initial transforms immediately at startup
@@ -897,6 +922,7 @@ export function createCrowd({
     const n=Math.round(peds.length*Math.max(0,Math.min(1,fraction)));
     peds.forEach((p,i)=>{p.active=i<n;if(!p.active)for(const sets of farVariants)for(const im of sets){im.setMatrixAt(i,mZero);im.instanceMatrix.needsUpdate=true;}});
     for(const sl of gemSlots)if(sl.pedId>=0 && peds[sl.pedId].active===false){peds[sl.pedId]._gemVariant=undefined;sl.pedId=-1;sl.g.visible=false;}
+    for (const flush of flushFar) flush();
   }
   return { group, update, solid, setDensity, peds, kickAt, vendorSpots };
 }
