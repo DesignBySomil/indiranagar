@@ -166,12 +166,10 @@ export function createKerbMaterial() {
 }
 
 export function createWallMaterial() {
-  const bump = createNoiseCanvas(128, 128, 0x808080, 0.14, false);
-  bump.repeat.set(4, 4);
+  // No bumpMap: the merged facade geometry has no UV attribute, and the bump
+  // shader path gave a non-finite HDR pixel on one far sliver triangle.
   return new THREE.MeshStandardMaterial({
     vertexColors: true,
-    bumpMap: bump,
-    bumpScale: 0.018,
     roughness: 0.82,
     metalness: 0.02
   });
