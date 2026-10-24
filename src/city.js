@@ -354,21 +354,40 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     }
     return inside >= 30;
   };
+  const roadWidthOf = (r) => {
+    const n = (r && r.n) || '';
+    if (n.includes('100 Feet')) return 10.4;
+    if (n.includes('Chinmaya') || n.includes('CMH') || n.includes('Old Madras')) return 9.6;
+    return ({ 5: 15.2, 4: 14.4, 3: 14.0, 2: 13.2, 1: 11.0 }[r && r.k]) || 14.0;
+  };
   world.streetOutlines = 0;
   for (const b of world.buildings) {
     if (coversRoad(b)) {
       world.streetOutlines++;
       cx2d.save();
       cx2d.strokeStyle = '#fff'; cx2d.lineWidth = 1.4; cx2d.lineJoin = 'round';
-      // stroke edge by edge; an edge that crosses a road centreline is an artefact of the outline, not a wall
+      // stroke edge by edge; skip any outline edge that crosses a road or runs inside a road's drivable width
       const crossesRoad = (a, c) => {
+        const ed = Math.hypot(c[0] - a[0], c[1] - a[1]);
+        const steps = Math.max(1, Math.ceil(ed / 2.5));
         for (const r of world.roads) {
           const p = r.p;
+          const halfW = roadWidthOf(r) * 0.5 + 0.5;
           for (let j = 0; j < p.length - 1; j++) {
-            const ex = c[0] - a[0], ez = c[1] - a[1], fx = p[j + 1][0] - p[j][0], fz = p[j + 1][1] - p[j][1];
-            const den = ex * fz - ez * fx; if (Math.abs(den) < 1e-9) continue;
-            const t = ((p[j][0] - a[0]) * fz - (p[j][1] - a[1]) * fx) / den, u = ((p[j][0] - a[0]) * ez - (p[j][1] - a[1]) * ex) / den;
-            if (t >= -0.02 && t <= 1.02 && u >= 0 && u <= 1) return true;
+            const ax = p[j][0], az = p[j][1], bx = p[j + 1][0], bz = p[j + 1][1];
+            const ex = c[0] - a[0], ez = c[1] - a[1], fx = bx - ax, fz = bz - az;
+            const den = ex * fz - ez * fx;
+            if (Math.abs(den) >= 1e-9) {
+              const t = ((ax - a[0]) * fz - (az - a[1]) * fx) / den;
+              const u = ((ax - a[0]) * ez - (az - a[1]) * ex) / den;
+              if (t >= -0.02 && t <= 1.02 && u >= 0 && u <= 1) return true;
+            }
+            const L2 = fx * fx + fz * fz || 1;
+            for (let k = 0; k <= steps; k++) {
+              const sx = a[0] + ex * (k / steps), sz = a[1] + ez * (k / steps);
+              const tProj = Math.max(0, Math.min(1, ((sx - ax) * fx + (sz - az) * fz) / L2));
+              if (Math.hypot(sx - (ax + fx * tProj), sz - (az + fz * tProj)) < halfW) return true;
+            }
           }
         }
         return false;

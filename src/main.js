@@ -450,7 +450,7 @@ function drawMini() {
   mx.clearRect(0, 0, S, S); mx.save();
   mx.beginPath(); mx.arc(S / 2, S / 2, S / 2 - 1, 0, 7); mx.clip();
   mx.fillStyle = '#14181c'; mx.fillRect(0, 0, S, S);
-  mx.translate(S / 2, S / 2); mx.rotate(-auto.a + Math.PI);
+  mx.translate(S / 2, S / 2); mx.rotate(auto.a + Math.PI);
   const sc = S / (R * 2); mx.scale(sc, sc);
   mx.drawImage(miniBase, -auto.x - 900, -auto.z - 900);
   for (const s of stops) {
@@ -490,14 +490,20 @@ function inDivider(px, pz) {
       const det = ux * vz - uz * vx; if (Math.abs(det) < 1e-6) continue;
       const rx = px - q[0], rz = pz - q[1];
       const sU = (rx * vz - rz * vx) / det, tV = (ux * rz - uz * rx) / det;
-      if (sU > -0.35 && sU < 1.35 && tV > 0 && tV < 1) return true;
+      if (sU > 0 && sU < 1 && tV > 0 && tV < 1) return true;
     }
     return false;
   }
 
 function pierHit(x, z) { const P = window.__piers; if (!P) return false; for (let i = 0; i < P.length; i++) { const dx = x - P[i][0], dz = z - P[i][1]; if (dx * dx + dz * dz < 0.49) return true; } return false; }
 
-function step(dt, now) {
+function step(dt, now, sliced = false) {
+  if (!sliced && Math.abs(auto.v) * dt > 0.5) {
+    const n = Math.ceil(Math.abs(auto.v) * dt / 0.5);
+    for (let i = 0; i < n; i++) step(dt / n, now - dt * 1000 + (i + 1) * dt * 1000 / n, true);
+    return;
+  }
+  const startX = auto.x, startZ = auto.z;
   let thr = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
   let str = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
   if (joy.on) { thr = -joy.y; str = -joy.x; }
@@ -507,8 +513,8 @@ function step(dt, now) {
   str = input.str;
 
   const max = 17;
-  auto.v += (thr * (thr > 0 ? 9.5 : 12.5) - auto.v * 0.35 * (thr === 0 ? 1.8 : 1)) * dt;
-  auto.v = THREE.MathUtils.clamp(auto.v, -6, max);
+  auto.v += (thr * (thr > 0 ? 9.5 : 12.5) - (thr === 0 ? auto.v * 0.63 : 0)) * dt;
+  auto.v = Math.max(-6, auto.v);
   const preV = auto.v;
   auto.steer += (str - auto.steer) * Math.min(1, dt * 8.5);
   const dA = auto.steer * dt * 1.85 * THREE.MathUtils.clamp(auto.v / 5, -1, 1);
@@ -561,19 +567,20 @@ function step(dt, now) {
     }
     if (!moved) auto.v = thr > 0 ? Math.min(auto.v, 0) * 0.2 : Math.max(auto.v, 0) * 0.2;
   }
-  // impact feedback: if we drove into traffic or a parked vehicle, shove it a little
-  if (Math.abs(preV) > 2.4) {
+  // impact feedback: dispatch across front/rear bumper contact points with car origin (auto.x, auto.z)
+  if (Math.abs(preV) > 2.0) {
     const dirS = preV > 0 ? 1 : -1;
     const fx0 = Math.sin(auto.a) * dirS, fz0 = Math.cos(auto.a) * dirS;
-    const px0 = auto.x + fx0 * 2.05, pz0 = auto.z + fz0 * 2.05;
-    const kind0 = hitKind(px0, pz0, auto.a);
-    const pw = Math.min(6, Math.abs(preV) * 0.55);
-    if (kind0 === 2) {
-      if (traffic && traffic.kickAt) traffic.kickAt(px0, pz0, fx0, fz0, pw);
-      if (crowd && crowd.kickAt) crowd.kickAt(px0, pz0, fx0, fz0, pw * 1.15);
-      if (life && life.kickAt) life.kickAt(px0, pz0, fx0, fz0, pw);
+    const rx0 = Math.cos(auto.a), rz0 = -Math.sin(auto.a);
+    const pw = Math.min(7.5, Math.max(2.8, Math.abs(preV) * 0.62));
+    for (const [fOff, sOff] of [[2.05, 0], [1.95, 0.8], [1.95, -0.8], [1.4, 0]]) {
+      const px0 = auto.x + fx0 * fOff + rx0 * sOff;
+      const pz0 = auto.z + fz0 * fOff + rz0 * sOff;
+      if (traffic && traffic.kickAt) traffic.kickAt(px0, pz0, fx0, fz0, pw, auto.x, auto.z);
+      if (crowd && crowd.kickAt) crowd.kickAt(px0, pz0, fx0, fz0, pw * 1.15, auto.x, auto.z);
+      if (life && life.kickAt) life.kickAt(px0, pz0, fx0, fz0, pw, auto.x, auto.z);
+      if (parkedVehicles && parkedVehicles.kickAt) parkedVehicles.kickAt(px0, pz0, fx0, fz0, pw * 0.9, auto.x, auto.z);
     }
-    else if (kind0 === 1 && parkedVehicles && parkedVehicles.kickAt && parkedVehicles.solid(px0, pz0)) parkedVehicles.kickAt(px0, pz0, fx0, fz0, pw * 0.8);
   }
   // unstick fallback: throttle held but not moving against a collider -> back off, then snap to the road lane
   // Only static geometry triggers the recovery hop. Waiting behind traffic, a cow or a crowd never moves the player: they can wait, reverse or steer around.
@@ -619,6 +626,31 @@ function step(dt, now) {
     }
   }
 
+  // A sustained accelerator with no actual progress recovers only onto a clear nearby road.
+  const progress = Math.hypot(auto.x - startX, auto.z - startZ);
+  auto.noProgressT = thr > 0.3 && progress < dt * 0.15 ? (auto.noProgressT || 0) + dt : 0;
+  if (auto.noProgressT > 2.0) {
+    const candidates = [];
+    for (const sg of (streetRef?.roadSegs || [])) {
+      const sx = sg.x2 - sg.x1, sz = sg.z2 - sg.z1, len2 = sx * sx + sz * sz;
+      if (!len2) continue;
+      const t = THREE.MathUtils.clamp(((auto.x - sg.x1) * sx + (auto.z - sg.z1) * sz) / len2, 0, 1);
+      const len = Math.sqrt(len2), yaw = Math.atan2(sx, sz);
+      for (const along of [-5, 0, 5]) for (const off of [-0.22, 0.22]) {
+        const x = sg.x1 + sx * t + sx / len * along - sz / len * sg.width * off;
+        const z = sg.z1 + sz * t + sz / len * along + sx / len * sg.width * off;
+        const d = Math.hypot(x - auto.x, z - auto.z);
+        if (d > 1 && d < 18 && Math.abs(x) < 970 && Math.abs(z) < 970) candidates.push({x,z,yaw,d});
+      }
+    }
+    candidates.sort((a,b) => a.d-b.d);
+    for (const q of candidates) {
+      const a = Math.cos(q.yaw - auto.a) >= 0 ? q.yaw : q.yaw + Math.PI;
+      if (hitA(q.x,q.z,a) || hitA(q.x + Math.sin(a)*3,q.z + Math.cos(a)*3,a)) continue;
+      auto.x=q.x;auto.z=q.z;auto.a=a;auto.v=0;auto.noProgressT=0;auto.recoveryCount=(auto.recoveryCount||0)+1;
+      break;
+    }
+  }
   if (auto.unstickAt === undefined) { auto.unstickAt = -99; auto.unstickN = 0; }
   auto.clk = (auto.clk || 0) + dt;
   if (auto._didUnstick) { auto._didUnstick = false; }
@@ -668,7 +700,7 @@ function step(dt, now) {
   if (eg) {
     const spd = Math.abs(auto.v);
     const gearRatio = spd < 5.5 ? spd / 5.5 : (spd < 11.5 ? (spd - 4.0) / 7.5 : (spd - 9.0) / 8.0);
-    eg.gain.value = spd < 0.35 ? 0 : 0.02 + (spd / max) * 0.05;
+    eg.gain.value = spd < 0.35 ? 0 : 0.02 + Math.min(1.8, spd / max) * 0.05;
     engine.frequency.value = 48 + gearRatio * 62 + Math.sin(performance.now() * 0.04) * 2.5;
     amb.gain.value = 0.10;
   }
@@ -859,6 +891,7 @@ try {
     }
   });
   
+  const obstacleFn = (x, z) => Boolean(solid(x, z) || inDivider(x, z) || pierHit(x, z));
   life = createStreetLife({
     THREE,
     scene,
@@ -868,6 +901,7 @@ try {
     speedBreakers: street.speedBreakers,
     vendorSpots: street.vendorSpots,
     solid,
+    obstacleFn,
     auto,
     npcsRef: npcs,
     ui: {
@@ -886,9 +920,9 @@ try {
 
   try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
   shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
-  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); if (q === null || q === '') return 150; const n = parseInt(q); return Number.isFinite(n) ? Math.max(0, Math.min(220, n)) : 150; })() });
-  parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
-  crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, avoidFn: (parkedVehicles && parkedVehicles.overlaps) ? parkedVehicles.overlaps : undefined, getAuto: () => { const cd = camera.getWorldDirection(new THREE.Vector3()); return { x: auto.x, z: auto.z, yaw: Math.atan2(cd.x, cd.z) }; }, nightUniform, count: 120 });
+  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); if (q === null || q === '') return 150; const n = parseInt(q); return Number.isFinite(n) ? Math.max(0, Math.min(220, n)) : 150; })() });
+  parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
+  crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, avoidFn: (parkedVehicles && parkedVehicles.overlaps) ? parkedVehicles.overlaps : undefined, getAuto: () => { const cd = camera.getWorldDirection(new THREE.Vector3()); return { x: auto.x, z: auto.z, yaw: Math.atan2(cd.x, cd.z) }; }, nightUniform, count: 120 });
   bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   hazards = createHazards({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid });
   buildMini();

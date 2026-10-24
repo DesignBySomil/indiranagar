@@ -191,7 +191,7 @@ export function createRainTrees({
       const rw = s.width ?? s[6] ?? 14.0;
       const sName = s.name ?? s[4] ?? '';
 
-      const margin = rw * 0.5 + 8.5;
+      const margin = rw * 0.5 + 4.0;
       if (x < Math.min(x1, x2) - margin || x > Math.max(x1, x2) + margin) continue;
       if (z < Math.min(z1, z2) - margin || z > Math.max(z1, z2) + margin) continue;
 
@@ -200,18 +200,12 @@ export function createRainTrees({
       const t = T.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / L2, 0, 1);
       const d = Math.hypot(x - (x1 + dx * t), z - (z1 + dz * t));
 
-      if (d < rw * 0.5 + 1.65) return true;
+      // Strictly outside every road's physical carriageway + 1.1m kerb clearance
+      if (d < rw * 0.5 + 1.1) return true;
       if (i === ownSegIdx) continue;
 
-      const sharesEndpoint =
-        Math.hypot(x1 - (ownSeg.x1 ?? ownSeg[0]), z1 - (ownSeg.z1 ?? ownSeg[1])) < 1.5 ||
-        Math.hypot(x1 - (ownSeg.x2 ?? ownSeg[2]), z1 - (ownSeg.z2 ?? ownSeg[3])) < 1.5 ||
-        Math.hypot(x2 - (ownSeg.x1 ?? ownSeg[0]), z2 - (ownSeg.z1 ?? ownSeg[1])) < 1.5 ||
-        Math.hypot(x2 - (ownSeg.x2 ?? ownSeg[2]), z2 - (ownSeg.z2 ?? ownSeg[3])) < 1.5;
-
-      if (!sharesEndpoint || (sName !== ownName)) {
-        if (d < rw * 0.5 + 5.5) return true;
-      }
+      // Only add extra corner mouth clearance right where a different cross street intersects
+      if (sName !== ownName && d < rw * 0.5 + 2.2) return true;
     }
     return false;
   }
@@ -219,33 +213,36 @@ export function createRainTrees({
   function isUnderBridge(x, z) {
     for (let i = 0; i < bridgeVolumes.length; i++) {
       const b = bridgeVolumes[i];
-      if (Math.hypot(x - b.x, z - b.z) < (b.r || 18) + 4.0) return true;
+      if (Math.hypot(x - b.x, z - b.z) < (b.r || 18) + 2.5) return true;
     }
     return false;
   }
 
+  // Only reject points sitting in the narrow median strip between two divided carriageways (100 Ft / CMH)
   function isBetweenCarriageways(x, z) {
     let best = null, bd = 1e9;
     for (let i = 0; i < roadSegs.length; i++) {
       const s = roadSegs[i];
+      if (!s.divided) continue;
       const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
       const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz) || 1;
       const tt = T.MathUtils.clamp(((x - x1) * dx + (z - z1) * dz) / (L * L), 0, 1);
       const d = Math.hypot(x - (x1 + dx * tt), z - (z1 + dz * tt));
-      if (d < bd) { bd = d; best = { ux: dx / L, uz: dz / L }; }
+      if (d < bd) { bd = d; best = { ux: dx / L, uz: dz / L, rIdx: i }; }
     }
-    if (!best) return false;
+    if (!best || bd > 11.5) return false;
     let left = false, right = false;
     for (let i = 0; i < roadSegs.length; i++) {
       const s = roadSegs[i];
+      if (!s.divided) continue;
       const x1 = s.x1 ?? s[0], z1 = s.z1 ?? s[1], x2 = s.x2 ?? s[2], z2 = s.z2 ?? s[3];
       const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L;
       if (Math.abs(ux * best.ux + uz * best.uz) < 0.88) continue;
       const tt = T.MathUtils.clamp(((x - x1) * ux + (z - z1) * uz) / L, 0, 1);
       const d = Math.hypot(x - (x1 + dx * tt), z - (z1 + dz * tt));
-      if (d > 28) continue;
+      if (d > 11.5) continue;
       const cr = (x - x1) * uz - (z - z1) * ux;
-      if (cr > 2.2) left = true; else if (cr < -2.2) right = true;
+      if (cr > 1.2) left = true; else if (cr < -1.2) right = true;
     }
     return left && right;
   }
@@ -259,7 +256,7 @@ export function createRainTrees({
 
     const dx = x2 - x1, dz = z2 - z1;
     const L = Math.hypot(dx, dz);
-    if (L < 11) continue;
+    if (L < 8) continue;
     const ux = dx / L, uz = dz / L;
 
     const isPrimeAvenue =
@@ -270,28 +267,29 @@ export function createRainTrees({
       name.includes('80 Feet') ||
       kind >= 4;
 
-    const baseStep = isPrimeAvenue ? 9.5 : 13.5;
-    const minSpacing = isPrimeAvenue ? 8.2 : 11.2;
+    const baseStep = isPrimeAvenue ? 8.5 : 12.5;
+    const minSpacing = isPrimeAvenue ? 7.4 : 10.5;
     const fw = kind >= 4 ? 2.3 : 1.5;
 
-    for (let dist = 5.5; dist < L - 4.5; dist += baseStep + hash(x1 + dist, z1, seed) * 5.2) {
+    for (let dist = 3.5; dist < L - 2.5; dist += baseStep + hash(x1 + dist, z1, seed) * 4.2) {
       for (const side of [-1, 1]) {
         const hVal = hash(x1 * side + dist, z1 - dist, seed);
-        if (!isPrimeAvenue && hVal < 0.36) continue;
+        if (!isPrimeAvenue && hVal < 0.32) continue;
 
         let tx = 0, tz = 0, placed = false;
-        const jitter = hash(z1 + dist, x1 * side, seed) * 0.9;
-        for (const extraOff of [fw + 0.55 + jitter, fw * 0.72 + 0.35, fw + 1.45]) {
+        const jitter = hash(z1 + dist, x1 * side, seed) * 0.6;
+        // Probe from inner footpath kerb outward so trees always fit between the doubled road and setback buildings
+        for (const extraOff of [Math.min(fw - 0.2, 1.45), fw - 0.1]) {
           const vergeOff = width * 0.5 + extraOff;
           const cx = x1 + ux * dist - uz * vergeOff * side;
           const cz = z1 + uz * dist + ux * vergeOff * side;
-          if (Math.hypot(cx - (-133), cz - (-345)) < 34) break;
+          if (Math.hypot(cx - (-133), cz - (-345)) < 26) break;
           if (
             solidFn(cx, cz) ||
-            solidFn(cx + 1.1, cz) ||
-            solidFn(cx - 1.1, cz) ||
-            solidFn(cx, cz + 1.1) ||
-            solidFn(cx, cz - 1.1)
+            solidFn(cx + 0.65, cz) ||
+            solidFn(cx - 0.65, cz) ||
+            solidFn(cx, cz + 0.65) ||
+            solidFn(cx, cz - 0.65)
           ) continue;
           if (isUnderBridge(cx, cz)) continue;
           if (isBetweenCarriageways(cx, cz)) continue;
@@ -433,7 +431,7 @@ export function createRainTrees({
     qYaw.setFromAxisAngle(yAxis, sp.roadInwardYaw);
 
     // Tilt overhanging trees (~35%+) toward the road so their canopy arches 2-3m over the kerb while keeping >=5.5m clearance
-    const tiltAngle = sp.overhangsRoad ? 0.24 : 0.04;
+    const tiltAngle = 0; // Trunks stay upright on the footpath; crowns provide the overhang.
     qTilt.setFromAxisAngle(xAxis, tiltAngle);
     const qCombined = qYaw.clone().multiply(qTilt);
 

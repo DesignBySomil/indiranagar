@@ -161,7 +161,62 @@ export function prepareRoadCorridors(world) {
     return c;
   };
 
-  // 3. Coherent rigid setback of existing building footprints out of widened carriageways + footpaths
+  // Helper: clip closed ring [p0..pn-1] against half-plane (p - origin) . normal >= 0
+  const clipHalfPlane = (ring, ox, oz, nx, nz) => {
+    const out = [];
+    const len = ring.length;
+    if (len < 3) return out;
+    for (let i = 0; i < len; i++) {
+      const a = ring[i], b = ring[(i + 1) % len];
+      const da = (a[0] - ox) * nx + (a[1] - oz) * nz;
+      const db = (b[0] - ox) * nx + (b[1] - oz) * nz;
+      if (da >= 0) {
+        out.push([a[0], a[1]]);
+        if (db < 0) {
+          const t = da / (da - db);
+          out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+      } else if (db >= 0) {
+        const t = da / (da - db);
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+    return out;
+  };
+
+  const polyArea = (ring) => {
+    if (ring.length < 3) return 0;
+    let a = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i], q = ring[(i + 1) % ring.length];
+      a += p[0] * q[1] - q[0] * p[1];
+    }
+    return Math.abs(a) * 0.5;
+  };
+
+  // Test if polygon ring (either its edges or its interior) encroaches within `pad` of segment `s`
+  const ringHitsSeg = (ring, s, pad) => {
+    const len = ring.length;
+    for (let i = 0; i < len; i++) {
+      const a = ring[i], b = ring[(i + 1) % len];
+      const ed = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const steps = Math.max(1, Math.ceil(ed / 2.0));
+      for (let k = 0; k <= steps; k++) {
+        const px = a[0] + (b[0] - a[0]) * (k / steps);
+        const pz = a[1] + (b[1] - a[1]) * (k / steps);
+        const tv = Math.max(0, Math.min(1, ((px - s.x1) * s.dx + (pz - s.z1) * s.dz) / s.L2));
+        if (Math.hypot(px - (s.x1 + s.dx * tv), pz - (s.z1 + s.dz * tv)) < pad) return true;
+      }
+    }
+    const rSteps = Math.max(1, Math.ceil(s.L / 2.5));
+    for (let k = 0; k <= rSteps; k++) {
+      const rx = s.x1 + s.dx * (k / rSteps), rz = s.z1 + s.dz * (k / rSteps);
+      if (inPoly(ring, rx, rz)) return true;
+    }
+    return false;
+  };
+
+  // 3. Coherent rigid setback + targeted straddle-split out of widened carriageways + footpaths
   const keptBuildings = [];
   for (const b of world.buildings) {
     if (!b.p || b.p.length < 4) continue;
@@ -176,8 +231,8 @@ export function prepareRoadCorridors(world) {
     cx /= nPts; cz /= nPts;
 
     const near = new Set();
-    for (let gx = Math.floor(x0 / G); gx <= Math.floor(x1 / G); gx++) {
-      for (let gz = Math.floor(z0 / G); gz <= Math.floor(z1 / G); gz++) {
+    for (let gx = Math.floor(x0 / G) - 1; gx <= Math.floor(x1 / G) + 1; gx++) {
+      for (let gz = Math.floor(z0 / G) - 1; gz <= Math.floor(z1 / G) + 1; gz++) {
         const cell = segGrid.get(gx + ',' + gz);
         if (cell) for (let k = 0; k < cell.length; k++) near.add(cell[k]);
       }
@@ -187,89 +242,77 @@ export function prepareRoadCorridors(world) {
       continue;
     }
 
+    // Compute non-cumulative tight setback vector against the single most-encroached road
+    // so buildings sit right behind the footpath (no wide empty verges)
+    let bestPen = 0, bestNx = 0, bestNz = 0;
     const diag = Math.hypot(x1 - x0, z1 - z0);
-    if (diag > 36) {
-      let insideLen = 0;
+    if (diag < 42) {
       for (const s of near) {
-        if (s.L >= 16 && inPoly(b.p, (s.x1 + s.x2) * 0.5, (s.z1 + s.z2) * 0.5)) insideLen += s.L;
-      }
-      if (insideLen >= 30) {
-        keptBuildings.push(b);
-        continue;
-      }
-    }
-
-    let shiftX = 0, shiftZ = 0;
-    for (let pass = 0; pass < 2; pass++) {
-      const curCx = cx + shiftX, curCz = cz + shiftZ;
-      for (const s of near) {
-        const tc = Math.max(0, Math.min(1, ((curCx - s.x1) * s.dx + (curCz - s.z1) * s.dz) / s.L2));
+        const targetHalf = s.w * 0.5 + 1.65;
+        const tc = Math.max(0, Math.min(1, ((cx - s.x1) * s.dx + (cz - s.z1) * s.dz) / s.L2));
         const rcx = s.x1 + s.dx * tc, rcz = s.z1 + s.dz * tc;
-        let nx = curCx - rcx, nz = curCz - rcz;
-        const nd = Math.hypot(nx, nz);
-        if (nd < 0.001) {
-          nx = -s.uz; nz = s.ux;
-        } else {
-          nx /= nd; nz /= nd;
-        }
+        // Skip rigid shift if centroid itself is inside the road (straddling polygon -> split below)
+        if (Math.hypot(cx - rcx, cz - rcz) < s.w * 0.45) continue;
+        const sideSgn = ((cx - s.x1) * (-s.uz) + (cz - s.z1) * s.ux) >= 0 ? 1 : -1;
+        const nx = -s.uz * sideSgn, nz = s.ux * sideSgn;
 
-        let maxPen = 0;
+        let segPen = 0;
         for (let i = 0; i < nPts; i++) {
-          const vx = b.p[i][0] + shiftX, vz = b.p[i][1] + shiftZ;
+          const vx = b.p[i][0], vz = b.p[i][1];
           const tv = Math.max(0, Math.min(1, ((vx - s.x1) * s.dx + (vz - s.z1) * s.dz) / s.L2));
           const px = s.x1 + s.dx * tv, pz = s.z1 + s.dz * tv;
-          const d = Math.hypot(vx - px, vz - pz);
-          const sideDot = (vx - px) * nx + (vz - pz) * nz;
-          const signedD = sideDot >= 0 ? d : -d;
-          const pen = s.clearHalf - signedD;
-          if (pen > maxPen) maxPen = pen;
+          if (Math.hypot(vx - px, vz - pz) > targetHalf + 1.0) continue;
+          const signedPerp = (vx - s.x1) * nx + (vz - s.z1) * nz;
+          const pen = targetHalf - signedPerp;
+          if (pen > segPen) segPen = pen;
         }
-        if (maxPen > 0 && maxPen < 14.5) {
-          shiftX += nx * maxPen;
-          shiftZ += nz * maxPen;
+        if (segPen > bestPen && segPen <= 5.2) {
+          bestPen = segPen;
+          bestNx = nx;
+          bestNz = nz;
         }
       }
     }
 
-    if (shiftX !== 0 || shiftZ !== 0) {
-      for (let i = 0; i < nPts; i++) {
-        b.p[i][0] += shiftX;
-        b.p[i][1] += shiftZ;
-      }
-      b.p[nPts][0] = b.p[0][0];
-      b.p[nPts][1] = b.p[0][1];
-    }
-
-    let stillInsideCarriageway = false;
+    const baseRing = [];
     for (let i = 0; i < nPts; i++) {
-      const vx = b.p[i][0], vz = b.p[i][1];
-      for (const s of near) {
-        const tv = Math.max(0, Math.min(1, ((vx - s.x1) * s.dx + (vz - s.z1) * s.dz) / s.L2));
-        const px = s.x1 + s.dx * tv, pz = s.z1 + s.dz * tv;
-        const d = Math.hypot(vx - px, vz - pz);
-        if (d < s.w * 0.5 + 0.8) {
-          let ox = vx - px, oz = vz - pz;
-          const ol = Math.hypot(ox, oz) || 1;
-          ox /= ol; oz /= ol;
-          b.p[i][0] = px + ox * s.clearHalf;
-          b.p[i][1] = pz + oz * s.clearHalf;
-        }
-      }
+      baseRing.push([b.p[i][0] + bestNx * bestPen, b.p[i][1] + bestNz * bestPen]);
     }
-    b.p[nPts][0] = b.p[0][0];
-    b.p[nPts][1] = b.p[0][1];
 
-    let ncx = 0, ncz = 0;
-    for (let i = 0; i < nPts; i++) { ncx += b.p[i][0]; ncz += b.p[i][1]; }
-    ncx /= nPts; ncz /= nPts;
+    // If any building (including large/straddling polygons) still encroaches into a road's
+    // drivable corridor (w * 0.5 + 1.25m), split/trim it cleanly along that corridor boundary
+    let ringList = [baseRing];
     for (const s of near) {
-      const tc = Math.max(0, Math.min(1, ((ncx - s.x1) * s.dx + (ncz - s.z1) * s.dz) / s.L2));
-      if (Math.hypot(ncx - (s.x1 + s.dx * tc), ncz - (s.z1 + s.dz * tc)) < s.w * 0.5 + 0.6) {
-        stillInsideCarriageway = true;
-        break;
+      const pad = s.w * 0.5 + 1.25;
+      const cutHalf = s.w * 0.5 + 1.45;
+      const nextList = [];
+      for (const ring of ringList) {
+        if (!ringHitsSeg(ring, s, pad)) {
+          nextList.push(ring);
+          continue;
+        }
+        const rnx = -s.uz, rnz = s.ux;
+        const sideA = clipHalfPlane(ring, s.x1 + rnx * cutHalf, s.z1 + rnz * cutHalf, rnx, rnz);
+        const sideB = clipHalfPlane(ring, s.x1 - rnx * cutHalf, s.z1 - rnz * cutHalf, -rnx, -rnz);
+        if (polyArea(sideA) >= 14) nextList.push(sideA);
+        if (polyArea(sideB) >= 14) nextList.push(sideB);
+      }
+      ringList = nextList;
+      if (!ringList.length) break;
+    }
+
+    for (const ring of ringList) {
+      if (polyArea(ring) < 14) continue;
+      let bad = false;
+      for (const s of near) {
+        if (ringHitsSeg(ring, s, s.w * 0.5 + 1.15)) { bad = true; break; }
+      }
+      if (!bad) {
+        const closed = ring.map(pt => [pt[0], pt[1]]);
+        closed.push([ring[0][0], ring[0][1]]);
+        keptBuildings.push({ ...b, p: closed });
       }
     }
-    if (!stillInsideCarriageway) keptBuildings.push(b);
   }
   world.buildings = keptBuildings;
   return world;
@@ -351,8 +394,40 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
       }
     }
   };
+  // Remove raised pavement/median pieces wherever a transverse drivable road crosses.
+  const crossingSegs = [];
+  for (const r of world.roads) for (let j=0;j<r.p.length-1;j++) {
+    const [x1,z1]=r.p[j], [x2,z2]=r.p[j+1], dx=x2-x1,dz=z2-z1,L=Math.hypot(dx,dz);
+    if(L>0.2) crossingSegs.push({x1,z1,x2,z2,dx,dz,L,w:getRoadWidth(r)});
+  }
+  function openPieces(x1,z1,x2,z2,buffer=0.6) {
+    const dx=x2-x1,dz=z2-z1,L=Math.hypot(dx,dz); if(L<0.1)return [];
+    const cuts=[];
+    for(const c of crossingSegs) {
+      const den=dx*c.dz-dz*c.dx;
+      if(Math.abs(den)/(L*c.L)<0.3)continue;
+      const rx=c.x1-x1,rz=c.z1-z1;
+      const t=(rx*c.dz-rz*c.dx)/den, u=(rx*dz-rz*dx)/den;
+      const reach=(c.w/2+buffer)/Math.max(0.3,Math.abs(den)/(L*c.L))/L;
+      if(u < -(c.w/2+buffer+2)/c.L || u > 1+(c.w/2+buffer+2)/c.L || t+reach<0 || t-reach>1)continue;
+      cuts.push([Math.max(0,t-reach),Math.min(1,t+reach)]);
+    }
+    cuts.sort((a,b)=>a[0]-b[0]);const out=[];let at=0;
+    for(const [a,b] of cuts){if(a>at+0.001)out.push([at,a]);at=Math.max(at,b);}if(at<0.999)out.push([at,1]);return out;
+  }
   collectHundred();
   pairHundred();
+  const originalMedians=medianQuads.splice(0);medianKerbs.length=0;medianStrips.length=0;
+  for(const q of originalMedians){
+    const ax=(q[0]+q[2])/2,az=(q[1]+q[3])/2,bx=(q[4]+q[6])/2,bz=(q[5]+q[7])/2;
+    for(const [a,b] of openPieces(ax,az,bx,bz,2.0)){
+      const at=(i,j,t)=>q[i]+(q[j]-q[i])*t;
+      const n=[at(0,4,a),at(1,5,a),at(2,6,a),at(3,7,a),at(0,4,b),at(1,5,b),at(2,6,b),at(3,7,b)];
+      medianQuads.push(n);medianKerbs.push([n[0],n[1],n[4],n[5]],[n[2],n[3],n[6],n[7]]);
+      medianStrips.push([(n[0]+n[2])/2,(n[1]+n[3])/2,(n[4]+n[6])/2,(n[5]+n[7])/2]);
+    }
+  }
+
 
   // Overhead signal gantries across 100 Feet Road carriageways (depth cue, Bangalore-style)
   {
@@ -547,9 +622,11 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
           const inX = -uz * (w / 2) * s, inZ = ux * (w / 2) * s;
           const outX = -uz * (w / 2 + fw) * s, outZ = ux * (w / 2 + fw) * s;
 
+          for (const [t0,t1] of openPieces(x1+(inX+outX)/2,z1+(inZ+outZ)/2,x2+(inX+outX)/2,z2+(inZ+outZ)/2,fw/2+0.8)) {
+          const ax=x1+dx*t0,az=z1+dz*t0,bx=x1+dx*t1,bz=z1+dz*t1;
           fpPos.push(
-            x1 + inX, fy, z1 + inZ, x1 + outX, fy + slabJitter * 0.4, z1 + outZ,
-            x2 + inX, fy, z2 + inZ, x2 + outX, fy - slabJitter * 0.4, z2 + outZ
+            ax + inX, fy, az + inZ, ax + outX, fy + slabJitter * 0.4, az + outZ,
+            bx + inX, fy, bz + inZ, bx + outX, fy - slabJitter * 0.4, bz + outZ
           );
           const slabTone = 0.48 + (hash(i + s, x1) - 0.5) * 0.14;
           for (let k = 0; k < 4; k++) fpCol.push(slabTone + 0.02, slabTone, slabTone - 0.03);
@@ -558,12 +635,13 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
           fpV += 4;
 
           kbPos.push(
-            x1 + inX, 0.02, z1 + inZ, x1 + inX, fy, z1 + inZ,
-            x2 + inX, 0.02, z2 + inZ, x2 + inX, fy, z2 + inZ
+            ax + inX, 0.02, az + inZ, ax + inX, fy, az + inZ,
+            bx + inX, 0.02, bz + inZ, bx + inX, fy, bz + inZ
           );
           kbUvs.push(0, 0, 0, 1, L * 0.6, 0, L * 0.6, 1);
           kbIdx.push(kbV, kbV + 1, kbV + 2, kbV + 1, kbV + 3, kbV + 2);
           kbV += 4;
+          }
         }
       }
 
@@ -714,6 +792,21 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     scene.add(sbInst);
   }
 
+  // Final corner-cap guard: never emit a raised pavement quad across a transverse lane.
+  for(let vi=fpPos.length/12-1;vi>=0;vi--){
+    const k=vi*12,dx=fpPos[k+6]-fpPos[k],dz=fpPos[k+8]-fpPos[k+2],L=Math.hypot(dx,dz);
+    let cross=false;
+    for(const t of [0.1,0.5,0.9]){
+      const x=(fpPos[k]+fpPos[k+3])/2+dx*t,z=(fpPos[k+2]+fpPos[k+5])/2+dz*t;
+      for(const c of crossingSegs){
+        if(Math.abs((dx*c.dx+dz*c.dz)/(L*c.L))>0.9)continue;
+        const u=Math.max(0,Math.min(1,((x-c.x1)*c.dx+(z-c.z1)*c.dz)/(c.L*c.L)));
+        if(Math.hypot(x-c.x1-u*c.dx,z-c.z1-u*c.dz)<c.w/2+0.1){cross=true;break;}
+      }
+      if(cross)break;
+    }
+    if(cross){fpIdx.splice(vi*6,6);kbIdx.splice(vi*6,6);}
+  }
   // Build Uneven Footpaths & Kerbs
   const fpGeo = new THREE.BufferGeometry();
   fpGeo.setAttribute('position', new THREE.Float32BufferAttribute(fpPos, 3));
@@ -723,7 +816,12 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   fpGeo.computeVertexNormals();
   const fpMat = createPavementMaterial();
   fpMat.vertexColors = true;
+  fpMat.side = THREE.DoubleSide;
+  fpMat.color.setHex(0xded8c8);
+  fpMat.emissive.setHex(0x6b6455);
+  fpMat.emissiveIntensity = 0.22;
   const fpMesh = new THREE.Mesh(fpGeo, fpMat);
+  fpMesh.name = "road-footpaths";
   fpMesh.receiveShadow = true;
   scene.add(fpMesh);
 
@@ -732,7 +830,13 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   kbGeo.setAttribute('uv', new THREE.Float32BufferAttribute(kbUvs, 2));
   kbGeo.setIndex(kbIdx);
   kbGeo.computeVertexNormals();
-  scene.add(new THREE.Mesh(kbGeo, createKerbMaterial()));
+  const kerbMat = createKerbMaterial();
+  kerbMat.side = THREE.DoubleSide;
+  kerbMat.emissive.setHex(0x777777);
+  kerbMat.emissiveIntensity = 0.22;
+  const kerbMesh = new THREE.Mesh(kbGeo, kerbMat);
+  kerbMesh.name = "road-kerbs";
+  scene.add(kerbMesh);
 
   // Faded Hand-Painted Centre Dashes
   const dg = new THREE.BufferGeometry();
