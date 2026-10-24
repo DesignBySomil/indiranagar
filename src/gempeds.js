@@ -34,6 +34,7 @@ function getMat(key, params) {
     roughness: 0.72,
     metalness: 0.04,
     flatShading: false,
+    side: THREE.DoubleSide,
     ...params,
   });
   materialCache.set(key, mat);
@@ -1338,7 +1339,9 @@ export function buildPedestrian(variant) {
       36,
       false
     );
-    body.add(new THREE.Mesh(kurtaGeo, kurtaMat));
+    const kurtaSkirt = new THREE.Mesh(kurtaGeo, kurtaMat);
+    kurtaSkirt.name = 'kurtaSkirt';
+    body.add(kurtaSkirt);
 
     // Mandarin Bandhgala Collar + Button Placket
     const collarGeo = new THREE.CylinderGeometry(0.068, 0.074, 0.038, 24, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
@@ -1881,7 +1884,8 @@ export function tickWalk(group, t, speed = 1.0) {
   const phase = t * freq * speed;
   const amp = Math.min(Math.max(speed, 0), 1.6);
 
-  const legAmplitude = (isDrapedWrap ? 0.38 : 0.50) * amp;
+  const legAmplitude = (isDrapedWrap ? 0.36 : 0.48) * amp;
+  const legAmp = legAmplitude;
   const armAmplitude = (isDrapedWrap ? 0.34 : 0.45) * amp;
 
   const s = Math.sin(phase);
@@ -1920,6 +1924,13 @@ export function tickWalk(group, t, speed = 1.0) {
     parts.body.rotation.x = 0.02 * amp + s2 * 0.008 * amp;
   }
 
+  // 3b. Kurta skirt billows along the stride axis as the legs scissor apart
+  const kurtaSkirt = group.getObjectByName('kurtaSkirt');
+  if (kurtaSkirt) {
+    const maxSwing = Math.abs(s) * legAmp;
+    kurtaSkirt.scale.z = 1.0 + maxSwing * 0.80;
+  }
+
   // 4. Head Horizon Stabilization + Gentle Street Observation
   if (parts.head) {
     parts.head.rotation.y = -s * 0.04 * amp + Math.sin(t * 0.75) * 0.09;
@@ -1934,7 +1945,7 @@ function mergePartGroup(part) {
   const inv = new THREE.Matrix4().copy(part.matrixWorld).invert();
   const byMat = new Map();
   part.traverse(o => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || o.name === 'kurtaSkirt') return;
     const rel = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
     const geo = o.geometry.clone().applyMatrix4(rel);
     const key = o.material.uuid;
