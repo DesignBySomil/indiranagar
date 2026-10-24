@@ -514,9 +514,9 @@ function step(dt, now) {
     else { thr = R.gear; str = Math.max(-1, Math.min(1, wrap(want - auto.a) * 2)) * R.gear; }
     if (auto.rec) {
       // yield to moving bodies (traffic, pedestrians) in the travel direction: stop pushing, keep the heading, resume when clear
-      const sA = Math.sin(auto.a), cA = Math.cos(auto.a), look = Math.max(2, Math.abs(auto.v)), near = R.gear > 0 ? 1.95 : 1.3;
+      const sA = Math.sin(auto.a), cA = Math.cos(auto.a), look = Math.max(0.5, Math.abs(auto.v) * 0.4), near = R.gear > 0 ? 1.95 : 1.3;
       let bodyAhead = false;
-      for (let d = 0.5; d <= near + look && !bodyAhead; d += 0.5) for (let lx = -0.85; lx <= 0.86; lx += 0.85) {
+      for (let d = 0.5; d <= near + look && !bodyAhead; d += 0.5) for (let lx = -0.6; lx <= 0.61; lx += 0.6) {
         const fz = R.gear * d, px = auto.x + cA * lx + sA * fz, pz = auto.z - sA * lx + cA * fz;
         if ((traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) { bodyAhead = true; break; }
       }
