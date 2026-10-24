@@ -125,6 +125,7 @@ export function buildCity(world, scene, nightUniform, landmarksData = []) {
     } catch {
       continue;
     }
+    b._renderedFacade = {pts,cx,cz,area,h,floors};
     g.rotateX(-Math.PI / 2);
 
     const baseCol = new THREE.Color(PALETTE[Math.floor(r * PALETTE.length)]).offsetHSL((r2 - 0.5) * 0.03, 0.01, (r - 0.5) * 0.13 - 0.03);

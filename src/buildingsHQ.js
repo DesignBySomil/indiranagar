@@ -135,31 +135,18 @@ export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene
     const buildings = world && world.buildings ? world.buildings : [];
     for (let i = 0; i < buildings.length; i++) {
       const b = buildings[i];
-      const pts = b.p;
-      if (!pts || pts.length < 3) continue;
-
-      // Compute building stats exactly as city.js does
-      let area = 0, cx = 0, cz = 0;
-      for (let j = 0; j < pts.length; j++) {
-        const p = pts[j], q = pts[(j + 1) % pts.length];
-        area += p[0] * q[1] - q[0] * p[1];
-        cx += p[0]; cz += p[1];
-      }
-      area = Math.abs(area) / 2;
-      if (area < 12) continue;
-      cx /= pts.length; cz /= pts.length;
-      { let ov = false; for (const lm of landmarks) { if (Math.hypot(cx - lm.x, cz - lm.z) < 13.5) { ov = true; break; } } if (ov) continue; }
-
-      if (Math.hypot(cx - px, cz - pz) > 90) continue;
-
-      const r = hash(cx, cz);
-      const floors = 2 + Math.floor(r * 3.5) + (area > 380 ? 1 : 0);
-      const h = b.h ? Math.max(6.8, b.h) : floors * 3.3;
+      // Use the exact footprint/height that city.js actually built, not a second
+      // hash of a closed polygon (whose repeated endpoint shifts its centroid).
+      const built=b._renderedFacade;
+      if(!built)continue;
+      const {pts,cx,cz,area,h,floors}=built;
+      if(Math.hypot(cx-px,cz-pz)>90)continue;
+      const r=hash(cx,cz);
 
       // Evaluate road-facing edges
-      for (let j = 0; j < pts.length - 1; j++) {
+      for (let j = 0; j < pts.length; j++) {
         const x1 = pts[j][0], z1 = pts[j][1];
-        const x2 = pts[j + 1][0], z2 = pts[j + 1][1];
+        const x2 = pts[(j + 1) % pts.length][0], z2 = pts[(j + 1) % pts.length][1];
         const edx = x2 - x1, edz = z2 - z1;
         const eLen = Math.hypot(edx, edz);
         if (eLen < 4.0) continue;
@@ -192,6 +179,7 @@ export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene
         const edgeYaw = Math.atan2(dirX, dirZ);
         q4.setFromAxisAngle(new T.Vector3(0, 1, 0), edgeYaw);
 
+        s3.set(1,1,1);
         // Add parapet cornice & roof water tank on top edge
         if (cornCount < MAX_INSTANCES) {
           for (let sPos = 1.2; sPos < eLen - 1.0; sPos += 2.0) {
@@ -241,6 +229,8 @@ export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene
           }
         }
 
+        s3.set(1,1,1);
+        q4.setFromAxisAngle(yAxisS,edgeYaw);
         // Add balconies and AC units on upper floors (floors 2+)
         const bayWidth = 2.4;
         const bays = Math.floor(eLen / bayWidth);
@@ -257,7 +247,7 @@ export function upgradeBuildingFacades({ THREE: T = THREE, landmarks = [], scene
             if (bayHash > 0.45 && bCount < MAX_INSTANCES) {
               v3.set(bx + nx * 0.45, fy - 0.45, bz + nz * 0.45);
               m4.compose(v3, q4, s3);
-              balcSlabInst.setMatrixAt(bCount++, m4);
+              balcSlabInst.setMatrixAt(bCount, m4);
               v3.set(bx + nx * 0.85, fy - 0.05, bz + nz * 0.85);
               m4.compose(v3, q4, s3);
               balcRailInst.setMatrixAt(bCount++, m4);
