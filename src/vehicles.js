@@ -1201,7 +1201,7 @@ export function createTraffic({
       const dz = pos.z - player.z;
       const dist = Math.hypot(dx, dz);
       const wantsRecycle = forceRecycle || dist > 320 || (solidFn && solidFn(pos.x, pos.z));
-      if (typeof window !== 'undefined' && wantsRecycle) { window.__trc = window.__trc || { trans:0,failNext:0,failJump:0,held:0,recycled:0,log:[] }; if (dist <= 200 && tu.lastSeg) window.__trc.held++; else window.__trc.recycled++; }
+      if (typeof window !== 'undefined' && wantsRecycle) { window.__trc = window.__trc || { trans:0,failNext:0,failJump:0,held:0,recycled:0,log:[] }; if (dist <= 200 && tu.lastSeg) window.__trc.held++; else window.__trc.recycled++; const R = window.__recLog = window.__recLog || []; if (R.length < 4000) R.push({ why: forceRecycle ? 'force' : (dist > 320 ? 'dist' : 'solid'), x: +pos.x.toFixed(0), z: +pos.z.toFixed(0), d: +dist.toFixed(0), seg: tu.seg && tu.seg.name || '', ow: tu.seg && tu.seg.oneway ? 1 : 0 }); }
       if (wantsRecycle && dist <= 200 && tu.lastSeg) {
         // never pop a vehicle in or out where the player can see it: hold at the last good spot until the player is far
         tu.__held = (tu.__held || 0) + 1; tu.__why = forceRecycle ? 'force' : (dist > 320 ? 'dist' : 'solid');
