@@ -911,7 +911,19 @@ export function createTraffic({
         // score penalty: the 28-trial stride samples one array-neighborhood, so a soft penalty
         // can still lose to nothing and let an in-view spawn win. If every trial is in-cone the
         // caller falls back to the unconstrained best (last resort only).
-        if (!allowCone && dot > 0.5 && dist < 350) continue;
+        if (!allowCone) {
+          // The renderer uses an offset lane, not the segment centerline. Reject
+          // either lane entering the protected view cone before choosing a segment.
+          const laneOffset = Math.min(2.05, Math.max(1.35, seg.width * 0.14));
+          let laneInView = false;
+          for (const dir of (seg.oneway ? [1] : [1, -1])) {
+            const lx = dx + seg.uz * laneOffset * dir;
+            const lz = dz - seg.ux * laneOffset * dir;
+            const ld = Math.hypot(lx, lz);
+            if (ld > 0 && ld < 350 && (lx * hx + lz * hz) / ld > 0.5) laneInView = true;
+          }
+          if (laneInView) continue;
+        }
         if (biasAhead) score += dot * 95;
       }
 
@@ -1269,7 +1281,14 @@ export function createTraffic({
       } else if (wantsRecycle) {
         const picked = pickRoadPlacement(player.x, player.z, player.hx, player.hz, 210, 300, true, i + tu.t * 100);
         const cand = computeLanePos(picked.seg, picked.t, picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1));
-        if (Math.hypot(cand.x - player.x, cand.z - player.z) >= 190) {
+        const candDx = cand.x - player.x, candDz = cand.z - player.z;
+        const candDist = Math.hypot(candDx, candDz);
+        // The picker may relax its view constraint when every trial is in view.
+        // Never commit that fallback as a visible teleport. Keep this unit where
+        // it was and try again later, preserving population and collision state.
+        const candInView = candDist > 0 && candDist < 350 &&
+          (candDx * player.hx + candDz * player.hz) / candDist > 0.5;
+        if (candDist >= 190 && !candInView && !(solidFn && solidFn(cand.x, cand.z))) {
           tu.seg = picked.seg; tu.__site = 'pick';
           tu.t = picked.t;
           tu.dir = picked.seg.oneway ? 1 : ((i % 2 === 0) ? 1 : -1);
