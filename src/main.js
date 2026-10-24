@@ -513,12 +513,27 @@ function step(dt, now) {
     if (opposing || dist < 1.3 || R.t > 3.5 || (R.t > 0.5 && R.stall > 0.5)) { (window.__recLog = window.__recLog || []).push(['end', opposing ? 'input' : dist < 1.3 ? 'reached' : R.t > 3.5 ? 'timeout' : 'stalled', +dist.toFixed(2), +R.t.toFixed(2), +auto.x.toFixed(1), +auto.z.toFixed(1)]); auto.rec = null; }
     else { thr = R.gear; str = Math.max(-1, Math.min(1, wrap(want - auto.a) * 2)) * R.gear; }
     if (auto.rec) {
-      // yield to moving bodies (traffic, pedestrians) in the travel direction: stop pushing, keep the heading, resume when clear
-      const sA = Math.sin(auto.a), cA = Math.cos(auto.a), look = Math.max(0.5, Math.abs(auto.v) * 0.4), near = R.gear > 0 ? 1.95 : 1.3;
+      // yield to MOVING bodies (traffic, pedestrians) in the travel direction. A body that is not moving is left to the normal
+      // collision physics (the stall timer then ends the recovery). Full body width: car half-width 0.85 m plus the body's own half-width.
+      const sA = Math.sin(auto.a), cA = Math.cos(auto.a), look = Math.max(1, Math.abs(auto.v) * 0.8), near = R.gear > 0 ? 1.95 : 1.3;
       let bodyAhead = false;
-      for (let d = 0.5; d <= near + look && !bodyAhead; d += 0.5) for (let lx = -0.6; lx <= 0.61; lx += 0.6) {
+      const tl = traffic && traffic.units;
+      if (tl) {
+        const prev = R.prev || (R.prev = new Map());
+        for (let i = 0; i < tl.length; i++) {
+          const tu = tl[i], p0 = prev.get(i);
+          prev.set(i, [tu.x, tu.z]);
+          if (!p0 || bodyAhead) continue;
+          const dx = tu.x - auto.x, dz = tu.z - auto.z;
+          if (dx * dx + dz * dz > 100) continue;
+          if (Math.hypot(tu.x - p0[0], tu.z - p0[1]) / dt < 0.4) continue;
+          const lx = cA * dx - sA * dz, fz = (sA * dx + cA * dz) * R.gear;
+          if (Math.abs(lx) < 0.85 + 0.9 && fz > -2.1 && fz < near + look + 2.1) bodyAhead = true;
+        }
+      }
+      for (let d = 0.5; d <= near + look && !bodyAhead; d += 0.5) for (let lx = -0.85; lx <= 0.86; lx += 0.85) {
         const fz = R.gear * d, px = auto.x + cA * lx + sA * fz, pz = auto.z - sA * lx + cA * fz;
-        if ((traffic && traffic.solid(px, pz)) || (crowd && crowd.solid(px, pz))) { bodyAhead = true; break; }
+        if (crowd && crowd.solid(px, pz)) { bodyAhead = true; break; }
       }
       if (bodyAhead && (R.yield || 0) < 2.5) {
         R.yield = (R.yield || 0) + dt; R.t -= dt * 0.75; R.stall = 0;
