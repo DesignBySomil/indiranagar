@@ -1944,8 +1944,10 @@ function mergePartGroup(part) {
   part.updateWorldMatrix(true, true);
   const inv = new THREE.Matrix4().copy(part.matrixWorld).invert();
   const byMat = new Map();
+  const keep = [];
   part.traverse(o => {
-    if (!o.isMesh || o.name === 'kurtaSkirt') return;
+    if (!o.isMesh) return;
+    if (o.name === 'kurtaSkirt') { keep.push(o); return; }
     const rel = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
     const geo = o.geometry.clone().applyMatrix4(rel);
     const key = o.material.uuid;
@@ -1953,6 +1955,7 @@ function mergePartGroup(part) {
     byMat.get(key).geos.push(geo);
   });
   while (part.children.length) part.remove(part.children[0]);
+  for (const o of keep) part.add(o);
   for (const { mat, geos } of byMat.values()) {
     const merged = mergeGeometries(geos, false);
     if (merged) {
