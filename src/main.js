@@ -506,7 +506,8 @@ function step(dt, now) {
     const wrap = (q) => Math.atan2(Math.sin(q), Math.cos(q));
     const ex = R.x - auto.x, ez = R.z - auto.z, dist = Math.hypot(ex, ez);
     if (!R.gear) { const f0 = Math.sin(auto.a) * ex + Math.cos(auto.a) * ez; R.gear = f0 >= 0 ? 1 : -1; }
-    const opposing = Math.abs(strIn) > 0.3 || (R.thr !== 0 && thrIn !== 0 && Math.sign(thrIn) !== Math.sign(R.thr)) || (R.thr === 0 && Math.abs(thrIn) > 0.1);
+    if (Math.abs(thrIn) < 0.1) R.rel = true;
+    const opposing = (R.rel && Math.abs(thrIn) > 0.2) || Math.abs(strIn) > 0.3 || (R.thr !== 0 && thrIn !== 0 && Math.sign(thrIn) !== Math.sign(R.thr)) || (R.thr === 0 && Math.abs(thrIn) > 0.1);
     if (Math.abs(auto.v) < 0.25) R.stall += dt; else R.stall = Math.max(0, R.stall - dt);
     const want = Math.atan2(ex, ez) + (R.gear < 0 ? Math.PI : 0);
     if (opposing || dist < 1.3 || R.t > 3.5 || (R.t > 0.5 && R.stall > 0.5)) { (window.__recLog = window.__recLog || []).push(['end', opposing ? 'input' : dist < 1.3 ? 'reached' : R.t > 3.5 ? 'timeout' : 'stalled', +dist.toFixed(2), +R.t.toFixed(2), +auto.x.toFixed(1), +auto.z.toFixed(1)]); auto.rec = null; }
