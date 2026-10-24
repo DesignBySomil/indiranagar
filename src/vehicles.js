@@ -1034,13 +1034,17 @@ export function createTraffic({
   const yAxis = new T.Vector3(0, 1, 0);
   const eulTraffic = new T.Euler(0, 0, 0, 'YXZ');
 
+  // Static endpoint index; original segment order preserves tie-break behavior.
+  const transitionCells=new Map();
+  validSegs.forEach((seg,i)=>{const keys=new Set();for(const [x,z] of [[seg.x1,seg.z1],[seg.x2,seg.z2]])for(let cx=Math.floor((x-22)/32);cx<=Math.floor((x+22)/32);cx++)for(let cz=Math.floor((z-22)/32);cz<=Math.floor((z+22)/32);cz++)keys.add(cx+','+cz);for(const key of keys){let arr=transitionCells.get(key);if(!arr)transitionCells.set(key,arr=[]);arr.push(seg);}});
   function findConnectedSegment(oldSeg, exitX, exitZ, prevUx, prevUz) {
     let bestSeg = null;
     let bestDir = 1;
     let bestScore = -1e9;
 
-    for (let i = 0; i < validSegs.length; i++) {
-      const s = validSegs[i];
+    const nearby=transitionCells.get(Math.floor(exitX/32)+','+Math.floor(exitZ/32))||[];
+    for (let i = 0; i < nearby.length; i++) {
+      const s = nearby[i];
       if (s === oldSeg && validSegs.length > 1) continue;
 
       const d1 = Math.hypot(s.x1 - exitX, s.z1 - exitZ);

@@ -840,11 +840,13 @@ export function createStreetLife({
   function getRoadHazardFactor(x, z) {
     for (let i = 0; i < speedBreakers.length; i++) {
       const sb = speedBreakers[i];
+      if (Math.abs(x-sb.x)>6.5 || Math.abs(z-sb.z)>6.5)continue;
       if (Math.hypot(x - sb.x, z - sb.z) < 6.5) return 0.38; // Slow down for speed breaker
     }
     if (npcsRef && Array.isArray(npcsRef.npcs)) {
       for (let i = 0; i < npcsRef.npcs.length; i++) {
         const npc = npcsRef.npcs[i];
+        if(npc.role!=='cop'||Math.abs(x-npc.x)>11||Math.abs(z-npc.z)>11)continue;
         if (npc.role === 'cop' && Math.hypot(x - npc.x, z - npc.z) < 11.0) return 0.18; // Stop/crawl for Constable Gowda
       }
     }
