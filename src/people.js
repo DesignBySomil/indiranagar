@@ -367,11 +367,13 @@ export function createCrowd({
   scene,
   roadSegs = [],
   solidFn = () => 0,
+  obstacleFn = null,
   getAuto,
   nightUniform,
   count = 78,
   avoidFn = () => false
 }) {
+  const obsCheck = obstacleFn || solidFn;
   // Strictly enforce performance budget: cap pedestrian count at 120
   const maxPeds = Math.min(84, Math.max(36, count || 78));
   const group = new T.Group();
@@ -505,12 +507,12 @@ export function createCrowd({
   }
 
   function isSolidSafe(x, z) {
-    if (!solidFn) return true;
-    if (solidFn(x, z)) return false;
-    if (solidFn(x + 0.35, z)) return false;
-    if (solidFn(x - 0.35, z)) return false;
-    if (solidFn(x, z + 0.35)) return false;
-    if (solidFn(x, z - 0.35)) return false;
+    if (!obsCheck) return true;
+    if (obsCheck(x, z)) return false;
+    if (obsCheck(x + 0.35, z)) return false;
+    if (obsCheck(x - 0.35, z)) return false;
+    if (obsCheck(x, z + 0.35)) return false;
+    if (obsCheck(x, z - 0.35)) return false;
     return true;
   }
 
@@ -683,28 +685,58 @@ export function createCrowd({
     for (let i = 0; i < maxPeds; i++) {
       const p = peds[i];
 
-      // Knocked-by-impact ped: ballistic flight, tumble, land, recover to a footpath
+      // Knocked-by-impact ped: lateral slide clear of path, topple, then resume walking from landed spot
       if (p.kn) {
         const kn = p.kn;
         kn.t += safeDt;
-        kn.vx *= Math.max(0, 1 - 1.6 * safeDt); kn.vz *= Math.max(0, 1 - 1.6 * safeDt);
+        const drag = Math.exp(-1.35 * safeDt);
+        kn.vx *= drag; kn.vz *= drag;
         kn.vy -= 22 * safeDt;
-        p.x += kn.vx * safeDt; p.z += kn.vz * safeDt;
+        const nx = p.x + kn.vx * safeDt, nz = p.z + kn.vz * safeDt;
+        if (isSolidSafe(nx, nz)) {
+          p.x = nx; p.z = nz;
+        } else {
+          kn.vx *= -0.2; kn.vz *= -0.2;
+        }
         p.ky = (p.ky || 0) + kn.vy * safeDt;
-        if (p.ky <= 0 && kn.vy < 0) {
+        if (p.ky <= 0 && kn.vy <= 0) {
           p.ky = 0;
+          kn.vy = 0;
           if (kn.landT === undefined) kn.landT = elapsed;
-          if (elapsed - kn.landT > 1.1) {
-            const picked = pickFootpathPlacement(p.x, p.z, 0, 0, 2, 60, false, p.id + elapsed * 13);
-            p.seg = picked.seg; p.t = picked.t; p.kerbOff = picked.kerbOff;
-            p.kn = null; p.ky = 0;
+          if (elapsed - kn.landT > 1.25) {
+            // Project landed (p.x, p.z) onto the nearest walkSeg so the ped resumes walking
+            // from where they landed without snapping across the map or freezing
+            let bestSeg = p.seg || walkSegs[0], bestD = 1e9, bestT = 0.5, bestOff = p.kerbOff || 7.5;
+            for (let w = 0; w < walkSegs.length; w++) {
+              const sg = walkSegs[w];
+              const apx = p.x - sg.x1, apz = p.z - sg.z1;
+              const tProj = T.MathUtils.clamp((apx * sg.ux + apz * sg.uz) / (sg.len || 1), 0.06, 0.94);
+              const cx = sg.x1 + sg.ux * sg.len * tProj, cz = sg.z1 + sg.uz * sg.len * tProj;
+              const d = Math.hypot(p.x - cx, p.z - cz);
+              if (d < bestD) {
+                bestD = d;
+                bestSeg = sg;
+                bestT = tProj;
+                const signed = -apx * sg.uz + apz * sg.ux;
+                const sgn = signed >= 0 ? 1 : -1;
+                const minOff = sg.width * 0.5 + 0.65;
+                const maxOff = sg.width * 0.5 + 2.45;
+                bestOff = sgn * T.MathUtils.clamp(Math.abs(signed), minOff, maxOff);
+              }
+            }
+            p.seg = bestSeg;
+            p.t = bestT;
+            p.kerbOff = bestOff;
+            p.kn = null;
+            p.ky = 0;
             continue;
           }
         }
-        const tumble = kn.t * kn.spin;
-        eul.set(tumble, p.yaw, tumble * 0.6);
+        const tAnim = kn.landT !== undefined ? (kn.landT - kn.startT) : kn.t;
+        const roll = Math.min(1.42, tAnim * Math.abs(kn.spin)) * Math.sign(kn.spin);
+        eul.set(Math.min(0.65, tAnim * 1.4), p.yaw, roll, 'YXZ');
         qAll.setFromEuler(eul);
-        vPos.set(p.x, p.ky, p.z);
+        vPos.set(p.x, Math.max(0.12, p.ky), p.z);
         m4.compose(vPos, qAll, sOne);
         for (const im of farVariants[farVariantOf(p)]) im.setMatrixAt(i, m4);
         continue;
@@ -800,9 +832,8 @@ export function createCrowd({
   // Populate initial transforms immediately at startup
   update(0.016, 17.8);
 
-  // impact reaction: the nearest walker gets knocked off their feet (playful hop, no gore)
-  function kickAt(x, z, dx, dz, power) {
-    let best = null, bestD = 2.4 * 2.4;
+  function kickAt(x, z, dx, dz, power, carX = x, carZ = z) {
+    let best = null, bestD = 2.8 * 2.8;
     for (let i = 0; i < peds.length; i++) {
       const q = peds[i];
       if (q.kn) continue;
@@ -811,17 +842,26 @@ export function createCrowd({
       if (d2 < bestD) { bestD = d2; best = q; }
     }
     if (!best) return false;
-    const pw = Math.min(8, power * 1.5);
-    const side = (best.x - x) * dz - (best.z - z) * dx;
+    const pw = Math.min(9.0, Math.max(4.5, power * 1.45));
+    const relX = best.x - carX, relZ = best.z - carZ;
+    let latSign = (relX * dz - relZ * dx) >= 0 ? 1 : -1;
+    let lx = dz * latSign, lz = -dx * latSign;
+    if (!isSolidSafe(best.x + lx * 2.8, best.z + lz * 2.8) && isSolidSafe(best.x - lx * 2.8, best.z - lz * 2.8)) {
+      latSign = -latSign; lx = -lx; lz = -lz;
+    }
+    const vxDir = dx * 0.30 + lx * 0.88;
+    const vzDir = dz * 0.30 + lz * 0.88;
+    const vLen = Math.hypot(vxDir, vzDir) || 1;
     best.kn = {
-      vx: dx * pw * 1.6 + (side >= 0 ? dz : -dz) * pw * 0.35,
-      vz: dz * pw * 1.6 - (side >= 0 ? dx : -dx) * pw * 0.35,
-      vy: 3.4 + pw * 0.5,
-      spin: (side >= 0 ? 1 : -1) * (2.2 + Math.min(3, pw * 0.4)),
+      vx: (vxDir / vLen) * pw * 1.45,
+      vz: (vzDir / vLen) * pw * 1.45,
+      vy: 1.8 + pw * 0.18,
+      spin: latSign * (2.6 + Math.min(2.5, pw * 0.35)),
       t: 0,
+      startT: elapsed,
       landT: undefined
     };
-    best.ky = 0.02;
+    best.ky = 0.06;
     return true;
   }
 

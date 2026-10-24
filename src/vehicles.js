@@ -701,15 +701,105 @@ function normalizeRoadSegs(roadSegs, solidFn, minLen = 5) {
   return valid;
 }
 
+function isBlockedObstacle(x, z, checkFn, r = 0.65) {
+  if (!checkFn) return false;
+  return Boolean(
+    checkFn(x, z) ||
+    checkFn(x + r, z) ||
+    checkFn(x - r, z) ||
+    checkFn(x, z + r) ||
+    checkFn(x, z - r)
+  );
+}
+
+// Compute majority-lateral road-aware outward velocity + frame-0 clearance step so the struck
+// object translates horizontally out of the continued driving corridor with whole-body margin.
+function computeRoadAwareOutwardImpulse(objX, objZ, carX, carZ, fx, fz, seg, allSegs, checkFn, objHalfWidth, massMult, power) {
+  const relX = objX - carX, relZ = objZ - carZ;
+  const signedLat = relX * fz - relZ * fx;
+  let latSign = signedLat >= 0 ? 1 : -1;
+
+  let refSeg = seg;
+  if (!refSeg && allSegs && allSegs.length) {
+    let bd = 1e9;
+    for (let i = 0; i < allSegs.length; i++) {
+      const s = allSegs[i];
+      const apx = objX - s.x1, apz = objZ - s.z1;
+      const t = Math.max(0, Math.min(1, (apx * s.ux + apz * s.uz) / (s.len || 1)));
+      const d = Math.hypot(objX - (s.x1 + s.ux * s.len * t), objZ - (s.z1 + s.uz * s.len * t));
+      if (d < bd) { bd = d; refSeg = s; }
+    }
+  }
+
+  if (refSeg && Math.abs(signedLat) < 0.35) {
+    const apx = objX - refSeg.x1, apz = objZ - refSeg.z1;
+    const sideOfRoad = apx * refSeg.uz - apz * refSeg.ux;
+    const outNx = refSeg.uz * (sideOfRoad >= 0 ? 1 : -1);
+    const outNz = -refSeg.ux * (sideOfRoad >= 0 ? 1 : -1);
+    latSign = (outNx * fz + outNz * (-fx)) >= 0 ? 1 : -1;
+  }
+
+  let lx = fz * latSign, lz = -fx * latSign;
+  const clearDist = (dirX, dirZ) => {
+    let m = 0;
+    for (const d of [1.0, 2.0, 3.2, 4.5, 6.0]) {
+      if (isBlockedObstacle(objX + dirX * d, objZ + dirZ * d, checkFn, objHalfWidth * 0.65)) break;
+      m = d;
+    }
+    return m;
+  };
+  const clearPrimary = clearDist(lx, lz);
+  const clearOpposite = clearDist(-lx, -lz);
+  if (clearPrimary < 2.2 && clearOpposite > clearPrimary + 0.8) {
+    latSign = -latSign;
+    lx = -lx;
+    lz = -lz;
+  }
+
+  // Majority lateral direction (88% lateral, 30% forward carry)
+  let dirX = fx * 0.30 + lx * 0.88;
+  let dirZ = fz * 0.30 + lz * 0.88;
+  const dl = Math.hypot(dirX, dirZ) || 1;
+  dirX /= dl;
+  dirZ /= dl;
+
+  // Target whole-body lateral clearance from the continued driving line (auto half-width 0.95 + object half-extent + 1.25m margin)
+  const curLat = (objX - carX) * lx + (objZ - carZ) * lz;
+  const targetLatFromLine = Math.max(3.1, (0.95 + objHalfWidth + 1.25) * Math.min(1.45, Math.max(0.82, massMult)));
+  const neededLat = Math.max(2.4 * Math.min(1.3, massMult), targetLatFromLine - Math.max(0, curLat));
+
+  const nudge = Math.min(1.05, 0.50 * Math.min(1.5, massMult));
+  let nudgeX = 0, nudgeZ = 0;
+  if (!isBlockedObstacle(objX + dirX * nudge, objZ + dirZ * nudge, checkFn, objHalfWidth * 0.55)) {
+    nudgeX = dirX * nudge;
+    nudgeZ = dirZ * nudge;
+  }
+
+  // Slide friction is exp(-1.35 * dt), so integrated distance = v0 / 1.35
+  const DRAG = 1.35;
+  const minHorizDist = Math.max(neededLat / 0.88, (2.8 + power * 0.50) * massMult);
+  const v0 = Math.min(18.5, Math.max(5.0, minHorizDist * DRAG));
+
+  return {
+    vx: dirX * v0,
+    vz: dirZ * v0,
+    nudgeX,
+    nudgeZ,
+    latSign
+  };
+}
+
 export function createTraffic({
   THREE: T = THREE,
   scene,
   roadSegs = [],
   solidFn = () => 0,
+  obstacleFn = null,
   nightUniform,
   getAuto,
   count = 140
 }) {
+  const obsCheck = obstacleFn || solidFn;
   const totalCount = Math.max(140, count || 140);
   const group = new T.Group();
   scene.add(group);
@@ -942,6 +1032,7 @@ export function createTraffic({
   const s3 = new T.Vector3(1.12, 1.12, 1.12);
   const sBrakeOff = new T.Vector3(0.0001, 0.0001, 0.0001);
   const yAxis = new T.Vector3(0, 1, 0);
+  const eulTraffic = new T.Euler(0, 0, 0, 'YXZ');
 
   function findConnectedSegment(oldSeg, exitX, exitZ, prevUx, prevUz) {
     let bestSeg = null;
@@ -1077,6 +1168,17 @@ export function createTraffic({
       const tu = trafficUnits[i];
       if (tu.seg.oneway) tu.dir = 1;
       let forceRecycle = false;
+      if (tu.wreck) {
+        tu.speed = 0;
+        tu.wreckTimer = (tu.wreckTimer || 0) + safeDt;
+        const dPlayer = Math.hypot((tu.x || 0) - player.x, (tu.z || 0) - player.z);
+        // Bounded wreck lifetime: recover after 14s (or after 4s once player drives > 45m away)
+        if (tu.wreckTimer > 14.0 || (tu.wreckTimer > 4.0 && dPlayer > 45.0)) {
+          tu.wreck = false;
+          tu.wreckTimer = 0;
+          tu.krollTarget = 0;
+        }
+      }
       tu.t += (tu.dir * tu.speed * safeDt) / tu.seg.len;
       tu.__transCd = (tu.__transCd || 0) - (tu.__transCd > 0 ? 1 : 0);
       if (tu.__transCd > 0 && (tu.t > 0.995 || tu.t < 0.005)) { tu.t = T.MathUtils.clamp(tu.t, 0.005, 0.995); tu.__transCd = 0; }
@@ -1174,22 +1276,45 @@ export function createTraffic({
 
       if (typeof window !== 'undefined' && typeof tu.x === 'number') { const J = window.__jumpLog = window.__jumpLog || []; const jdx = pos.x - tu.x, jdz = pos.z - tu.z; if (Math.hypot(jdx, jdz) > 40 && J.length < 200) J.push({ i, site: tu.__site || 'none', tseg: tu.seg && tu.seg.name || '', from: [+tu.x.toFixed(0), +tu.z.toFixed(0)], to: [+pos.x.toFixed(0), +pos.z.toFixed(0)] }); } // DEBUG strip
       tu.lastSeg = tu.seg; tu.lastT = tu.t; tu.lastDir = tu.dir;
-      // impact kick: damped spring, quick hop, spin decay. The offset is steadily
-      // baked into a persistent displacement (ox/oz/oyaw) so a struck vehicle
-      // STAYS where the impact left it instead of springing back to its lane.
-      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0) {
-        // free slide with friction, NO restoring spring: the vehicle lands where the hit sends it
-        const fr = Math.exp(-3.2 * safeDt), frs = Math.exp(-4.5 * safeDt);
-        tu.ox = (tu.ox || 0) + tu.kvx * safeDt; tu.oz = (tu.oz || 0) + tu.kvz * safeDt;
-        tu.oyaw = (tu.oyaw || 0) + tu.ksv * safeDt;
-        tu.kvx *= fr; tu.kvz *= fr; tu.ksv *= frs;
-        if (tu.ky > 0 || tu.kvy > 0) { tu.kvy -= 26 * safeDt; tu.ky += tu.kvy * safeDt; if (tu.ky < 0) { tu.ky = 0; tu.kvy = 0; } }
-        if (tu.cool > 0) tu.cool -= safeDt;
-        if (Math.abs(tu.kvx) + Math.abs(tu.kvz) < 0.05) { tu.kvx = 0; tu.kvz = 0; }
-        if (Math.abs(tu.ksv) < 0.05) tu.ksv = 0;
+      if (tu.__site === 'pick') {
+        tu.wreck = false;
+        tu.wreckTimer = 0;
+        tu.sliding = false;
+        tu.kroll = 0; tu.krollV = 0; tu.krollTarget = 0;
+        tu.kpitch = 0; tu.kpitchV = 0;
       }
-      // impact state owns the unit's displacement: cancel any transition blend so the
-      // collision sweep's lane-space tests and the rendered/knocked position never diverge
+      if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0 || tu.krollV || tu.kpitchV || tu.kroll) {
+        const fr = Math.exp(-1.35 * safeDt), frs = Math.exp(-2.8 * safeDt);
+        const stepX = (tu.kvx || 0) * safeDt, stepZ = (tu.kvz || 0) * safeDt;
+        const candX = pos.x + (tu.ox || 0) + stepX;
+        const candZ = pos.z + (tu.oz || 0) + stepZ;
+        if (!isBlockedObstacle(candX, candZ, obsCheck, 0.7)) {
+          tu.ox = (tu.ox || 0) + stepX;
+          tu.oz = (tu.oz || 0) + stepZ;
+        } else {
+          tu.kvx = -(tu.kvx || 0) * 0.15;
+          tu.kvz = -(tu.kvz || 0) * 0.15;
+        }
+        tu.oyaw = (tu.oyaw || 0) + (tu.ksv || 0) * safeDt;
+        tu.kvx = (tu.kvx || 0) * fr;
+        tu.kvz = (tu.kvz || 0) * fr;
+        tu.ksv = (tu.ksv || 0) * frs;
+
+        const targetRoll = tu.krollTarget || 0;
+        tu.krollV = ((tu.krollV || 0) + (targetRoll - (tu.kroll || 0)) * 14.0 * safeDt) * Math.exp(-5.0 * safeDt);
+        tu.kroll = (tu.kroll || 0) + tu.krollV * safeDt;
+        tu.kpitchV = ((tu.kpitchV || 0) - (tu.kpitch || 0) * 16.0 * safeDt) * Math.exp(-5.5 * safeDt);
+        tu.kpitch = (tu.kpitch || 0) + tu.kpitchV * safeDt;
+
+        if (tu.ky > 0 || tu.kvy > 0) { tu.kvy -= 22 * safeDt; tu.ky += tu.kvy * safeDt; if (tu.ky < 0) { tu.ky = 0; tu.kvy = 0; } }
+        if (tu.cool > 0) tu.cool -= safeDt;
+        const remSpd = Math.hypot(tu.kvx || 0, tu.kvz || 0);
+        if (remSpd < 0.06) { tu.kvx = 0; tu.kvz = 0; }
+        if (Math.abs(tu.ksv || 0) < 0.04) tu.ksv = 0;
+        // Keep sliding flag active while translating or still overlapping the player car
+        const distCar = Math.hypot((pos.x + (tu.ox || 0)) - player.x, (pos.z + (tu.oz || 0)) - player.z);
+        if (remSpd < 0.12 && tu.cool <= 0 && distCar > 2.8) tu.sliding = false;
+      }
       if (tu.kx || tu.kz || tu.kvx || tu.kvz || tu.ks || tu.ksv || tu.ky > 0 || tu.kvy > 0 || tu.cool > 0 || tu.wreck) { if (tu.bx || tu.bz || tu.byaw) { tu.ox = (tu.ox || 0) + tu.bx; tu.oz = (tu.oz || 0) + tu.bz; tu.oyaw = (tu.oyaw || 0) + (tu.byaw || 0); tu.bx = 0; tu.bz = 0; tu.byaw = 0; } }
       if (tu.bx || tu.bz) { const bl = Math.hypot(tu.bx, tu.bz), dd = 6.5 * safeDt; if (bl <= dd) { tu.bx = 0; tu.bz = 0; } else { tu.bx *= (bl - dd) / bl; tu.bz *= (bl - dd) / bl; } }
       if (tu.byaw) { const ay = Math.abs(tu.byaw), dy2 = 2.2 * safeDt; tu.byaw = ay <= dy2 ? 0 : tu.byaw * (ay - dy2) / ay; }
@@ -1197,8 +1322,10 @@ export function createTraffic({
       tu.z = pos.z + (tu.oz || 0) + (tu.kz || 0) + (tu.bz || 0);
       tu.yaw = pos.yaw + (tu.oyaw || 0) + (tu.ks || 0) + (tu.byaw || 0);
 
-      q4.setFromAxisAngle(yAxis, tu.yaw);
-      v3.set(tu.x, tu.ky || 0, tu.z);
+      eulTraffic.set(tu.kpitch || 0, tu.yaw, tu.kroll || 0, 'YXZ');
+      q4.setFromEuler(eulTraffic);
+      const tiltLift = Math.abs(Math.sin(tu.kroll || 0)) * 0.30;
+      v3.set(tu.x, (tu.ky || 0) + tiltLift, tu.z);
       m4.compose(v3, q4, s3);
 
       tu.td.bodyInst.setMatrixAt(tu.subIdx, m4);
@@ -1224,18 +1351,18 @@ export function createTraffic({
   function solid(x, z) {
     for (let i = 0; i < trafficUnits.length; i++) {
       const u = trafficUnits[i];
+      if (u.sliding) continue;
       const dx = x - u.x, dz = z - u.z;
       if (dx * dx + dz * dz > 49) continue;
       const s1 = Math.sin(u.yaw), c1 = Math.cos(u.yaw);
       const lx = dx * c1 - dz * s1, lz = dx * s1 + dz * c1;
-      if (Math.abs(lx) < (HW[u.td.key] || 1.0) * 1.1 && Math.abs(lz) < u.halfLen * 1.12) return true;
+      if (Math.abs(lx) < (HW[u.td.key] || 1.0) * 1.05 && Math.abs(lz) < u.halfLen * 1.08) return true;
     }
     return false;
   }
 
-  // shove the nearest unit (collision impact reaction)
-  function kickAt(x, z, dx, dz, power) {
-    let best = null, bestD = 3.2 * 3.2;
+  function kickAt(x, z, dx, dz, power, carX = x, carZ = z) {
+    let best = null, bestD = 3.8 * 3.8;
     for (let i = 0; i < trafficUnits.length; i++) {
       const u = trafficUnits[i];
       const ddx = u.x - x, ddz = u.z - z;
@@ -1243,16 +1370,27 @@ export function createTraffic({
       if (d2 < bestD) { bestD = d2; best = u; }
     }
     if (!best || best.cool > 0) return false;
-    const airborne = (best.ky || 0) > 0.02; // never stack a second launch mid-flight
-    const mass = best.halfLen < 1.5 ? 1.5 : (best.halfLen > 2.8 ? 0.7 : 1.0);
-    const p2 = power * mass;
-    best.kvx += dx * p2;
-    best.kvz += dz * p2;
-    const side = (best.x - x) * dz - (best.z - z) * dx;
-    best.ksv += (side >= 0 ? 1 : -1) * p2 * 0.6;
-    // user bar: a struck vehicle must visibly leave the ground, not just shove sideways
-    if (!airborne) best.kvy = Math.min(12, Math.max(best.kvy, 4.5 + p2 * 1.15));
-    best.cool = 0.55;
+    const key = best.td.key;
+    const massMult = key === 'scooter' ? 1.85 : (key === 'auto' ? 1.35 : (key === 'sedan' ? 1.0 : (key === 'suv' ? 0.78 : 0.65)));
+    const halfW = Math.max(HW[key] || 1.0, best.halfLen * 0.65);
+    const imp = computeRoadAwareOutwardImpulse(best.x, best.z, carX, carZ, dx, dz, best.seg, validSegs, obsCheck, halfW, massMult, power);
+
+    best.ox = (best.ox || 0) + imp.nudgeX;
+    best.oz = (best.oz || 0) + imp.nudgeZ;
+    best.x += imp.nudgeX;
+    best.z += imp.nudgeZ;
+    best.kvx = imp.vx;
+    best.kvz = imp.vz;
+    best.ksv = imp.latSign * (1.5 + 1.25 * massMult);
+    if ((best.ky || 0) <= 0.04) best.kvy = Math.min(2.4, 0.95 + 0.45 * massMult);
+    best.krollTarget = imp.latSign * (key === 'scooter' ? 1.12 : (key === 'auto' ? 0.55 : (key === 'sedan' ? 0.22 : 0.14)));
+    best.krollV = imp.latSign * 2.8 * massMult;
+    best.kpitchV = 1.2 * massMult;
+    best.wreck = true;
+    best.wreckTimer = 0;
+    best.sliding = true;
+    best.speed = 0;
+    best.cool = 0.48;
     return true;
   }
 
@@ -1264,10 +1402,12 @@ export function createParkedVehicles({
   scene,
   roadSegs = [],
   solidFn = () => 0,
+  obstacleFn = null,
   nightUniform,
   seed = 42,
   getAuto
 }) {
+  const obsCheck = obstacleFn || solidFn;
   const group = new T.Group();
   scene.add(group);
 
@@ -1437,6 +1577,7 @@ export function createParkedVehicles({
   const v3 = new T.Vector3();
   const s3 = new T.Vector3(1.12, 1.12, 1.12);
   const yAxis = new T.Vector3(0, 1, 0);
+  const eulParked = new T.Euler(0, 0, 0, 'YXZ');
   const colC = new T.Color();
   const hiddenMatrix = new T.Matrix4().makeScale(0, 0, 0);
 
@@ -1508,8 +1649,10 @@ export function createParkedVehicles({
       for (let i = 0; i < maxCap; i++) {
         if (i < list.length) {
           const sp = list[i];
-          q4.setFromAxisAngle(yAxis, sp.yaw + (sp.oyaw || 0));
-          v3.set(sp.x + (sp.ox || 0), sp.ky || 0, sp.z + (sp.oz || 0));
+          eulParked.set(sp.pitch || 0, sp.yaw + (sp.oyaw || 0), sp.roll || 0, 'YXZ');
+          q4.setFromEuler(eulParked);
+          const tiltLift = Math.abs(Math.sin(sp.roll || 0)) * 0.28;
+          v3.set(sp.x + (sp.ox || 0), (sp.ky || 0) + tiltLift, sp.z + (sp.oz || 0));
           m4.compose(v3, q4, s3);
           sp.m = m; sp.idx = i;
           instancedSpots.push(sp);
@@ -1534,55 +1677,81 @@ export function createParkedVehicles({
 
   const instancedSpots = [];
   const activeParked = new Set();
-  if (typeof window !== 'undefined') window.__parkedSpots = () => instancedSpots.map(sp => ({ x: +sp.x.toFixed(1), z: +sp.z.toFixed(1), type: sp.type, yaw: +sp.yaw.toFixed(2) }));
+  if (typeof window !== 'undefined') window.__parkedSpots = () => instancedSpots.map(sp => ({ x: +sp.x.toFixed(1), z: +sp.z.toFixed(1), type: sp.type, yaw: +sp.yaw.toFixed(2), roll: +(sp.roll || 0).toFixed(2) }));
 
   // Initial populate
   refreshStreaming(true);
 
+  const HALF = { hatch: [0.95, 2.25], sedan: [1.0, 2.55], suv: [1.1, 2.55], autoRickshaw: [0.85, 1.6], scooter: [0.5, 1.05], bike: [0.45, 1.05] };
+
   function update(dt = 0.016) {
+    const safeDt = Math.min(0.1, Math.max(0.001, dt || 0.016));
+    const autoNow = getAuto ? getAuto() : null;
+    const ax = (autoNow && typeof autoNow.x === 'number') ? autoNow.x : -9999;
+    const az = (autoNow && typeof autoNow.z === 'number') ? autoNow.z : -9999;
     if (activeParked.size) {
       for (const sp of activeParked) {
-        // free slide with friction, NO restoring spring: it stays where the impact leaves it
-        const fr = Math.exp(-3.2 * dt), frs = Math.exp(-4.5 * dt);
-        sp.x += sp.vx * dt; sp.z += sp.vz * dt; sp.yaw += sp.vaw * dt;
+        const fr = Math.exp(-1.35 * safeDt), frs = Math.exp(-2.8 * safeDt);
+        const nx = sp.x + sp.vx * safeDt, nz = sp.z + sp.vz * safeDt;
+        if (!isBlockedObstacle(nx, nz, obsCheck, 0.65)) {
+          sp.x = nx; sp.z = nz;
+        } else {
+          sp.vx *= -0.15; sp.vz *= -0.15;
+        }
+        sp.yaw += sp.vaw * safeDt;
         sp.vx *= fr; sp.vz *= fr; sp.vaw *= frs;
         sp.ox = sp.oz = sp.oyaw = 0;
-        if (sp.ky > 0 || sp.vy > 0) { sp.vy -= 26 * dt; sp.ky += sp.vy * dt; if (sp.ky < 0) { sp.ky = 0; sp.vy = 0; } }
-        sp.cool -= dt;
+
+        const targetRoll = sp.rollTarget || 0;
+        sp.vroll = ((sp.vroll || 0) + (targetRoll - (sp.roll || 0)) * 14.0 * safeDt) * Math.exp(-5.0 * safeDt);
+        sp.roll = (sp.roll || 0) + sp.vroll * safeDt;
+        sp.vpitch = ((sp.vpitch || 0) - (sp.pitch || 0) * 16.0 * safeDt) * Math.exp(-5.5 * safeDt);
+        sp.pitch = (sp.pitch || 0) + sp.vpitch * safeDt;
+
+        if (sp.ky > 0 || sp.vy > 0) { sp.vy -= 22 * safeDt; sp.ky += sp.vy * safeDt; if (sp.ky < 0) { sp.ky = 0; sp.vy = 0; } }
+        sp.cool -= safeDt;
         if (sp.m && sp.idx >= 0) {
-          q4.setFromAxisAngle(yAxis, sp.yaw + sp.oyaw);
-          v3.set(sp.x + sp.ox, sp.ky, sp.z + sp.oz);
+          eulParked.set(sp.pitch || 0, sp.yaw, sp.roll || 0, 'YXZ');
+          q4.setFromEuler(eulParked);
+          const tiltLift = Math.abs(Math.sin(sp.roll || 0)) * 0.28;
+          v3.set(sp.x, (sp.ky || 0) + tiltLift, sp.z);
           m4.compose(v3, q4, s3);
           sp.m.bodyInst.setMatrixAt(sp.idx, m4);
           sp.m.detailInst.setMatrixAt(sp.idx, m4);
           sp.m.bodyInst.instanceMatrix.needsUpdate = true;
           sp.m.detailInst.instanceMatrix.needsUpdate = true;
         }
-        if (sp.cool <= 0 && Math.abs(sp.vx) + Math.abs(sp.vz) + Math.abs(sp.vaw) < 0.05 && Math.abs(sp.ox) + Math.abs(sp.oz) + Math.abs(sp.oyaw) < 0.01 && sp.ky === 0) {
-          sp.ox = sp.oz = sp.oyaw = 0; sp.vx = sp.vz = sp.vaw = 0;
-          activeParked.delete(sp);
-          // the impact moved it for real: keep collision lookup correct across cells
-          const nc = Math.floor(sp.x / cellSize) + ',' + Math.floor(sp.z / cellSize);
-          if (sp.cellKey !== nc) {
-            const oldCell = spatialGrid.get(sp.cellKey);
-            if (oldCell) { const oi = oldCell.indexOf(sp); if (oi >= 0) oldCell.splice(oi, 1); }
-            let nCell = spatialGrid.get(nc); if (!nCell) { nCell = []; spatialGrid.set(nc, nCell); }
-            nCell.push(sp); sp.cellKey = nc;
+        const nc = Math.floor(sp.x / cellSize) + ',' + Math.floor(sp.z / cellSize);
+        if (sp.cellKey !== nc) {
+          const oldCell = spatialGrid.get(sp.cellKey);
+          if (oldCell) { const oi = oldCell.indexOf(sp); if (oi >= 0) oldCell.splice(oi, 1); }
+          let nCell = spatialGrid.get(nc); if (!nCell) { nCell = []; spatialGrid.set(nc, nCell); }
+          nCell.push(sp); sp.cellKey = nc;
+        }
+        const remSpd = Math.hypot(sp.vx, sp.vz);
+        const distCar = Math.hypot(sp.x - ax, sp.z - az);
+        if (remSpd < 0.12 && sp.cool <= 0 && distCar > 2.8) {
+          sp.sliding = false;
+        }
+        if (sp.cool <= 0 && remSpd < 0.05 && Math.abs(sp.vaw) < 0.04 && sp.ky === 0 && Math.abs(sp.vroll || 0) < 0.03) {
+          sp.vx = sp.vz = sp.vaw = 0;
+          if (distCar > 2.8) {
+            sp.sliding = false;
+            activeParked.delete(sp);
           }
         }
       }
     }
-    accumDt += dt;
+    accumDt += safeDt;
     if (accumDt >= 0.35) {
       accumDt = 0;
       refreshStreaming(false);
     }
   }
 
-  // shove the nearest parked vehicle (collision impact reaction)
-  function kickAt(x, z, dx, dz, power) {
+  function kickAt(x, z, dx, dz, power, carX = x, carZ = z) {
     const cx = Math.floor(x / cellSize), cz = Math.floor(z / cellSize);
-    let best = null, bestD = 3.0 * 3.0;
+    let best = null, bestD = 3.6 * 3.6;
     for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) {
       const cell = spatialGrid.get(`${i},${j}`);
       if (!cell) continue;
@@ -1594,20 +1763,27 @@ export function createParkedVehicles({
       }
     }
     if (!best || best.cool > 0) return false;
-    const airborne = (best.ky || 0) > 0.02;
-    const light = (best.type === 'scooter' || best.type === 'bike') ? 1.6 : (best.type === 'autoRickshaw' ? 1.1 : 0.7);
-    const p = power * light;
-    best.vx += dx * p; best.vz += dz * p;
-    const side = (best.x - x) * dz - (best.z - z) * dx;
-    best.vaw += (side >= 0 ? 1 : -1) * p * 0.65;
-    // same visible-airborne bar for parked vehicles
-    if (!airborne) best.vy = Math.min(12, Math.max(best.vy, 4 + p * 1.05));
-    best.cool = 0.55;
+    const isLight = best.type === 'scooter' || best.type === 'bike';
+    const massMult = isLight ? 1.85 : (best.type === 'autoRickshaw' ? 1.35 : (best.type === 'suv' ? 0.78 : 1.0));
+    const h = HALF[best.type] || [0.95, 2.25];
+    const halfW = Math.max(h[0], h[1] * 0.65);
+    const imp = computeRoadAwareOutwardImpulse(best.x, best.z, carX, carZ, dx, dz, null, validSegs, obsCheck, halfW, massMult, power);
+
+    best.x += imp.nudgeX;
+    best.z += imp.nudgeZ;
+    best.vx = imp.vx;
+    best.vz = imp.vz;
+    best.vaw = imp.latSign * (1.5 + 1.25 * massMult);
+    if ((best.ky || 0) <= 0.04) best.vy = Math.min(2.3, 0.9 + 0.45 * massMult);
+    best.rollTarget = imp.latSign * (isLight ? 1.15 : (best.type === 'autoRickshaw' ? 0.55 : 0.22));
+    best.vroll = imp.latSign * 2.8 * massMult;
+    best.vpitch = 1.2 * massMult;
+    best.sliding = true;
+    best.cool = 0.48;
     activeParked.add(best);
     return true;
   }
 
-  const HALF = { hatch: [0.95, 2.25], sedan: [1.0, 2.55], suv: [1.1, 2.55], autoRickshaw: [0.85, 1.6], scooter: [0.5, 1.05], bike: [0.45, 1.05] };
   function solid(x, z) {
     const cx = Math.floor(x / cellSize), cz = Math.floor(z / cellSize);
     for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) {
@@ -1615,6 +1791,7 @@ export function createParkedVehicles({
       if (!cell) continue;
       for (let k = 0; k < cell.length; k++) {
         const sp = cell[k];
+        if (sp.sliding) continue;
         const dx = x - sp.x, dz = z - sp.z;
         if (dx * dx + dz * dz > 25) continue;
         const h = HALF[sp.type] || [0.9, 2.1];

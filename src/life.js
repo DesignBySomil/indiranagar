@@ -156,10 +156,12 @@ export function createStreetLife({
   speedBreakers = [],
   vendorSpots = [],
   solid = () => 0,
+  obstacleFn = null,
   auto,
   npcsRef = null,
   ui = {}
 }) {
+  const obsCheck = obstacleFn || solid;
   const root = new T.Group();
   scene.add(root);
 
@@ -505,6 +507,7 @@ export function createStreetLife({
   }
 
   // ---------- 4. Street Vendor Carts at exported vendorSpots ----------
+  const vendorCarts = [];
   const vendorTypes = [
     { roof: 0x16a34a, prop: 0x22c55e },
     { roof: 0xdc2626, prop: 0xfacc15 },
@@ -529,6 +532,17 @@ export function createStreetLife({
     mound.position.set(0, 1.02, 0);
     vg.add(bed, canopy, mound);
     root.add(vg);
+    vendorCarts.push({
+      mesh: vg,
+      x: vs.x,
+      z: vs.z,
+      yaw: vs.yaw || 0,
+      radius: 1.15,
+      vx: 0, vz: 0, vy: 0, ky: 0, vaw: 0,
+      roll: 0, vroll: 0, rollTarget: 0,
+      pitch: 0, vpitch: 0,
+      wreck: false, sliding: false, cool: 0
+    });
   }
 
   // ---------- 5. Weird Fare & Detour Waypoint ----------
@@ -603,9 +617,182 @@ export function createStreetLife({
     }
   }
 
+  function isBlockedLifePos(x, z, r = 0.6) {
+    if (!obsCheck) return false;
+    return Boolean(
+      obsCheck(x, z) ||
+      obsCheck(x + r, z) ||
+      obsCheck(x - r, z) ||
+      obsCheck(x, z + r) ||
+      obsCheck(x, z - r)
+    );
+  }
+
+  function stepKnockedLifeEntity(ent, dt, playerAuto, allowRecover = false) {
+    if (!ent.wreck && !(ent.cool > 0) && !ent.sliding) return false;
+    const safeDt = Math.min(0.1, Math.max(0.001, dt || 0.016));
+    const fr = Math.exp(-1.35 * safeDt), frs = Math.exp(-2.8 * safeDt);
+    const nx = ent.x + (ent.vx || 0) * safeDt;
+    const nz = ent.z + (ent.vz || 0) * safeDt;
+    if (!isBlockedLifePos(nx, nz, 0.65)) {
+      ent.x = nx;
+      ent.z = nz;
+    } else {
+      ent.vx = -(ent.vx || 0) * 0.15;
+      ent.vz = -(ent.vz || 0) * 0.15;
+    }
+    ent.yaw = (ent.yaw || 0) + (ent.vaw || 0) * safeDt;
+    ent.vx = (ent.vx || 0) * fr;
+    ent.vz = (ent.vz || 0) * fr;
+    ent.vaw = (ent.vaw || 0) * frs;
+
+    const rTarget = ent.rollTarget || 0;
+    ent.vroll = ((ent.vroll || 0) + (rTarget - (ent.roll || 0)) * 14.0 * safeDt) * Math.exp(-5.0 * safeDt);
+    ent.roll = (ent.roll || 0) + ent.vroll * safeDt;
+    ent.vpitch = ((ent.vpitch || 0) - (ent.pitch || 0) * 16.0 * safeDt) * Math.exp(-5.5 * safeDt);
+    ent.pitch = (ent.pitch || 0) + ent.vpitch * safeDt;
+
+    if ((ent.ky || 0) > 0 || (ent.vy || 0) > 0) {
+      ent.vy = (ent.vy || 0) - 22 * safeDt;
+      ent.ky = (ent.ky || 0) + ent.vy * safeDt;
+      if (ent.ky < 0) { ent.ky = 0; ent.vy = 0; }
+    }
+    if (ent.cool > 0) ent.cool -= safeDt;
+    const remSpd = Math.hypot(ent.vx || 0, ent.vz || 0);
+    if (remSpd < 0.05) { ent.vx = 0; ent.vz = 0; }
+    const px = playerAuto ? playerAuto.x : -9999, pz = playerAuto ? playerAuto.z : -9999;
+    const dPlayer = Math.hypot(ent.x - px, ent.z - pz);
+    if (remSpd < 0.12 && ent.cool <= 0 && dPlayer > 2.8) ent.sliding = false;
+
+    if (allowRecover && ent.wreck) {
+      ent.wreckTimer = (ent.wreckTimer || 0) + safeDt;
+      if (ent.wreckTimer > 14.0 || (ent.wreckTimer > 4.0 && dPlayer > 45.0)) {
+        ent.wreck = false;
+        ent.wreckTimer = 0;
+        ent.sliding = false;
+        ent.roll = 0; ent.vroll = 0; ent.rollTarget = 0;
+        ent.pitch = 0; ent.vpitch = 0;
+        ent.mesh.rotation.set(0, ent.yaw || 0, 0);
+        return false;
+      }
+    }
+
+    const lift = Math.abs(Math.sin(ent.roll || 0)) * 0.28;
+    ent.mesh.position.set(ent.x, (ent.ky || 0) + lift, ent.z);
+    ent.mesh.rotation.order = 'YXZ';
+    ent.mesh.rotation.set(ent.pitch || 0, ent.yaw || 0, ent.roll || 0);
+    return true;
+  }
+
+  function kickAt(x, z, dx, dz, power, carX = x, carZ = z) {
+    let best = null, bestKind = '', bestD = 3.8 * 3.8;
+    const scan = (arr, kind) => {
+      for (let i = 0; i < arr.length; i++) {
+        const it = arr[i];
+        const d2 = (it.x - x) * (it.x - x) + (it.z - z) * (it.z - z);
+        if (d2 < bestD) { bestD = d2; best = it; bestKind = kind; }
+      }
+    };
+    scan(vendorCarts, 'cart');
+    scan(cows, 'cow');
+    scan(npcAutos, 'auto');
+    scan(trafficUnits, 'traffic');
+
+    if (!best || (best.cool && best.cool > 0)) return false;
+
+    const massMult = bestKind === 'cart' ? 1.85
+      : (bestKind === 'cow' ? 1.25
+      : (bestKind === 'auto' ? 1.38
+      : (best.type === 'yulu' || best.type === 'bike' ? 1.95 : (best.type === 'bmtc' ? 0.58 : 1.05))));
+
+    const halfW = bestKind === 'cart' ? 1.15
+      : (bestKind === 'cow' ? 1.15
+      : (bestKind === 'auto' ? 1.15 : (best.radius || 1.2)));
+
+    const relX = best.x - carX, relZ = best.z - carZ;
+    const signedLat = relX * dz - relZ * dx;
+    let latSign = signedLat >= 0 ? 1 : -1;
+
+    if (Math.abs(signedLat) < 0.35 && navSegs.length) {
+      let refSeg = best.segIdx !== undefined ? navSegs[best.segIdx] : null;
+      if (!refSeg) {
+        let bd = 1e9;
+        for (let i = 0; i < navSegs.length; i++) {
+          const s = navSegs[i];
+          const apx = best.x - s.x1, apz = best.z - s.z1;
+          const t = Math.max(0, Math.min(1, (apx * s.ux + apz * s.uz) / (s.len || 1)));
+          const d = Math.hypot(best.x - (s.x1 + s.ux * s.len * t), best.z - (s.z1 + s.uz * s.len * t));
+          if (d < bd) { bd = d; refSeg = s; }
+        }
+      }
+      if (refSeg) {
+        const apx = best.x - refSeg.x1, apz = best.z - refSeg.z1;
+        const sideOfRoad = apx * refSeg.uz - apz * refSeg.ux;
+        const outNx = refSeg.uz * (sideOfRoad >= 0 ? 1 : -1);
+        const outNz = -refSeg.ux * (sideOfRoad >= 0 ? 1 : -1);
+        latSign = (outNx * dz + outNz * (-dx)) >= 0 ? 1 : -1;
+      }
+    }
+
+    let lx = dz * latSign, lz = -dx * latSign;
+    const probeClear = (dirX, dirZ) => {
+      let m = 0;
+      for (const d of [1.0, 2.0, 3.2, 4.5]) {
+        if (isBlockedLifePos(best.x + dirX * d, best.z + dirZ * d, 0.65)) break;
+        m = d;
+      }
+      return m;
+    };
+    if (probeClear(lx, lz) < 2.2 && probeClear(-lx, -lz) > probeClear(lx, lz) + 0.8) {
+      latSign = -latSign; lx = -lx; lz = -lz;
+    }
+
+    let vxDir = dx * 0.30 + lx * 0.88;
+    let vzDir = dz * 0.30 + lz * 0.88;
+    const vLen = Math.hypot(vxDir, vzDir) || 1;
+    vxDir /= vLen; vzDir /= vLen;
+
+    const curLat = (best.x - carX) * lx + (best.z - carZ) * lz;
+    const targetLatFromLine = Math.max(3.1, (0.95 + halfW + 1.25) * Math.min(1.45, Math.max(0.85, massMult)));
+    const neededLat = Math.max(2.4 * Math.min(1.3, massMult), targetLatFromLine - Math.max(0, curLat));
+
+    const nudge = Math.min(1.05, 0.50 * Math.min(1.5, massMult));
+    if (!isBlockedLifePos(best.x + vxDir * nudge, best.z + vzDir * nudge, 0.6)) {
+      best.x += vxDir * nudge;
+      best.z += vzDir * nudge;
+    }
+
+    const DRAG = 1.35;
+    const minHorizDist = Math.max(neededLat / 0.88, (2.8 + power * 0.5) * massMult);
+    const v0 = Math.min(18.0, Math.max(5.0, minHorizDist * DRAG));
+
+    best.vx = vxDir * v0;
+    best.vz = vzDir * v0;
+    best.vaw = latSign * (1.55 + 1.25 * massMult);
+    best.vy = Math.min(2.3, 0.9 + 0.42 * massMult);
+    best.ky = Math.max(best.ky || 0, 0.05);
+    best.rollTarget = latSign * (bestKind === 'cart' ? 1.18 : (massMult > 1.7 ? 1.12 : (bestKind === 'auto' ? 0.55 : (bestKind === 'cow' ? 0.42 : 0.20))));
+    best.vroll = latSign * 2.8 * massMult;
+    best.vpitch = 1.15 * massMult;
+    best.wreck = true;
+    best.wreckTimer = 0;
+    best.sliding = true;
+    best.cool = 0.48;
+
+    if (bestKind === 'auto' && best.cooldown <= 0) {
+      triggerArgument(best, 'What is this, are you blind?! You hit my bumper!');
+    } else if (bestKind === 'cow' && best.cooldown <= 0) {
+      best.cooldown = 5;
+      playMoo();
+      spawnBubble(best.mesh, 'MOOO! Go around me!', 2.8, 2.5, false);
+    }
+    return true;
+  }
+
   function checkNpcSolid(x, z) {
     for (let i = 0; i < cows.length; i++) {
       const c = cows[i];
+      if (c.sliding) continue;
       if (Math.hypot(x - c.x, z - c.z) < 1.35) {
         if (c.cooldown <= 0) {
           c.cooldown = 5;
@@ -617,6 +804,7 @@ export function createStreetLife({
     }
     for (let i = 0; i < npcAutos.length; i++) {
       const na = npcAutos[i];
+      if (na.sliding) continue;
       if (Math.hypot(x - na.x, z - na.z) < 1.35) {
         if (na.cooldown <= 0) triggerArgument(na, 'What is this, are you blind?! You hit my bumper!');
         return true;
@@ -624,6 +812,7 @@ export function createStreetLife({
     }
     for (let i = 0; i < trafficUnits.length; i++) {
       const tu = trafficUnits[i];
+      if (tu.sliding) continue;
       if (Math.hypot(x - tu.x, z - tu.z) < tu.radius * 0.72) return true;
     }
     return false;
@@ -667,6 +856,7 @@ export function createStreetLife({
     for (let i = 0; i < npcAutos.length; i++) {
       const na = npcAutos[i];
       if (na.cooldown > 0) na.cooldown -= dt;
+      if (stepKnockedLifeEntity(na, dt, playerAuto, true)) continue;
 
       const distToPlayer = Math.hypot(na.x - playerAuto.x, na.z - playerAuto.z);
       // Switch between full buildAuto() mesh (<95m) and cheap LOD mesh (>=95m)
@@ -735,6 +925,7 @@ export function createStreetLife({
     // 2. Update BMTC Buses, Cars, Bikes & Yulu Riders on Left Lane
     for (let i = 0; i < trafficUnits.length; i++) {
       const tu = trafficUnits[i];
+      if (stepKnockedLifeEntity(tu, dt, playerAuto, true)) continue;
       const seg = navSegs[tu.segIdx];
       if (!seg) continue;
 
@@ -769,11 +960,15 @@ export function createStreetLife({
     // Attach real SpotLight pool to nearest 4 AI vehicles at night
     attachHeadlightsToNearest(allHeadlightVehicles, playerAuto, 4, scene);
 
-    // 3. Update Cows
+    // 3. Update Cows & Vendor Carts
     for (let i = 0; i < cows.length; i++) {
       const c = cows[i];
       if (c.cooldown > 0) c.cooldown -= dt;
+      stepKnockedLifeEntity(c, dt, playerAuto, false);
       c.head.rotation.z = Math.sin(clock * 1.8 + i) * 0.08;
+    }
+    for (let i = 0; i < vendorCarts.length; i++) {
+      stepKnockedLifeEntity(vendorCarts[i], dt, playerAuto, false);
     }
 
     // 4. Update Speech Bubbles
@@ -832,6 +1027,11 @@ export function createStreetLife({
     update,
     onHorn,
     solid: checkNpcSolid,
+    kickAt,
+    vendorCarts,
+    cows,
+    npcAutos,
+    trafficUnits,
     setMuted,
     stats,
     dispose

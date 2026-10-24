@@ -557,19 +557,20 @@ function step(dt, now) {
     }
     if (!moved) auto.v = thr > 0 ? Math.min(auto.v, 0) * 0.2 : Math.max(auto.v, 0) * 0.2;
   }
-  // impact feedback: if we drove into traffic or a parked vehicle, shove it a little
-  if (Math.abs(preV) > 2.4) {
+  // impact feedback: dispatch across front/rear bumper contact points with car origin (auto.x, auto.z)
+  if (Math.abs(preV) > 2.0) {
     const dirS = preV > 0 ? 1 : -1;
     const fx0 = Math.sin(auto.a) * dirS, fz0 = Math.cos(auto.a) * dirS;
-    const px0 = auto.x + fx0 * 2.05, pz0 = auto.z + fz0 * 2.05;
-    const kind0 = hitKind(px0, pz0, auto.a);
-    const pw = Math.min(6, Math.abs(preV) * 0.55);
-    if (kind0 === 2) {
-      if (traffic && traffic.kickAt) traffic.kickAt(px0, pz0, fx0, fz0, pw);
-      if (crowd && crowd.kickAt) crowd.kickAt(px0, pz0, fx0, fz0, pw * 1.15);
-      if (life && life.kickAt) life.kickAt(px0, pz0, fx0, fz0, pw);
+    const rx0 = Math.cos(auto.a), rz0 = -Math.sin(auto.a);
+    const pw = Math.min(7.5, Math.max(2.8, Math.abs(preV) * 0.62));
+    for (const [fOff, sOff] of [[2.05, 0], [1.95, 0.8], [1.95, -0.8], [1.4, 0]]) {
+      const px0 = auto.x + fx0 * fOff + rx0 * sOff;
+      const pz0 = auto.z + fz0 * fOff + rz0 * sOff;
+      if (traffic && traffic.kickAt) traffic.kickAt(px0, pz0, fx0, fz0, pw, auto.x, auto.z);
+      if (crowd && crowd.kickAt) crowd.kickAt(px0, pz0, fx0, fz0, pw * 1.15, auto.x, auto.z);
+      if (life && life.kickAt) life.kickAt(px0, pz0, fx0, fz0, pw, auto.x, auto.z);
+      if (parkedVehicles && parkedVehicles.kickAt) parkedVehicles.kickAt(px0, pz0, fx0, fz0, pw * 0.9, auto.x, auto.z);
     }
-    else if (kind0 === 1 && parkedVehicles && parkedVehicles.kickAt && parkedVehicles.solid(px0, pz0)) parkedVehicles.kickAt(px0, pz0, fx0, fz0, pw * 0.8);
   }
   // unstick fallback: throttle held but not moving against a collider -> back off, then snap to the road lane
   // Only static geometry triggers the recovery hop. Waiting behind traffic, a cow or a crowd never moves the player: they can wait, reverse or steer around.
@@ -850,6 +851,7 @@ try {
     }
   });
   
+  const obstacleFn = (x, z) => Boolean(solid(x, z) || inDivider(x, z) || pierHit(x, z));
   life = createStreetLife({
     THREE,
     scene,
@@ -859,6 +861,7 @@ try {
     speedBreakers: street.speedBreakers,
     vendorSpots: street.vendorSpots,
     solid,
+    obstacleFn,
     auto,
     npcsRef: npcs,
     ui: {
@@ -877,9 +880,9 @@ try {
 
   try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
   shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
-  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); if (q === null || q === '') return 150; const n = parseInt(q); return Number.isFinite(n) ? Math.max(0, Math.min(220, n)) : 150; })() });
-  parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
-  crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, avoidFn: (parkedVehicles && parkedVehicles.overlaps) ? parkedVehicles.overlaps : undefined, getAuto: () => { const cd = camera.getWorldDirection(new THREE.Vector3()); return { x: auto.x, z: auto.z, yaw: Math.atan2(cd.x, cd.z) }; }, nightUniform, count: 120 });
+  traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); if (q === null || q === '') return 150; const n = parseInt(q); return Number.isFinite(n) ? Math.max(0, Math.min(220, n)) : 150; })() });
+  parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
+  crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, avoidFn: (parkedVehicles && parkedVehicles.overlaps) ? parkedVehicles.overlaps : undefined, getAuto: () => { const cd = camera.getWorldDirection(new THREE.Vector3()); return { x: auto.x, z: auto.z, yaw: Math.atan2(cd.x, cd.z) }; }, nightUniform, count: 120 });
   bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   hazards = createHazards({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid });
   buildMini();
