@@ -356,7 +356,8 @@ const tiltButton=$('tilt-toggle');
 function stopTilt(message='Enable tilt'){tiltEnabled=false;tiltValue=0;tiltTarget=0;tiltNeutral=null;clearTimeout(tiltTimer);tiltButton.textContent=message;tiltButton.setAttribute('aria-pressed','false');}
 tiltButton.addEventListener('click',async()=>{if(tiltEnabled){stopTilt();return;}try{if(!window.DeviceOrientationEvent){stopTilt('Tilt unavailable');return;}if(typeof DeviceOrientationEvent.requestPermission==='function'&&await DeviceOrientationEvent.requestPermission()!=='granted'){stopTilt('Tilt denied - use arrows');return;}tiltEnabled=true;tiltNeutral=null;tiltButton.textContent='Hold level...';tiltButton.setAttribute('aria-pressed','true');tiltTimer=setTimeout(()=>{if(tiltNeutral===null)stopTilt('No sensor - use arrows');},2500);}catch{stopTilt('Tilt unavailable');}});
 addEventListener('deviceorientation',e=>{if(!tiltEnabled||typeof e.beta!=='number'||typeof e.gamma!=='number')return;const angle=(screen.orientation?.angle??window.orientation??0)*Math.PI/180;const value=e.gamma*Math.cos(angle)+e.beta*Math.sin(angle);if(tiltNeutral===null){tiltNeutral=value;clearTimeout(tiltTimer);tiltButton.textContent='Tilt on · tap to stop';}const delta=value-tiltNeutral;tiltTarget=tiltResponse(delta);});
-addEventListener('blur',()=>{releaseMobile();tiltNeutral=null;});document.addEventListener('visibilitychange',()=>{if(document.hidden){releaseMobile();tiltNeutral=null;}});
+function releaseAllInput(){for(const key of Object.keys(keys))keys[key]=false;releaseMobile();tiltNeutral=null;}
+addEventListener('blur',releaseAllInput);addEventListener('pagehide',releaseAllInput);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAllInput();});
 
 document.addEventListener('pointerdown',()=>{if(started)startAudio();},{passive:true});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&started&&AC&&AC.state!=='running')AC.resume().catch(()=>{});});
