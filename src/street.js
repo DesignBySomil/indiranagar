@@ -1,3 +1,4 @@
+import { WIDTHS as widthMap, W100, WCMH, roadWidth } from './roadwidth.js';
 // src/street.js
 import * as THREE from 'three';
 import { createAsphaltMaterial, createPavementMaterial, createKerbMaterial, makeSign, makeEmissiveSignMaterial, makeNeonMaterial } from './materials.js';
@@ -74,7 +75,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   // Real Bangalore road widths: single carriageway 1-lane each way (~7m residential, ~10.5m 12th Main/CMH),
   // 100 Feet Road as two separated one-way carriageways (2 lanes each, pale concrete) with narrow 0.5m concrete divider
   // User rule (2026-10-23): ONLY 2-lane roads - one lane each way, no 3/4-lane roads.
-  const widthMap = { 5: 7.6, 4: 7.2, 3: 7.0, 2: 6.6, 1: 5.5 };
+
 
   const pos = [], col = [], uvs = [], idx = [];
   const fpPos = [], fpCol = [], fpUvs = [], fpIdx = [];
@@ -93,7 +94,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   // User rule (2-lane roads, one lane each way): the raw OSM pair sits 10-30m apart, which reads as a
   // 4-lane-wide corridor from driver height. Narrow the corridor at the source polyline so the two
   // carriageways sit GAP100 apart (5.2m each + 1.2m median) - one divided 2-lane road.
-  const W100 = 5.2; // 100 Feet Road: one-way carriageway pair, 1 lane each = 2 lanes total (user rule)
+
   const GAP100 = W100 + 1.2;
   const medianQuads = [];
   const medianKerbs = [], medianStrips = [];
@@ -143,25 +144,6 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   };
   const nbrPerp = new Map();
   collectHundred();
-  pairHundred(false); // measure original pair separation
-  {
-    const done = new Set();
-    for (const a of hundredSegs) {
-      const perp = nbrPerp.get(a.ri + ':' + a.i);
-      if (perp === undefined) continue;
-      const sh = Math.max(0, (Math.abs(perp) - GAP100) / 2);
-      if (sh <= 0) continue;
-      const sgn = Math.sign(perp);
-      const sx = -a.uz * sgn * sh, sz = a.ux * sgn * sh;
-      const rp = world.roads[a.ri].p;
-      for (const pi of [a.i, a.i + 1]) {
-        const k2 = a.ri + ':' + pi;
-        if (done.has(k2)) continue;
-        done.add(k2);
-        rp[pi][0] += sx; rp[pi][1] += sz;
-      }
-    }
-  }
   nbrSide.clear();
   collectHundred();
   pairHundred(true); // rebuild pairs + median quads on the narrowed corridor
@@ -225,7 +207,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
     const isCMH = Boolean(r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras')));
     // User rule (2026-10-23): 2 lanes TOTAL per road, one each way. Divided corridors
     // (100 Ft, CMH/metro) are one-way single-lane carriageway pairs around the median.
-    const w = is100Ft ? W100 : (isCMH ? 4.8 : (widthMap[r.k] || 7.0)); // CMH: carriageway pair with a median that holds the metro piers
+    const w = roadWidth(r); // CMH: carriageway pair with a median that holds the metro piers
     // 100 Feet Road is pale white-topped concrete slabs with patches; other roads are worn mid-grey asphalt
     const baseCol = is100Ft
       ? [0.40, 0.40, 0.39]
@@ -951,7 +933,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   const treeGrid = new Set();
 
   for (const r of world.roads) {
-    const rw = (r.n && r.n.includes('100 Feet')) ? W100 : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? 4.8 : (widthMap[r.k] || 7.0));
+    const rw = (r.n && r.n.includes('100 Feet')) ? W100 : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? WCMH : (widthMap[r.k] || 14.0));
     const fw = r.k >= 4 ? 2.3 : 1.5;
     const vergeOffset = rw * 0.5 + fw + 0.55;
 
@@ -1035,7 +1017,7 @@ export function buildStreet(world, scene, nightUniform, solidFn, extras = null) 
   // Street Lamps
   for (const r of world.roads) {
     if (r.k < 3) continue;
-    const rw = (r.n && r.n.includes('100 Feet')) ? W100 : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? 4.8 : (widthMap[r.k] || 7.0));
+    const rw = (r.n && r.n.includes('100 Feet')) ? W100 : ((r.n && (r.n.includes('Chinmaya') || r.n.includes('CMH') || r.n.includes('Old Madras'))) ? WCMH : (widthMap[r.k] || 14.0));
     for (let i = 0; i < r.p.length - 1; i++) {
       const [x1, z1] = r.p[i], [x2, z2] = r.p[i + 1];
       const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz);

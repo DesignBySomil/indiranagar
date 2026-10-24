@@ -1,3 +1,4 @@
+import { prepareWideRoads, clearWideRoadBuildings, roadWidth } from './roadwidth.js';
 import { applyAlleyFix, applyBldgFix } from './alleyfix.js';
 // src/main.js
 import * as THREE from 'three';
@@ -716,12 +717,13 @@ async function boot() {
   applyAlleyFix(world.roads);
   applyBldgFix(world.buildings);
   world.roads.push({ k: 3, n: 'Old Airport Road', p: LEELA_ACCESS_ROAD });
+  prepareWideRoads(world);
   (function infill() {
     const WM = { 5: 14.5, 4: 10.5, 3: 8.2, 2: 7, 1: 5.5 };
     const segs = [];
     for (const r of world.roads) {
       if (!r.p || r.p.length < 2) continue;
-      const hw = ((r.n || '').includes('100 Feet') ? 10 : (WM[r.k] || 7)) / 2 + 3.2;
+      const hw = roadWidth(r) / 2 + 3.2;
       for (let i = 0; i < r.p.length - 1; i++) segs.push([r.p[i][0], r.p[i][1], r.p[i + 1][0], r.p[i + 1][1], hw]);
     }
     const G = 24, grid = new Map();
@@ -786,6 +788,7 @@ try {
 }
 
 
+  clearWideRoadBuildings(world);
   setLoad(30, 'Raising Indiranagar blocks');
   await new Promise(r => setTimeout(r, 20));
   const clearing = [];

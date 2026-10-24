@@ -497,7 +497,7 @@ export function createCrowd({
   }
   function computeFootpathOffset(seg, side, seedVal) {
     const minOff = Math.max(3.4, seg.width * 0.5 + 0.65);
-    const maxOff = Math.min(6.0, Math.max(minOff + 0.4, seg.width * 0.5 + 1.85));
+    const maxOff = Math.max(minOff + 0.4, seg.width * 0.5 + 1.85);
     const mag = T.MathUtils.clamp(minOff + hash(seedVal, seg.mx, 19) * (maxOff - minOff), 3.4, 6.0);
     if (offsetClear(seg, mag * side)) return mag * side;
     if (offsetClear(seg, -mag * side)) return -mag * side;
@@ -630,7 +630,7 @@ export function createCrowd({
     for (const frac of [0.28, 0.72]) {
       if (vendorSpots.length >= 14) break;
       const side = (i % 2 === 0) ? 1 : -1;
-      const vOff = Math.min(5.8, Math.max(4.1, s.width * 0.5 + 1.45)) * side;
+      const vOff = Math.max(4.1, s.width * 0.5 + 1.45) * side;
       const vx = s.x1 + s.ux * s.len * frac - s.uz * vOff;
       const vz = s.z1 + s.uz * s.len * frac + s.ux * vOff;
       if (Math.hypot(vx - (-133), vz - (-345)) < 16) continue;
