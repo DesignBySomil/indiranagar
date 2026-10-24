@@ -369,7 +369,8 @@ export function createCrowd({
   solidFn = () => 0,
   getAuto,
   nightUniform,
-  count = 78
+  count = 78,
+  avoidFn = () => false
 }) {
   // Strictly enforce performance budget: cap pedestrian count at 120
   const maxPeds = Math.min(84, Math.max(36, count || 78));
@@ -634,6 +635,7 @@ export function createCrowd({
       const vz = s.z1 + s.uz * s.len * frac + s.ux * vOff;
       if (Math.hypot(vx - (-133), vz - (-345)) < 16) continue;
       if (!isSolidSafe(vx, vz) || !isSolidSafe(vx + 0.9, vz + 0.9) || !isSolidSafe(vx - 0.9, vz - 0.9)) continue;
+      if (avoidFn(vx, vz, 1.1)) continue; // keep vendor carts out of parked-vehicle footprints (cart 1.15x1.65 -> r1.1)
       vendorSpots.push({ x: vx, z: vz, yaw: Math.atan2(s.ux, s.uz) });
     }
   }
@@ -833,5 +835,5 @@ export function createCrowd({
     return false;
   }
 
-  return { group, update, solid, peds, kickAt };
+  return { group, update, solid, peds, kickAt, vendorSpots };
 }

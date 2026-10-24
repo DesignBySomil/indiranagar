@@ -1581,5 +1581,16 @@ export function createParkedVehicles({
     return false;
   }
 
-  return { group, update, solid, kickAt };
+  // Does a circle (x,z,r) overlap any parked-vehicle footprint? Full generated spot list, rotated type half-extents (scoped extraction from collision worker v25, reference only - physics candidate stays separate)
+  function overlaps(x, z, r = 0) {
+    for (const sp of allSpots) {
+      const dx = x - sp.x, dz = z - sp.z;
+      if (dx * dx + dz * dz > 36) continue;
+      const h = HALF[sp.type] || [0.9, 2.1], s1 = Math.sin(sp.yaw), c1 = Math.cos(sp.yaw);
+      const lx = dx * c1 - dz * s1, lz = dx * s1 + dz * c1;
+      if (Math.abs(lx) < h[0] + r && Math.abs(lz) < h[1] + r) return true;
+    }
+    return false;
+  }
+  return { group, update, solid, kickAt, overlaps };
 }
