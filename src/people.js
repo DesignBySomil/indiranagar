@@ -698,6 +698,7 @@ export function createCrowd({
 
     for (let i = 0; i < maxPeds; i++) {
       const p = peds[i];
+      if(p.active === false) { for(const sets of farVariants)for(const im of sets)im.setMatrixAt(i,mZero); continue; }
 
       // Knocked-by-impact ped: lateral slide clear of path, topple, then resume walking from landed spot
       if (p.kn) {
@@ -797,6 +798,7 @@ export function createCrowd({
     // Swap the nearest walkers to the high-fidelity models (hide their instanced proxies)
     const byDist = [];
     for (let i = 0; i < peds.length; i++) {
+      if(peds[i].active === false)continue;
       const dx = peds[i].x - player.x, dz = peds[i].z - player.z;
       byDist.push([dx * dx + dz * dz, i]);
     }
@@ -807,7 +809,7 @@ export function createCrowd({
       if (sl.pedId < 0) continue;
       const q = peds[sl.pedId];
       const ddx = q.x - player.x, ddz = q.z - player.z;
-      if (ddx * ddx + ddz * ddz > 65 * 65) { q._lastGemVariant = sl.variant; sl.pedId = -1; sl.g.visible = false; q._gemVariant = undefined; }
+      if (q.active === false || ddx * ddx + ddz * ddz > 65 * 65) { q._lastGemVariant = sl.variant; sl.pedId = -1; sl.g.visible = false; q._gemVariant = undefined; }
     }
     // assign free slots to the nearest unlocked peds, matching clothing class so the swap never changes who someone is
     for (let k = 0; k < byDist.length; k++) {
@@ -850,6 +852,7 @@ export function createCrowd({
     let best = null, bestD = 2.8 * 2.8;
     for (let i = 0; i < peds.length; i++) {
       const q = peds[i];
+      if(q.active === false)continue;
       if (q.kn) continue;
       const ddx = q.x - x, ddz = q.z - z;
       const d2 = ddx * ddx + ddz * ddz;
@@ -882,6 +885,7 @@ export function createCrowd({
   function solid(x, z) {
     for (let i = 0; i < peds.length; i++) {
       const q = peds[i];
+      if(q.active === false)continue;
       if (q.kn) continue; // a knocked ped is airborne/recovering, not a wall
       const dx = x - q.x, dz = z - q.z;
       if (dx * dx + dz * dz < 0.36) return true;
@@ -889,5 +893,10 @@ export function createCrowd({
     return false;
   }
 
-  return { group, update, solid, peds, kickAt, vendorSpots };
+  function setDensity(fraction) {
+    const n=Math.round(peds.length*Math.max(0,Math.min(1,fraction)));
+    peds.forEach((p,i)=>{p.active=i<n;if(!p.active)for(const sets of farVariants)for(const im of sets){im.setMatrixAt(i,mZero);im.instanceMatrix.needsUpdate=true;}});
+    for(const sl of gemSlots)if(sl.pedId>=0 && peds[sl.pedId].active===false){peds[sl.pedId]._gemVariant=undefined;sl.pedId=-1;sl.g.visible=false;}
+  }
+  return { group, update, solid, setDensity, peds, kickAt, vendorSpots };
 }

@@ -360,7 +360,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
       <div class="shud-pill" id="shud-lvl">Lv.1 · Auto Rookie</div>
       <div class="shud-pill">XP <b id="shud-xp">0</b></div>
       <div class="shud-pill">₹ <b id="shud-coins">100</b></div>
-      <button class="shud-btn" id="btn-passport">Passport (P)</button>
+      <button class="shud-btn" id="btn-passport" aria-label="Collected locations, open stamps"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg><span id="stamp-count">0/20</span></button>
     </div>
     <div class="shud-row">
       <div class="shud-pill" id="shud-combo" style="display:none">Combo <b id="shud-mult">x1</b></div>
@@ -639,6 +639,7 @@ export function createStopsGame({ THREE: T = THREE, scene, camera, renderer, wor
 
     const visitedCount = stops.filter(s => s.got).length;
     if (elFound) elFound.textContent = visitedCount;
+    const countLabel=document.getElementById("stamp-count");if(countLabel)countLabel.textContent=`${visitedCount}/${stops.length}`;
     if (elTotal) elTotal.textContent = stops.length;
   }
   updateHUD();

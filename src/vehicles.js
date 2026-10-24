@@ -1078,6 +1078,7 @@ export function createTraffic({
     const laneMap = new Map();
     for (let i = 0; i < trafficUnits.length; i++) {
       const tu = trafficUnits[i];
+      if (tu.active === false) continue;
       let segList = laneMap.get(tu.seg);
       if (!segList) {
         segList = { f: [], r: [] };
@@ -1166,6 +1167,7 @@ export function createTraffic({
     // 3. Advance positions, transition segments, recycle distant units, and write matrices
     for (let i = 0; i < trafficUnits.length; i++) {
       const tu = trafficUnits[i];
+      if (tu.active === false) continue;
       if (tu.seg.oneway) tu.dir = 1;
       let forceRecycle = false;
       if (tu.wreck) {
@@ -1347,10 +1349,16 @@ export function createTraffic({
   // Run one initial update step so matrices are immediately populated at frame 0
   update(0.016, 17.8);
 
+  function setDensity(fraction) {
+    const n = Math.round(trafficUnits.length * Math.max(0, Math.min(1, fraction)));
+    const zero = new T.Matrix4().makeScale(0,0,0);
+    trafficUnits.forEach((u,i) => { u.active = i<n; if(!u.active)for(const im of [u.td.bodyInst,u.td.detailInst,u.td.brakeInst]) { im.setMatrixAt(u.subIdx,zero); im.instanceMatrix.needsUpdate=true; } });
+  }
   const HW = { sedan: 1.05, suv: 1.1, scooter: 0.55, auto: 0.9, tempo: 1.2 };
   function solid(x, z) {
     for (let i = 0; i < trafficUnits.length; i++) {
       const u = trafficUnits[i];
+      if (u.active === false) continue;
       if (u.sliding) continue;
       const dx = x - u.x, dz = z - u.z;
       if (dx * dx + dz * dz > 49) continue;
@@ -1365,6 +1373,7 @@ export function createTraffic({
     let best = null, bestD = 3.8 * 3.8;
     for (let i = 0; i < trafficUnits.length; i++) {
       const u = trafficUnits[i];
+      if (u.active === false) continue;
       const ddx = u.x - x, ddz = u.z - z;
       const d2 = ddx * ddx + ddz * ddz;
       if (d2 < bestD) { bestD = d2; best = u; }
@@ -1394,7 +1403,7 @@ export function createTraffic({
     return true;
   }
 
-  return { group, update, solid, units: trafficUnits, kickAt, __segs: roadSegs, __validSegs: validSegs, __findNext: findConnectedSegment };
+  return { group, update, solid, setDensity, units: trafficUnits, kickAt, __segs: roadSegs, __validSegs: validSegs, __findNext: findConnectedSegment };
 }
 
 export function createParkedVehicles({

@@ -37,10 +37,11 @@ export function createHazards({ THREE: T, scene, roadSegs, solidFn = () => 0 }) 
   splash.visible = false; splash.frustumCulled = false; scene.add(splash);
   let splashT = 0, lastPot = -1, lastPud = -1, shake = 0;
 
+  let density=1;
   function update(dt, auto) {
     let pi = -1, ui = -1;
-    for (let i = 0; i < potholes.length; i++) { const p = potholes[i]; const dx = auto.x - p.x, dz = auto.z - p.z; if (dx * dx + dz * dz < (p.r + 0.7) * (p.r + 0.7)) { pi = i; break; } }
-    for (let i = 0; i < puddles.length; i++) { const p = puddles[i]; const dx = auto.x - p.x, dz = auto.z - p.z; if (dx * dx + dz * dz < (p.r + 0.5) * (p.r + 0.5)) { ui = i; break; } }
+    for (let i = 0; i < Math.round(potholes.length*density); i++) { const p = potholes[i]; const dx = auto.x - p.x, dz = auto.z - p.z; if (dx * dx + dz * dz < (p.r + 0.7) * (p.r + 0.7)) { pi = i; break; } }
+    for (let i = 0; i < Math.round(puddles.length*density); i++) { const p = puddles[i]; const dx = auto.x - p.x, dz = auto.z - p.z; if (dx * dx + dz * dz < (p.r + 0.5) * (p.r + 0.5)) { ui = i; break; } }
     if (pi >= 0 && pi !== lastPot && Math.abs(auto.v) > 1.5) { shake = 0.22; }
     lastPot = pi;
     if (ui >= 0) {
@@ -61,5 +62,6 @@ export function createHazards({ THREE: T, scene, roadSegs, solidFn = () => 0 }) 
     shake = Math.max(0, shake - dt);
     return shake > 0 ? Math.sin(performance.now() * 0.05) * shake * 0.25 : 0;
   }
-  return { group, update, potholes, puddles };
+  function setDensity(fraction){density=Math.max(0,Math.min(1,fraction));potI.count=Math.round(potholes.length*density);pudI.count=Math.round(puddles.length*density);if(!density){splash.visible=false;splashT=0;shake=0;}}
+  return { group, update, setDensity, potholes, puddles };
 }

@@ -346,7 +346,8 @@ let sid = null;
 if (stick) {
   stick.addEventListener('pointerdown', e => { sid = e.pointerId; joy.on = true; stick.setPointerCapture(sid); upd(e); });
   stick.addEventListener('pointermove', e => { if (e.pointerId === sid) upd(e); });
-  stick.addEventListener('pointerup', () => { joy.on = false; joy.x = joy.y = 0; stick.firstElementChild.style.transform = ''; });
+  const releaseStick=()=>{joy.on=false;joy.x=joy.y=0;sid=null;stick.firstElementChild.style.transform='';};
+  stick.addEventListener('pointerup',releaseStick);stick.addEventListener('pointercancel',releaseStick);stick.addEventListener('lostpointercapture',releaseStick);
 }
 function upd(e) {
   const r = stick.getBoundingClientRect();
@@ -935,7 +936,7 @@ try {
   try { ao = createAmbientOcclusion({ THREE, renderer, scene, camera, composer: post.composer, width: innerWidth, height: innerHeight }); } catch (e) { console.warn('AO off', e); }
   shadowTuner = tuneShadows({ THREE, renderer, sun: lighting.sun, getAuto: () => auto });
   traffic = createTraffic({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z, a: auto.a }), count: (() => { const q = new URLSearchParams(location.search).get('traffic'); if (q === null || q === '') return 150; const n = parseInt(q); return Number.isFinite(n) ? Math.max(0, Math.min(220, n)) : 150; })() });
-  parkedVehicles = createParkedVehicles({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, nightUniform, seed: 42, getAuto: () => ({ x: auto.x, z: auto.z }) });
+  parkedVehicles = null; // Removed entirely at Somil's request, not just hidden.
   crowd = createCrowd({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid, obstacleFn, avoidFn: (parkedVehicles && parkedVehicles.overlaps) ? parkedVehicles.overlaps : undefined, getAuto: () => { const cd = camera.getWorldDirection(new THREE.Vector3()); return { x: auto.x, z: auto.z, yaw: Math.atan2(cd.x, cd.z) }; }, nightUniform, count: 120 });
   bldgHQ = upgradeBuildingFacades({ THREE, landmarks: LANDMARKS_DATA.concat(clearing), scene, world, roadSegs: street.roadSegs, solidFn: solid, nightUniform, getAuto: () => ({ x: auto.x, z: auto.z }) });
   hazards = createHazards({ THREE, scene, roadSegs: street.roadSegs, solidFn: solid });
@@ -1039,23 +1040,24 @@ try {
       entity[key] = (...args) => entity.enabled ? original(...args) : (key === 'update' ? 0 : false);
     }
   }
-  (function togglesPanel() {
-    const items = [
-      ['Traffic', () => traffic && traffic.group, traffic], ['Pedestrians', () => crowd && crowd.group, crowd], ['Parked vehicles', () => parkedVehicles && parkedVehicles.group, parkedVehicles],
-      ['Trees', () => trees && trees.group, trees], ['Potholes and puddles', () => hazards && hazards.group, hazards]
-    ];
-    const box = document.createElement('div'); box.id = 'toggles';
-    box.innerHTML = '<button id="tgbtn">Settings</button><div id="tgpanel"></div>';
-    document.body.appendChild(box);
-    const panel = box.querySelector('#tgpanel');
-    for (const [name, get, entity] of items) {
-      const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.checked = true;
-      c.addEventListener('change', () => { const o = get(); if (o) o.visible = c.checked; if(entity)entity.enabled=c.checked; if(name==='Traffic' && life?.setTrafficEnabled)life.setTrafficEnabled(c.checked); });
-      l.append(c, ' ' + name); panel.appendChild(l);
+  (function settingsPanel() {
+    const box=document.createElement('div');box.id='toggles';
+    box.innerHTML='<button id="tgbtn" aria-label="Settings" aria-expanded="false"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="#18222a"/><circle cx="15" cy="17" r="3" fill="#18222a"/></svg></button><div id="tgpanel"><h3>Your neighbourhood</h3></div>';
+    document.body.appendChild(box);const panel=box.querySelector('#tgpanel');
+    function slider(id,name,min,max,step,value,format,change){
+      const row=document.createElement('label');row.htmlFor=id;
+      row.innerHTML=`<span>${name}<output></output></span><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${value}">`;
+      const input=row.querySelector('input'),out=row.querySelector('output');
+      const sync=()=>{out.textContent=format(+input.value);change(+input.value);};input.addEventListener('input',sync);panel.appendChild(row);sync();
     }
-    const nl = document.createElement('label'); const nc = document.createElement('input'); nc.type = 'checkbox';
-    nc.addEventListener('change', () => { state.hour = nc.checked ? 22 : 15; applyTime(state.hour); }); nl.append(nc, ' Night'); panel.appendChild(nl);
-    box.querySelector('#tgbtn').addEventListener('click', () => box.classList.toggle('open'));
+    slider('setting-time','Time of day',0,23.75,.25,state.hour,h=>`${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round((h%1)*60)).padStart(2,'0')}`,h=>{state.hour=h;applyTime(h);});
+    const density=(id,name,entity,extra)=>slider(id,name,0,100,10,100,v=>v===0?'Off':v+'%',v=>{const f=v/100;entity.enabled=v>0;entity.group.visible=v>0;entity.setDensity?.(f);extra?.(f);});
+    density('setting-traffic','Traffic',traffic,f=>{life.setTrafficEnabled(f>0);life.setTrafficDensity(f);});
+    density('setting-pedestrians','Pedestrians',crowd);
+    density('setting-trees','Trees',trees);
+    density('setting-hazards','Potholes and puddles',hazards);
+
+    box.querySelector('#tgbtn').addEventListener('click',()=>{box.classList.toggle('open');box.querySelector('#tgbtn').setAttribute('aria-expanded',box.classList.contains('open'));});
   })();
   const pick = document.getElementById('startpick');
   if (pick) {
@@ -1069,10 +1071,14 @@ try {
     startAudio();
   };
   $('go').addEventListener('click', go);
-  const chg = document.createElement('button'); chg.id = 'chgloc'; chg.textContent = 'Change location';
-  chg.style.cssText = 'position:fixed;left:20px;top:64px;z-index:60;font:600 13px Bricolage Grotesque,sans-serif;padding:8px 14px;border-radius:20px;border:1px solid #ffffff55;background:#10151cdd;color:#fff;cursor:pointer';
-  chg.addEventListener('click', () => { const sp = $('startpick'); $('start').classList.add('on'); if (sp) sp.focus(); });
-  document.body.appendChild(chg);
+  const rotateHint=document.createElement('div');rotateHint.id='rotate-hint';rotateHint.setAttribute('role','status');rotateHint.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="7" y="3" width="10" height="18" rx="2" transform="rotate(30 12 12)"/><path d="M3 9V4h5M21 15v5h-5"/></svg>Turn your phone for a wider view';document.body.appendChild(rotateHint);
+  const streetEl=$('street');const pickerWrap=document.createElement('div');pickerWrap.id='location-menu';
+  const locationSelect=document.createElement('select');locationSelect.id='location-select';locationSelect.setAttribute('aria-label','Change location');
+  locationSelect.innerHTML='<option value="">Change location...</option>'+stops.map((s,i)=>`<option value="${i}">${s.p.n}</option>`).join('');
+  locationSelect.addEventListener('change',()=>{if(locationSelect.value==='')return;const s=stops[+locationSelect.value];spawnAt(s.p.x,s.p.z);locationSelect.value='';pickerWrap.classList.remove('open');});
+  const chg=document.createElement('button');chg.id='location-dropdown';chg.setAttribute('aria-label','Choose location');chg.innerHTML='⌄';
+  chg.addEventListener('click',()=>{pickerWrap.classList.toggle('open');if(pickerWrap.classList.contains('open'))locationSelect.focus();});
+  streetEl.appendChild(chg);pickerWrap.appendChild(locationSelect);streetEl.appendChild(pickerWrap);
   window.__game = { get crowd() { return crowd; }, get trees() { return trees; }, roadSegs: () => street.roadSegs, get parked() { return parkedVehicles; }, get traffic() { return traffic; }, get hazards() { return hazards; }, get camRig() { return camRig; }, get destination() { return destination; }, scene, npcs, auto, state, stops, stopsGame, life, go, solid, world, applyTime, camera, get started() { return started; }, get engGain() { return eg ? eg.gain.value : null; } };
 }
 boot();

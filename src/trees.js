@@ -461,6 +461,10 @@ export function createRainTrees({
     vScale.set(sp.scaleXZ, 1, sp.scaleXZ);
     m4.compose(vPos, qYaw, vScale);
     litterInst.setMatrixAt(i, m4);
+    sp._instances=[[trunkInst,i],[litterInst,i],[sp.species===0?rainInst:sp.species===1?gulInst:ficusInst,sp.species===0?rIdx-1:sp.species===1?gIdx-1:fIdx-1]];
+    if(sp.hasBand)sp._instances.push([bandInst,bIdx-1]);
+    if(sp.hasGuard)sp._instances.push([guardInst,gdIdx-1]);
+    sp._instances=sp._instances.map(([im,k])=>{const mat=new T.Matrix4();im.getMatrixAt(k,mat);return{im,k,mat};});
   }
 
   // Camera overhead volumes: keep the chase-cam narrow-lane lift below every crown (Somil black-overlay fix)
@@ -486,6 +490,8 @@ export function createRainTrees({
     }
   }
 
+  const hiddenMatrix=new T.Matrix4().makeScale(0,0,0);
+  function setDensity(fraction){const n=Math.round(treeSpots.length*Math.max(0,Math.min(1,fraction)));treeSpots.forEach((sp,i)=>{for(const {im,k,mat} of sp._instances){im.setMatrixAt(k,i<n?mat:hiddenMatrix);im.instanceMatrix.needsUpdate=true;}});}
   function update(dt = 0.016, windTime = null) {
     if (windTime !== null) windUniform.value = windTime;
     else windUniform.value += dt;
@@ -494,6 +500,7 @@ export function createRainTrees({
   return {
     update,
     group,
-    treeSpots
+    treeSpots,
+    setDensity
   };
 }
