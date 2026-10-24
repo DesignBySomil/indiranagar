@@ -405,7 +405,14 @@ export function createCrowd({
 
   // High-fidelity articulated pedestrians for the nearest walkers (draw calls bounded by slot count)
   const GEM_SLOTS = 26;
-  const gemProto = [0, 1, 2, 3, 4, 5].map(v => buildPedestrianMerged(v));
+  const gemProto = [0, 1, 2, 3, 4, 5].map(v => {
+    const proto = buildPedestrianMerged(v);
+    // Object3D.clone JSON-copies userData. These live limb references would
+    // serialize entire meshes, materials and canvas textures for every slot.
+    // Prototypes are never animated; each clone rebuilds its own parts below.
+    delete proto.userData.parts;
+    return proto;
+  });
   const gemSlots = [];
   for (let j = 0; j < GEM_SLOTS; j++) {
     const g = gemProto[j % gemProto.length].clone(true);
