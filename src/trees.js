@@ -433,6 +433,7 @@ export function createRainTrees({
   const yAxis = new T.Vector3(0, 1, 0);
 
   let rIdx = 0, gIdx = 0, fIdx = 0, bIdx = 0, gdIdx = 0;
+  const treeParts = [];
 
   for (let i = 0; i < count; i++) {
     const sp = treeSpots[i];
@@ -447,15 +448,18 @@ export function createRainTrees({
     vScale.set(sp.scaleXZ, sp.scaleY, sp.scaleXZ);
     m4.compose(vPos, qCombined, vScale);
     trunkInst.setMatrixAt(i, m4);
+    const parts = [{ inst: trunkInst, idx: i, base: m4.clone() }];
+    treeParts.push(parts);
 
-    if (sp.species === 0) rainInst.setMatrixAt(rIdx++, m4);
-    else if (sp.species === 1) gulInst.setMatrixAt(gIdx++, m4);
-    else ficusInst.setMatrixAt(fIdx++, m4);
+    if (sp.species === 0) { parts.push({ inst: rainInst, idx: rIdx, base: m4.clone() }); rainInst.setMatrixAt(rIdx++, m4); }
+    else if (sp.species === 1) { parts.push({ inst: gulInst, idx: gIdx, base: m4.clone() }); gulInst.setMatrixAt(gIdx++, m4); }
+    else { parts.push({ inst: ficusInst, idx: fIdx, base: m4.clone() }); ficusInst.setMatrixAt(fIdx++, m4); }
 
-    if (sp.hasBand) bandInst.setMatrixAt(bIdx++, m4);
+    if (sp.hasBand) { parts.push({ inst: bandInst, idx: bIdx, base: m4.clone() }); bandInst.setMatrixAt(bIdx++, m4); }
 
     if (sp.hasGuard) {
       m4.compose(vPos, qYaw, vScale.set(1, 1, 1));
+      parts.push({ inst: guardInst, idx: gdIdx, base: m4.clone() });
       guardInst.setMatrixAt(gdIdx++, m4);
     }
 
@@ -502,6 +506,7 @@ export function createRainTrees({
   return {
     update,
     group,
-    treeSpots
+    treeSpots,
+    treeParts
   };
 }
