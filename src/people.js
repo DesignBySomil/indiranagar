@@ -774,6 +774,11 @@ export function createCrowd({
             p.seg = bestSeg;
             p.t = bestT;
             p.kerbOff = bestOff;
+            // Keep the landed pose while walking back to the selected footpath.
+            // Clamping kerbOff can move that path several metres away; assigning it
+            // directly on the next tick made a recovered walker visibly teleport.
+            const resume = evalFootpathPoint(bestSeg, bestT, bestOff);
+            p.resumeOffset = { x: p.x - resume.x, z: p.z - resume.z };
             p.kn = null;
             p.ky = 0;
             continue;
@@ -797,12 +802,28 @@ export function createCrowd({
       // Reverse direction at segment ends or if a solid building/obstacle blocks the footpath
       if (nextT > 0.95 || nextT < 0.05 || !isSolidSafe(candPt.x, candPt.z)) {
         p.dir *= -1;
-        p.t = T.MathUtils.clamp(p.t, 0.06, 0.94);
+        p.t = T.MathUtils.clamp(p.t, 0.05, 0.95);
       } else {
         p.t = nextT;
       }
 
       let pt = evalFootpathPoint(p.seg, p.t, p.kerbOff);
+
+      if (p.resumeOffset) {
+        const offset = p.resumeOffset;
+        const length = Math.hypot(offset.x, offset.z);
+        const advance = p.speed * safeDt;
+        const factor = length <= advance ? 0 : (length - advance) / length;
+        const ox = offset.x * factor, oz = offset.z * factor;
+        if (isSolidSafe(pt.x + ox, pt.z + oz)) {
+          offset.x = ox; offset.z = oz;
+        } else {
+          // Hold the landed position rather than crossing a solid on return.
+          offset.x = p.x - pt.x; offset.z = p.z - pt.z;
+        }
+        pt = { x: pt.x + offset.x, z: pt.z + offset.z };
+        if (Math.hypot(offset.x, offset.z) < 0.001) p.resumeOffset = null;
+      }
 
       // Keep within 150m of the player; recycle distant pedestrians or those in solid cells
       const dx = pt.x - player.x;
@@ -810,6 +831,7 @@ export function createCrowd({
       const dist = Math.hypot(dx, dz);
       if (dist > 150 || !isSolidSafe(pt.x, pt.z)) {
         const picked = pickFootpathPlacement(player.x, player.z, player.hx, player.hz, 35, 135, true, i + elapsed * 10);
+        p.resumeOffset = null;
         p.seg = picked.seg;
         p.t = picked.t;
         p.kerbOff = picked.kerbOff;
@@ -932,4 +954,4 @@ export function createCrowd({
     for (const flush of flushFar) flush();
   }
   return { group, update, solid, setDensity, peds, kickAt, vendorSpots };
-}
+    }
