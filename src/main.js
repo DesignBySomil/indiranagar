@@ -703,7 +703,11 @@ function step(dt, now, sliced = false) {
 
   // A sustained accelerator with no actual progress recovers only onto a clear nearby road.
   const progress = Math.hypot(auto.x - startX, auto.z - startZ);
-  auto.noProgressT = thr > 0.3 && Math.abs(auto.v) < 3 && progress < dt * 2.5 ? (auto.noProgressT || 0) + dt : 0;
+  const pushingBoundary = (auto.x <= MAP.x0 + 28 && Math.sin(auto.a) * thr < 0) ||
+    (auto.x >= MAP.x1 - 28 && Math.sin(auto.a) * thr > 0) ||
+    (auto.z <= MAP.z0 + 28 && Math.cos(auto.a) * thr < 0) ||
+    (auto.z >= MAP.z1 - 28 && Math.cos(auto.a) * thr > 0);
+  auto.noProgressT = !pushingBoundary && thr > 0.3 && Math.abs(auto.v) < 3 && progress < dt * 2.5 ? (auto.noProgressT || 0) + dt : 0;
   if (auto.noProgressT > 2.0) {
     const candidates = [];
     for (const sg of (streetRef?.roadSegs || [])) {
@@ -729,8 +733,12 @@ function step(dt, now, sliced = false) {
   if (auto.unstickAt === undefined) { auto.unstickAt = -99; auto.unstickN = 0; }
   auto.clk = (auto.clk || 0) + dt;
   if (auto._didUnstick) { auto._didUnstick = false; }
+  const unclampedX = auto.x, unclampedZ = auto.z;
   auto.x = THREE.MathUtils.clamp(auto.x, MAP.x0 + 28, MAP.x1 - 28);
   auto.z = THREE.MathUtils.clamp(auto.z, MAP.z0 + 28, MAP.z1 - 28);
+  // A boundary contact stops the vehicle as well as its position. Otherwise
+  // held throttle stores full speed at the wall and delays reversing away.
+  if (auto.x !== unclampedX || auto.z !== unclampedZ) auto.v = 0;
   // sitting inside solid geometry AT the boundary (e.g. clamped into a building edge): nudge to the nearest free spot
   const atBound = auto.x === MAP.x0 + 28 || auto.x === MAP.x1 - 28 || auto.z === MAP.z0 + 28 || auto.z === MAP.z1 - 28;
   if (atBound && hit(auto.x, auto.z)) {
