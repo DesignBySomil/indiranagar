@@ -434,7 +434,15 @@ export function createCrowd({
   // Canonical pedestrian slot matrices stay stable; the GPU sees only nonzero
   // instances. Zero-scaled hidden slots must not submit full detailed geometry.
   const flushFar = [];
-  function compactHiddenInstances(im) {
+  function compactHiddenInstances(im, shared) {
+    if (shared.owner) {
+      im.instanceMatrix = shared.owner.instanceMatrix;
+      im.setMatrixAt = shared.owner.setMatrixAt;
+      shared.meshes.push(im);
+      return;
+    }
+    shared.owner = im;
+    shared.meshes.push(im);
     const slots = new Float32Array(maxPeds * 16);
     for (let k = 0; k < maxPeds; k++) slots.set(mZero.elements, k * 16);
     // Simulation writes stable pedestrian IDs, independent of packed draw order.
@@ -451,7 +459,7 @@ export function createCrowd({
         // No temporary arrays in this per-frame path.
         for (let j = 0; j < 16; j++) packed[dst+j] = slots[off+j];
       }
-      im.count = visible;
+      for (const mesh of shared.meshes) mesh.count = visible;
       im.instanceMatrix.needsUpdate = true;
     };
     flushFar.push(flush);
@@ -469,12 +477,13 @@ export function createCrowd({
       byMat.get(key).geos.push(geo);
     });
     const sets = [];
+    const shared = { owner: null, meshes: [] };
     for (const { mat, geos } of byMat.values()) {
       const merged = geos.length > 1 ? mergeGeometries(geos, false) : geos[0];
       if (!merged) continue;
       const im = new T.InstancedMesh(merged, mat, maxPeds);
       im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
-      compactHiddenInstances(im);
+      compactHiddenInstances(im, shared);
       group.add(im);
       sets.push(im);
     }
@@ -954,4 +963,4 @@ export function createCrowd({
     for (const flush of flushFar) flush();
   }
   return { group, update, solid, setDensity, peds, kickAt, vendorSpots };
-    }
+}
